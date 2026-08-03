@@ -17,15 +17,23 @@ import type { Analysis, FunnelBrief, Product } from "@/lib/types";
  * point into that country's competitor deep-dive: clicking it calls
  * `onSelectMarket`. A market we hold no alpha-2 for stays non-clickable — a
  * declared gap, never a dead link.
+ *
+ * `onDiscover` (optional) makes the whole shortlist actionable in one step:
+ * "Discover buyers across the top markets" hands back every resolved alpha-2 in
+ * the top-5 so the caller can kick off buyer discovery across them.
  */
 export function WorldFunnel({
   product,
   onSelectMarket,
   selectedMarket,
+  onDiscover,
+  discovering,
 }: {
   product: Product;
   onSelectMarket?: (iso2: string) => void;
   selectedMarket?: string | null;
+  onDiscover?: (markets: string[]) => void;
+  discovering?: boolean;
 }) {
   const t = useTranslations("funnel");
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
@@ -190,6 +198,25 @@ export function WorldFunnel({
               );
             })}
           </ul>
+
+          {(() => {
+            // Every top-5 market we hold an alpha-2 for — the shortlist buyer
+            // discovery can run across. Unmapped markets are skipped, not faked.
+            const markets = top5
+              .map((r) => r.market_iso2)
+              .filter((iso2): iso2 is string => Boolean(iso2));
+            if (!onDiscover || markets.length === 0) return null;
+            return (
+              <button
+                type="button"
+                onClick={() => onDiscover(markets)}
+                disabled={discovering}
+                className="mt-4 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+              >
+                {discovering ? t("discoveringBuyers") : t("discoverTopMarkets")}
+              </button>
+            );
+          })()}
         </div>
       )}
     </section>

@@ -88,7 +88,9 @@
     "decisiveNumbers": "الأرقام الحاسمة",
     "competitivePosition": "الموقف التنافسي",
     "limits": "حدود هذا التقرير",
-    "viewCompetitors": "اعرض المنافسين في هذا السوق"
+    "viewCompetitors": "اعرض المنافسين في هذا السوق",
+    "discoverTopMarkets": "اكتشف المشترين في أفضل الأسواق",
+    "discoveringBuyers": "جارٍ بدء الاكتشاف…"
   },
   "buyers": {
     "title": "المشترون المحتملون",

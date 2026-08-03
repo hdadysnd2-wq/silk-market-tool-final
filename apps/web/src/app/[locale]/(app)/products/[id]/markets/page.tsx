@@ -19,6 +19,7 @@ export default function MarketsPage({ params }: { params: Promise<{ id: string }
   const [selected, setSelected] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [starting, setStarting] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
 
   async function pick(iso2: string) {
     setSelected(iso2);
@@ -42,12 +43,31 @@ export default function MarketsPage({ params }: { params: Promise<{ id: string }
     }
   }
 
+  // Batch discovery across the funnel's whole top-5 shortlist. Lands on the
+  // unfiltered buyers view so every discovered market is visible at once.
+  async function discoverMarkets(iso2s: string[]) {
+    if (iso2s.length === 0) return;
+    setDiscovering(true);
+    try {
+      await api.post(`/products/${id}/discover`, { markets: iso2s });
+      router.push(`/products/${id}/buyers`);
+    } finally {
+      setDiscovering(false);
+    }
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900">{t("title")}</h1>
 
       {product && (
-        <WorldFunnel product={product} onSelectMarket={pick} selectedMarket={selected} />
+        <WorldFunnel
+          product={product}
+          onSelectMarket={pick}
+          selectedMarket={selected}
+          onDiscover={discoverMarkets}
+          discovering={discovering}
+        />
       )}
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">

@@ -14,13 +14,27 @@ from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Buyer, Contact, Factory, HSCode, Market, MarketSnapshot, Product, utcnow
+from app.models import (
+    Analysis,
+    Buyer,
+    Contact,
+    CountryRanking,
+    Factory,
+    HSCode,
+    Market,
+    MarketSnapshot,
+    Product,
+    utcnow,
+)
+from app.providers.countries import iso3_to_iso2
 from app.schemas.report import (
     ProductReportOut,
     ReportBuyer,
     ReportContact,
     ReportExporter,
     ReportFactory,
+    ReportFunnel,
+    ReportFunnelMarket,
     ReportMarket,
     ReportProduct,
     ReportSnapshot,
@@ -31,6 +45,9 @@ from app.services.buyer_discovery import buyers_for_product
 
 #: How many top-ranked buyers to surface per market in the report.
 TOP_BUYERS_PER_MARKET = 5
+
+#: How many world-funnel markets to surface in the report's shortlist.
+TOP_FUNNEL_MARKETS = 5
 
 _VERIFIED_STATUSES = {"valid"}
 
@@ -63,7 +80,50 @@ def build_product_report(db: Session, product: Product, locale: str = "en") -> P
         factory=_factory_section(factory),
         product=_product_section(product, hs),
         summary=_summary(markets),
+        funnel=_funnel_section(db, product),
         markets=markets,
+    )
+
+
+def _funnel_section(db: Session, product: Product) -> ReportFunnel | None:
+    """The latest analysis's "world screened → top N", or None if none has run.
+
+    Read-only: reads the persisted shortlist (transit-flagged, year-stamped),
+    never re-screens. A market with no reported imports keeps ``import_usd=None``
+    — a declared gap (I1), never a fabricated figure.
+    """
+    analysis = db.scalar(
+        select(Analysis)
+        .where(Analysis.product_id == product.id)
+        .order_by(Analysis.created_at.desc())
+    )
+    if analysis is None:
+        return None
+
+    rankings = list(
+        db.scalars(
+            select(CountryRanking)
+            .where(CountryRanking.analysis_id == analysis.id)
+            .order_by(CountryRanking.rank)
+        )
+    )
+    top = [
+        ReportFunnelMarket(
+            rank=r.rank,
+            importer_iso3=r.importer_iso3,
+            market_iso2=iso3_to_iso2(r.importer_iso3),
+            year=r.year,
+            import_usd=float(r.import_usd) if r.import_usd is not None else None,
+            is_transit_hub=r.is_transit_hub,
+            is_mirror=r.is_mirror,
+            tags=r.tags,
+        )
+        for r in rankings[:TOP_FUNNEL_MARKETS]
+    ]
+    return ReportFunnel(
+        hs_code=product.hs_code,
+        shortlisted_count=len(rankings),
+        top_markets=top,
     )
 
 

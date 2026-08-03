@@ -13,6 +13,33 @@ def _seed_pipeline(db, product, market_iso2="IN"):
     db.commit()
 
 
+def _seed_and_run_funnel(db, product):
+    """Seed world_trade and run the world funnel so the product has an analysis."""
+    from app.models import WorldTrade
+    from app.services.ranking import run_product_world_analysis
+
+    rows = [
+        ("DEU", 700.0, False, False),  # genuine demand
+        ("NLD", 1000.0, True, False),  # transit hub — highest raw volume
+        ("IND", 500.0, False, True),  # mirror
+    ]
+    for iso3, usd, hub, mirror in rows:
+        db.add(
+            WorldTrade(
+                hs6=product.hs_code,
+                importer_iso3=iso3,
+                year=2022,
+                import_usd=usd,
+                is_transit_hub=hub,
+                is_mirror=mirror,
+                source="UN Comtrade",
+            )
+        )
+    db.commit()
+    run_product_world_analysis(db, product)
+    db.commit()
+
+
 def test_report_aggregates_markets_buyers_and_snapshot(db, factory, product, market):
     _seed_pipeline(db, product)
 
@@ -40,6 +67,36 @@ def test_report_without_analysis_is_empty_but_valid(db, factory, product):
     assert report.summary.total_buyers == 0
     assert report.summary.total_import_usd is None
     assert report.markets == []
+    # No world analysis run yet → the funnel is a declared absence, not a stub.
+    assert report.funnel is None
+
+
+def test_report_includes_world_funnel(db, factory, product):
+    _seed_and_run_funnel(db, product)
+
+    report = build_product_report(db, product, "en")
+
+    assert report.funnel is not None
+    assert report.funnel.hs_code == product.hs_code
+    top = report.funnel.top_markets
+    assert top, "expected a funnel shortlist"
+    # I9: the genuine market tops; the transit hub (highest raw volume) is demoted.
+    assert top[0].importer_iso3 == "DEU"
+    assert top[0].market_iso2 == "DE"  # alpha-3 → alpha-2 bridge surfaced
+    assert top[0].year == 2022  # decision #8 — the data year travels with the figure
+    nld = next(m for m in top if m.importer_iso3 == "NLD")
+    assert nld.is_transit_hub is True
+    assert nld.rank > top[0].rank
+
+
+def test_report_html_includes_funnel(client, auth_headers, db, factory, product):
+    _seed_and_run_funnel(db, product)
+
+    res = client.get(f"/api/v1/products/{product.id}/report.html", headers=auth_headers)
+    assert res.status_code == 200
+    # The funnel's top market is rendered into the downloadable document.
+    assert "World market funnel" in res.text
+    assert "DEU" in res.text
 
 
 def test_report_top_buyers_capped_per_market(db, factory, product, market, monkeypatch):

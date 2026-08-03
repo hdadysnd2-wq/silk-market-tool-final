@@ -15,8 +15,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.api.deps import DbDep, get_owned_product
 from app.models import Analysis, CountryRanking, Product
 from app.models.product import Product as ProductModel
-from app.schemas.analysis import AnalysisOut, CountryRankingOut
+from app.schemas.analysis import AnalysisOut, CountryRankingOut, FunnelBriefOut
 from app.security import CurrentUser, assert_factory_access
+from app.services.funnel_brief import build_funnel_brief
 from app.services.ranking import run_product_world_analysis
 
 router = APIRouter(tags=["analyses"])
@@ -55,15 +56,29 @@ def start_analysis(
     return _to_out(db, analysis)
 
 
-@router.get("/analyses/{analysis_id}", response_model=AnalysisOut)
-def get_analysis(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> AnalysisOut:
+def _owned_analysis(db: DbDep, analysis_id: uuid.UUID, user: CurrentUser) -> Analysis:
+    """Load an analysis, authorized via the owning product's factory.
+
+    An orphaned analysis (product deleted) cannot be authorized and is treated as
+    not found.
+    """
     analysis = db.get(Analysis, analysis_id)
     if analysis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
-    # Authorize via the owning product's factory. An orphaned analysis (product
-    # deleted) cannot be authorized and is treated as not found.
     product = db.get(Product, analysis.product_id) if analysis.product_id else None
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
     assert_factory_access(user, product.factory_id)
-    return _to_out(db, analysis)
+    return analysis
+
+
+@router.get("/analyses/{analysis_id}", response_model=AnalysisOut)
+def get_analysis(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> AnalysisOut:
+    return _to_out(db, _owned_analysis(db, analysis_id, user))
+
+
+@router.get("/analyses/{analysis_id}/brief", response_model=FunnelBriefOut)
+def get_analysis_brief(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> FunnelBriefOut:
+    """Brief-first funnel output: decision + 3 sourced numbers + a limits section."""
+    analysis = _owned_analysis(db, analysis_id, user)
+    return FunnelBriefOut.model_validate(build_funnel_brief(db, analysis))

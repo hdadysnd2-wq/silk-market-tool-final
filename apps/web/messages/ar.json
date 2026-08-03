@@ -41,6 +41,7 @@
     "replyRate": "معدل الرد",
     "bounceRate": "معدل الارتداد",
     "pendingApprovals": "بانتظار الموافقة",
+    "reviewPending": "مراجعة",
     "empty": "لا توجد بيانات بعد. ابدأ برفع منتج وإطلاق أول حملة."
   },
   "products": {
@@ -158,6 +159,10 @@
       "cancelled": "ملغاة"
     },
     "noApprovalWithoutReview": "لا تُرسل أي رسالة دون موافقتك الصريحة.",
+    "approvalSummary": "تقدّم الاعتماد",
+    "progressPending": "بانتظار المراجعة",
+    "progressApproved": "معتمَدة",
+    "progressSent": "مُرسَلة",
     "empty": "لا توجد رسائل بعد. اضغط على «صياغة الرسائل» لتوليد المسودات."
   },
   "deliverability": {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/routing";
 import { useApi } from "@/lib/useApi";
 import type { DashboardStats } from "@/lib/types";
 
@@ -13,7 +14,7 @@ export default function DashboardPage() {
 
   const hasActivity = data.campaigns > 0;
 
-  const tiles: { label: string; value: string }[] = [
+  const tiles: { label: string; value: string; href?: string; hint?: string }[] = [
     { label: t("campaigns"), value: String(data.campaigns) },
     { label: t("sent"), value: String(data.total_sent) },
     { label: t("opened"), value: String(data.total_opened) },
@@ -21,7 +22,14 @@ export default function DashboardPage() {
     { label: t("openRate"), value: pct(data.open_rate) },
     { label: t("replyRate"), value: pct(data.reply_rate) },
     { label: t("bounceRate"), value: pct(data.bounce_rate) },
-    { label: t("pendingApprovals"), value: String(data.pending_approvals) },
+    {
+      label: t("pendingApprovals"),
+      value: String(data.pending_approvals),
+      // The approval gate lives on each campaign's review screen; when drafts
+      // are waiting, make the count a way in rather than a dead number.
+      href: data.pending_approvals > 0 ? "/campaigns" : undefined,
+      hint: data.pending_approvals > 0 ? t("reviewPending") : undefined,
+    },
   ];
 
   return (
@@ -33,12 +41,30 @@ export default function DashboardPage() {
         </p>
       ) : (
         <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-          {tiles.map((tile) => (
-            <div key={tile.label} className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-black/5">
-              <p className="text-sm text-gray-500">{tile.label}</p>
-              <p className="tabular mt-1 text-2xl font-bold text-gray-900">{tile.value}</p>
-            </div>
-          ))}
+          {tiles.map((tile) => {
+            const body = (
+              <>
+                <p className="text-sm text-gray-500">{tile.label}</p>
+                <p className="tabular mt-1 text-2xl font-bold text-gray-900">{tile.value}</p>
+                {tile.hint && (
+                  <p className="mt-1 text-xs font-medium text-brand-600">{tile.hint} →</p>
+                )}
+              </>
+            );
+            return tile.href ? (
+              <Link
+                key={tile.label}
+                href={tile.href}
+                className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-black/5 hover:ring-brand-200"
+              >
+                {body}
+              </Link>
+            ) : (
+              <div key={tile.label} className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-black/5">
+                {body}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

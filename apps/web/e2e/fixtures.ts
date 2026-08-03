@@ -1,4 +1,4 @@
-import type { BuyerMatch, SenderAccount } from "@/lib/types";
+import type { BuyerMatch, Campaign, Email, EmailStatus, SenderAccount } from "@/lib/types";
 
 /**
  * A JWT-shaped token whose payload base64-decodes to a factory_user role. The
@@ -69,3 +69,53 @@ export const BUYER_MATCH_NL: BuyerMatch = {
   evidence: { summary: "Imported 18 shipments in the last 12 months" },
   contacts: [],
 };
+
+export const CAMPAIGN: Campaign = {
+  id: "camp-1",
+  factory_id: "fac-1",
+  product_id: "prod-1",
+  sender_account_id: "acc-1",
+  market_iso2: "IN",
+  name: "Outreach → IN",
+  status: "draft",
+  paused_reason: null,
+  total_emails: 4,
+  sent_count: 1,
+  opened_count: 0,
+  replied_count: 0,
+  bounced_count: 0,
+  complained_count: 0,
+  reported_meetings: 0,
+  reported_rfqs: 0,
+  created_at: "2026-01-01T00:00:00Z",
+};
+
+function email(id: string, status: EmailStatus): Email {
+  const cleared = status === "approved" || status === "queued" || status === "sent";
+  return {
+    id,
+    campaign_id: "camp-1",
+    contact_id: `contact-${id}`,
+    buyer_id: "buyer-1",
+    status,
+    subject: `Subject ${id}`,
+    body_text: `Body ${id}`,
+    body_html: null,
+    language: "en",
+    is_followup: false,
+    approved_at: cleared ? "2026-01-02T00:00:00Z" : null,
+    sent_at: status === "sent" ? "2026-01-02T00:00:00Z" : null,
+    opened_at: null,
+    replied_at: null,
+    blocked_reason: null,
+  };
+}
+
+// Two drafts awaiting review, one approved, one already sent → the approval
+// summary should read 2 pending · 1 approved · 1 sent.
+export const EMAILS: Email[] = [
+  email("e1", "draft"),
+  email("e2", "draft"),
+  email("e3", "approved"),
+  email("e4", "sent"),
+];

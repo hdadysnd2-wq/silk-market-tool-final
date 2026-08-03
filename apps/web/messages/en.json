@@ -41,6 +41,7 @@
     "replyRate": "Reply rate",
     "bounceRate": "Bounce rate",
     "pendingApprovals": "Pending approvals",
+    "reviewPending": "Review",
     "empty": "No data yet. Start by uploading a product and launching your first campaign."
   },
   "products": {
@@ -158,6 +159,10 @@
       "cancelled": "Cancelled"
     },
     "noApprovalWithoutReview": "No email is ever sent without your explicit approval.",
+    "approvalSummary": "Approval progress",
+    "progressPending": "Pending review",
+    "progressApproved": "Approved",
+    "progressSent": "Sent",
     "empty": "No emails yet. Click \"Draft emails\" to generate the drafts."
   },
   "deliverability": {

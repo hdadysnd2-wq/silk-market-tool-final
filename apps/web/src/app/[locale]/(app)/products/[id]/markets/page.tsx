@@ -46,7 +46,9 @@ export default function MarketsPage({ params }: { params: Promise<{ id: string }
     <div>
       <h1 className="text-2xl font-bold text-gray-900">{t("title")}</h1>
 
-      {product && <WorldFunnel product={product} />}
+      {product && (
+        <WorldFunnel product={product} onSelectMarket={pick} selectedMarket={selected} />
+      )}
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">
         <div className="flex flex-wrap gap-2">

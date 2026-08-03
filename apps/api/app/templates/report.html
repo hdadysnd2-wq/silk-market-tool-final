@@ -110,6 +110,29 @@
     </div>
   </section>
 
+  {% if r.funnel and r.funnel.top_markets %}
+  <section>
+    <h2>{{ t.world_funnel }}</h2>
+    <p class="muted num" style="margin:0 0 10px;">{{ t.shortlisted }}: {{ r.funnel.shortlisted_count }}</p>
+    <table>
+      <thead><tr><th class="num">#</th><th>{{ t.market }}</th><th class="num">{{ t.import_value }}</th><th class="num">{{ t.data_year }}</th></tr></thead>
+      <tbody>
+        {% for m in r.funnel.top_markets %}
+        <tr>
+          <td class="num">{{ m.rank }}</td>
+          <td>{{ m.importer_iso3 }}
+            {% if m.is_transit_hub %}<span class="pill warn">{{ t.transit_hub }}</span>{% endif %}
+            {% if m.is_mirror %}<span class="pill muted">{{ t.mirror }}</span>{% endif %}
+          </td>
+          <td class="num">{{ m.import_usd | usd }}</td>
+          <td class="num">{{ m.year if m.year is not none else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
   {% if r.markets %}
   {% for market in r.markets %}
   <section>

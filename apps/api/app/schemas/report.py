@@ -109,10 +109,38 @@ class ReportSummary(BaseModel):
     top_market_iso2: str | None
 
 
+class ReportFunnelMarket(BaseModel):
+    """One world-funnel market in the report's "world screened → top N" shortlist."""
+
+    rank: int
+    importer_iso3: str
+    #: Alpha-2 for the competitor/buyer machinery; None for an unmapped market.
+    market_iso2: str | None
+    year: int | None
+    import_usd: float | None  # None = a declared gap (I1), never a fabricated number
+    is_transit_hub: bool
+    is_mirror: bool
+    tags: list[str] | None
+
+
+class ReportFunnel(BaseModel):
+    """The world-market funnel result: the top markets an analysis screened to."""
+
+    #: The confirmed HS6 the world markets were screened for.
+    hs_code: str | None
+    #: Number of markets in the persisted shortlist (a faithful lower bound on the
+    #: total screened; the top slice of these is surfaced as ``top_markets``).
+    shortlisted_count: int
+    #: The transit-flagged (I9), year-stamped (decision #8) top markets.
+    top_markets: list[ReportFunnelMarket]
+
+
 class ProductReportOut(BaseModel):
     generated_at: datetime
     locale: str
     factory: ReportFactory
     product: ReportProduct
     summary: ReportSummary
+    #: "World screened → top N" — the funnel shortlist, or None if no analysis ran.
+    funnel: ReportFunnel | None
     markets: list[ReportMarket]

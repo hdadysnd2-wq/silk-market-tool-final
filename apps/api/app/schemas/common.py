@@ -73,6 +73,10 @@ class MessageResponse(BaseModel):
     detail: str
 
 
+class ErasureRequest(BaseModel):
+    email: str
+
+
 class AuditEntryOut(BaseModel):
     id: int
     action: str

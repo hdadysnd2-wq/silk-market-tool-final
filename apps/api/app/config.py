@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     access_token_ttl_minutes: int = 60 * 12
     otp_ttl_minutes: int = 10
 
+    # PDPL data-minimisation: contacts older than this whose campaign work is
+    # done have their personal data anonymised by the daily retention sweep.
+    pdpl_retention_days: int = 180
+
     # Storage
     storage_backend: str = "local"  # "local" | "s3"
     storage_local_dir: str = "./storage"

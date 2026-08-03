@@ -86,6 +86,36 @@ def run_hs_analysis(product_id: str, deepen: bool = False) -> dict:
         }
 
 
+@celery_app.task(name="app.workers.tasks.run_world_ranking")
+def run_world_ranking(analysis_id: str, hs6: str, top_n: int = 20) -> dict:
+    """Screen the world for a confirmed HS6 and persist the country shortlist.
+
+    Stage 1 of the world funnel: reads the precomputed ``world_trade`` table and
+    persists the ranked markets (with transit-port flags + provenance, I9/I1)
+    against the analysis. ``hs6`` is the human-confirmed code (I2) — the caller
+    passes it explicitly; this task never re-classifies.
+    """
+    import uuid as _uuid
+
+    from app.models import Analysis
+    from app.services.ranking import rank_and_persist
+
+    with session_scope() as db:
+        analysis = db.get(Analysis, _uuid.UUID(analysis_id))
+        if analysis is None:
+            return {"error": "analysis not found"}
+        rankings = rank_and_persist(db, analysis, hs6, top_n=top_n)
+        if analysis.status in ("pending", "classified"):
+            analysis.status = "ranked"
+        db.flush()
+        return {
+            "analysis_id": analysis_id,
+            "hs6": hs6,
+            "ranked": len(rankings),
+            "top5": [r.importer_iso3 for r in rankings[:5]],
+        }
+
+
 @celery_app.task(name="app.workers.tasks.draft_campaign_emails")
 def draft_campaign_emails(campaign_id: str) -> dict:
     from app.models import Campaign

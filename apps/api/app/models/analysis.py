@@ -11,6 +11,7 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -64,3 +65,39 @@ class HSClassification(UUIDMixin, TimestampMixin, Base):
     note: Mapped[str] = mapped_column(Text(), default="", nullable=False)
     # Human-confirmation gate (I2): a proposal is never auto-committed.
     is_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class CountryRanking(UUIDMixin, TimestampMixin, Base):
+    """A world-funnel country result for an analysis (the "world screened → top 5").
+
+    Persists the Stage-1 screen output (``services.world_funnel``) bound to an
+    analysis: the ranked importer, its screened score, and the transit-port /
+    mirror / no-data provenance tags (I9 / I1). ``rank`` 1..5 is the shortlist the
+    report surfaces as the top-5 export markets; ``stage`` records which funnel
+    stage produced the row (1 = local screen; Stage 2/3 enrichment lands later).
+    """
+
+    __tablename__ = "country_rankings"
+
+    analysis_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("analyses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    rank: Mapped[int] = mapped_column(Integer, nullable=False)  # 1 = best fit
+    importer_iso3: Mapped[str] = mapped_column(String(3), nullable=False)
+    year: Mapped[int | None] = mapped_column(Integer)
+    #: Screened volume (None when no data — I1) and multi-year trend.
+    import_usd: Mapped[float | None] = mapped_column(Numeric(18, 2))
+    yoy_growth: Mapped[float | None] = mapped_column(Numeric(8, 4))
+    cagr_3y: Mapped[float | None] = mapped_column(Numeric(8, 4))
+    #: Score after the transit-port penalty (I9) — the value that set the rank.
+    screen_score: Mapped[float] = mapped_column(Numeric(20, 4), default=0, nullable=False)
+    is_transit_hub: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_mirror: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    #: Visible provenance tags ("transit hub — …", "mirror data", "no data").
+    tags: Mapped[list[str] | None] = mapped_column(JSONB)
+    #: Funnel stage that produced this row (1 = local screen).
+    stage: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    source: Mapped[str] = mapped_column(String(64), default="world_trade", nullable=False)

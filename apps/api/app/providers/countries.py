@@ -84,6 +84,24 @@ GCC_MEMBERS = {"SA", "AE", "QA", "KW", "BH", "OM"}
 
 _M49_TO_ISO2 = {code: iso2 for iso2, (_, _, code, _) in COUNTRIES.items()}
 
+#: iso2 -> ISO 3166-1 alpha-3. The world-trade funnel keys markets by alpha-3
+#: (``importer_iso3``); this bridges them back to the alpha-2 the market,
+#: competitor, and buyer machinery uses. Covers every seeded market plus HKG,
+#: which shows up as a transit hub without a full market reference of its own.
+_ISO2_TO_ISO3: dict[str, str] = {
+    "SA": "SAU", "AE": "ARE", "QA": "QAT", "KW": "KWT", "BH": "BHR",
+    "OM": "OMN", "EG": "EGY", "JO": "JOR", "MA": "MAR", "IN": "IND",
+    "PK": "PAK", "BD": "BGD", "CN": "CHN", "JP": "JPN", "KR": "KOR",
+    "TR": "TUR", "DE": "DEU", "FR": "FRA", "NL": "NLD", "ES": "ESP",
+    "IT": "ITA", "PT": "PRT", "BE": "BEL", "PL": "POL", "GB": "GBR",
+    "US": "USA", "CA": "CAN", "BR": "BRA", "MX": "MEX", "CL": "CHL",
+    "AR": "ARG", "ZA": "ZAF", "NG": "NGA", "KE": "KEN", "ID": "IDN",
+    "MY": "MYS", "SG": "SGP", "TH": "THA", "VN": "VNM", "AU": "AUS",
+    "HK": "HKG",
+}  # fmt: skip
+
+_ISO3_TO_ISO2 = {iso3: iso2 for iso2, iso3 in _ISO2_TO_ISO3.items()}
+
 #: Language code -> the English name used in the drafting prompt.
 LANGUAGE_NAMES = {
     "en": "English",
@@ -109,6 +127,21 @@ def iso2_to_m49(iso2: str) -> str:
 
 def m49_to_iso2(m49: str) -> str | None:
     return _M49_TO_ISO2.get(str(m49).zfill(3))
+
+
+def iso3_to_iso2(iso3: str) -> str | None:
+    """Map an ISO 3166-1 alpha-3 code (as ``world_trade`` uses) to alpha-2.
+
+    Returns ``None`` for an unknown code — the funnel's ``importer_iso3`` may
+    include markets we hold no alpha-2 reference for. Callers degrade gracefully
+    rather than fabricating a code (I1).
+    """
+    return _ISO3_TO_ISO2.get((iso3 or "").upper())
+
+
+def iso2_to_iso3(iso2: str) -> str | None:
+    """Inverse of :func:`iso3_to_iso2`; ``None`` for an unknown alpha-2 code."""
+    return _ISO2_TO_ISO3.get((iso2 or "").upper())
 
 
 def primary_language(iso2: str) -> str:

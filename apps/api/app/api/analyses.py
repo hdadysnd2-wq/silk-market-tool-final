@@ -15,12 +15,22 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.api.deps import DbDep, get_owned_product
 from app.models import Analysis, CountryRanking, Product
 from app.models.product import Product as ProductModel
+from app.providers.countries import iso3_to_iso2
 from app.schemas.analysis import AnalysisOut, CountryRankingOut, FunnelBriefOut
 from app.security import CurrentUser, assert_factory_access
 from app.services.funnel_brief import build_funnel_brief
 from app.services.ranking import run_product_world_analysis
 
 router = APIRouter(tags=["analyses"])
+
+
+def _ranking_out(r: CountryRanking) -> CountryRankingOut:
+    out = CountryRankingOut.model_validate(r)
+    # Bridge the funnel's alpha-3 to the alpha-2 the competitor/buyer flow uses,
+    # so the top-5 can drill into each country's deep-dive. None for an unknown
+    # market — a declared gap, never a fabricated code (I1).
+    out.market_iso2 = iso3_to_iso2(r.importer_iso3)
+    return out
 
 
 def _to_out(db: DbDep, analysis: Analysis) -> AnalysisOut:
@@ -31,7 +41,7 @@ def _to_out(db: DbDep, analysis: Analysis) -> AnalysisOut:
         .all()
     )
     out = AnalysisOut.model_validate(analysis)
-    out.rankings = [CountryRankingOut.model_validate(r) for r in rankings]
+    out.rankings = [_ranking_out(r) for r in rankings]
     return out
 
 

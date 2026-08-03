@@ -12,8 +12,21 @@ import type { Analysis, FunnelBrief, Product } from "@/lib/types";
  * transit-port guard (I9) surfaces as a visible badge, and the data year travels
  * under every figure (decision #8). Running the funnel requires a human-confirmed
  * HS code (I2) — the API returns 409 otherwise.
+ *
+ * A top-5 row that carries a resolved alpha-2 (`market_iso2`) is a live entry
+ * point into that country's competitor deep-dive: clicking it calls
+ * `onSelectMarket`. A market we hold no alpha-2 for stays non-clickable — a
+ * declared gap, never a dead link.
  */
-export function WorldFunnel({ product }: { product: Product }) {
+export function WorldFunnel({
+  product,
+  onSelectMarket,
+  selectedMarket,
+}: {
+  product: Product;
+  onSelectMarket?: (iso2: string) => void;
+  selectedMarket?: string | null;
+}) {
   const t = useTranslations("funnel");
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [brief, setBrief] = useState<FunnelBrief | null>(null);
@@ -124,34 +137,58 @@ export function WorldFunnel({ product }: { product: Product }) {
             {t("screened", { count: analysis.rankings.length })}
           </p>
           <ul className="mt-3 divide-y divide-gray-100">
-            {top5.map((r) => (
-              <li key={r.importer_iso3} className="flex items-center justify-between gap-3 py-2">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold text-gray-400">#{r.rank}</span>
-                  <span className="text-sm font-medium text-gray-900">{r.importer_iso3}</span>
-                  {r.is_transit_hub && (
-                    <span
-                      className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700"
-                      title={t("transitHubHint")}
-                    >
-                      {t("transitHub")}
-                    </span>
-                  )}
-                  {r.is_mirror && (
-                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
-                      {t("mirror")}
-                    </span>
-                  )}
-                </div>
-                <div className="text-end">
-                  <div className="text-sm text-gray-900">{usd(r.import_usd)}</div>
-                  <div className="text-xs text-gray-400">
-                    {r.year ? t("yearLabel", { year: r.year }) : t("noData")} · {t("cagr")}{" "}
-                    {pct(r.cagr_3y)}
+            {top5.map((r) => {
+              const iso2 = r.market_iso2;
+              const clickable = Boolean(iso2 && onSelectMarket);
+              const isSelected = Boolean(iso2 && selectedMarket && iso2 === selectedMarket);
+              const rowInner = (
+                <>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-400">#{r.rank}</span>
+                    <span className="text-sm font-medium text-gray-900">{r.importer_iso3}</span>
+                    {r.is_transit_hub && (
+                      <span
+                        className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700"
+                        title={t("transitHubHint")}
+                      >
+                        {t("transitHub")}
+                      </span>
+                    )}
+                    {r.is_mirror && (
+                      <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
+                        {t("mirror")}
+                      </span>
+                    )}
                   </div>
-                </div>
-              </li>
-            ))}
+                  <div className="text-end">
+                    <div className="text-sm text-gray-900">{usd(r.import_usd)}</div>
+                    <div className="text-xs text-gray-400">
+                      {r.year ? t("yearLabel", { year: r.year }) : t("noData")} · {t("cagr")}{" "}
+                      {pct(r.cagr_3y)}
+                    </div>
+                  </div>
+                </>
+              );
+              return (
+                <li key={r.importer_iso3}>
+                  {clickable ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectMarket!(iso2!)}
+                      aria-pressed={isSelected}
+                      title={t("viewCompetitors")}
+                      className={`flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-start transition-colors hover:bg-gray-50 ${
+                        isSelected ? "bg-brand-50" : ""
+                      }`}
+                    >
+                      {rowInner}
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-between gap-3 px-2 py-2">{rowInner}</div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

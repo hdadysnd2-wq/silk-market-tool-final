@@ -25,6 +25,7 @@ from app.models.product import EMBEDDING_DIM, HSCode, HSCorrection, Product
 from app.models.sender_account import Notification, SenderAccount
 from app.models.shipment import Shipment
 from app.models.user import User
+from app.models.world_trade import WorldTrade
 
 __all__ = [
     "ALL_ENUMS",
@@ -60,5 +61,6 @@ __all__ = [
     "User",
     "UserRole",
     "VerificationStatus",
+    "WorldTrade",
     "utcnow",
 ]

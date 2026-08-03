@@ -23,6 +23,20 @@ jobs:
           python-version: "3.11"
       - run: python tools/check_no_pandas.py
 
+  etl:
+    name: ETL — offline transform tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # The world_trade transform (yoy/cagr/transit tagging) is pure Python and
+      # hermetically testable; the bulk Comtrade download (pandas) is Phase 3.
+      - run: pip install pytest
+      - run: python -m pytest etl/tests -q
+
   silk_intel:
     name: Engine — silk_intel hermetic tests
     runs-on: ubuntu-latest

@@ -58,6 +58,34 @@ def classify_product_hs(product_name: str, deepen: bool = False) -> dict:
     }
 
 
+@celery_app.task(name="app.workers.tasks.run_hs_analysis")
+def run_hs_analysis(product_id: str, deepen: bool = False) -> dict:
+    """Classify a product via the engine and persist the run to Postgres (I1/I2/I5).
+
+    Opens its own session scope (like ``run_discovery``), loads the product,
+    resolves HS6 proposals through ``silk_intel`` inside the re-established
+    ``/deepen`` scope, and persists an ``Analysis`` + one ``HSClassification`` per
+    ranked candidate, each with its full provenance envelope. Proposals are stored
+    unconfirmed — the human-confirm gate is not bypassed.
+    """
+    import uuid as _uuid
+
+    from app.models import Product
+    from app.services.analysis import classify_and_persist
+
+    with session_scope() as db:
+        product = db.get(Product, _uuid.UUID(product_id))
+        if product is None:
+            return {"error": "product not found"}
+        analysis = classify_and_persist(db, product, deepen=deepen)
+        db.flush()
+        return {
+            "analysis_id": str(analysis.id),
+            "status": analysis.status,
+            "deepen": deepen,
+        }
+
+
 @celery_app.task(name="app.workers.tasks.draft_campaign_emails")
 def draft_campaign_emails(campaign_id: str) -> dict:
     from app.models import Campaign

@@ -1,0 +1,22 @@
+family,source_name,url,scope
+food,UN Comtrade,https://comtradeplus.un.org/,trade flows
+food,ITC Trade Map,https://www.trademap.org/,trade flows
+food,World Bank WITS,https://wits.worldbank.org/,tariffs
+food,USDA FAS,https://fas.usda.gov/,import & labeling requirements
+food,trade.gov,https://www.trade.gov/,customs
+food,BlueWeave Consulting,https://www.blueweaveconsulting.com/,published market reports (GCC)
+textiles,UN Comtrade,https://comtradeplus.un.org/,trade flows
+textiles,ITC Trade Map,https://www.trademap.org/,trade flows
+textiles,World Bank WITS,https://wits.worldbank.org/,tariffs
+textiles,OTEXA,https://otexa.trade.gov/,quotas & labeling requirements
+textiles,Textile Exchange,https://textileexchange.org/,published market reports
+chemicals,UN Comtrade,https://comtradeplus.un.org/,trade flows
+chemicals,ITC Trade Map,https://www.trademap.org/,trade flows
+chemicals,World Bank WITS,https://wits.worldbank.org/,tariffs
+chemicals,ECHA,https://echa.europa.eu/,regulatory/REACH requirements
+chemicals,American Chemistry Council,https://www.americanchemistry.com/,published market reports
+machinery,UN Comtrade,https://comtradeplus.un.org/,trade flows
+machinery,ITC Trade Map,https://www.trademap.org/,trade flows
+machinery,World Bank WITS,https://wits.worldbank.org/,tariffs
+machinery,trade.gov,https://www.trade.gov/,customs
+machinery,VDMA,https://www.vdma.org/,published market reports (machinery)

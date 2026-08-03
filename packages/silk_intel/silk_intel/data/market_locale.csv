@@ -1,0 +1,46 @@
+# مرجع لغة/عملة/متاجر السوق — market locale reference for language-aware search (R1).
+# الغرض: تزويد البحث بلغة السوق الأساسية (hl)، نطاق الدولة (gl، ISO 3166-1 alpha-2)،
+#   العملة (ISO 4217)، ومنصّات البيع المعروفة — كي يبحث النظام كمستهلك محلي بدل التخمين.
+# المصادر: ISO 639 (اللغة) / ISO 3166 (الدولة) / ISO 4217 (العملة) — حقائق معيارية؛
+#   منصّات البيع (marketplaces/ethnic_retail) قائمة منسّقة للاستهداف — تُراجَع، لا تُعامَل
+#   كسعر مرصود. هذا جدول توجيه بحث، لا مصدر أرقام (المبدأ المؤسِّس ينطبق على الأسعار الناتجة).
+# التغطية: أسواق سِلك الـ38 (silk_market_ranker.COUNTRIES). سوق بلا صف => فجوة معلنة.
+iso3,name_en,lang_primary,lang_secondary,gl,currency,marketplaces,ethnic_retail,confidence,source,note
+ARE,United Arab Emirates,ar,en,ae,AED,Carrefour;Lulu Hypermarket;Noon;Amazon.ae,,0.85,Silk market-locale reference,السوق المحلي حلال أصلاً — لا حاجة لقناة إثنية منفصلة
+QAT,Qatar,ar,en,qa,QAR,Carrefour;Lulu Hypermarket;Al Meera;Snoonu,,0.85,Silk market-locale reference,
+KWT,Kuwait,ar,en,kw,KWD,Carrefour;Lulu Hypermarket;The Sultan Center;Oncost,,0.85,Silk market-locale reference,
+OMN,Oman,ar,en,om,OMR,Lulu Hypermarket;Carrefour;Nesto;Al Meera,,0.85,Silk market-locale reference,
+BHR,Bahrain,ar,en,bh,BHD,Lulu Hypermarket;Carrefour;Al Jazira;Talabat Mart,,0.85,Silk market-locale reference,
+JOR,Jordan,ar,en,jo,JOD,Carrefour;Sameh Mall;Cozmo;Talabat Mart,,0.85,Silk market-locale reference,
+LBN,Lebanon,ar,fr,lb,LBP,Spinneys;Carrefour;TSC;Toters,,0.8,Silk market-locale reference,عدم استقرار العملة — أكّد تاريخ رصد السعر
+EGY,Egypt,ar,en,eg,EGP,Carrefour;Spinneys;Gourmet;Amazon.eg;Talabat,,0.85,Silk market-locale reference,
+MAR,Morocco,ar,fr,ma,MAD,Marjane;Carrefour;Aswak Assalam;BIM;Jumia,,0.85,Silk market-locale reference,الفرنسية شائعة في البحث التجاري
+TUN,Tunisia,ar,fr,tn,TND,Carrefour;Monoprix;Géant;Aziza,,0.85,Silk market-locale reference,الفرنسية شائعة في البحث التجاري
+DZA,Algeria,ar,fr,dz,DZD,Ardis;Uno;Numidis;Carrefour,,0.8,Silk market-locale reference,تجارة إلكترونية محدودة — قد يقلّ الرصد
+IRQ,Iraq,ar,ku,iq,IQD,Miswag;Carrefour;City Center;Ishtari,,0.8,Silk market-locale reference,تجارة إلكترونية محدودة — قد يقلّ الرصد
+TUR,Turkey,tr,en,tr,TRY,Migros;BİM;A101;Trendyol;Hepsiburada,,0.85,Silk market-locale reference,ابحث بالتركية — النتائج الإنجليزية ضعيفة هنا
+YEM,Yemen,ar,,ye,YER,أسواق محلية;متاجر تجزئة محلية,,0.6,Silk market-locale reference,سوق مضطرب وبيانات شحيحة — الرصد قد يكون فجوة معلنة
+ZAF,South Africa,en,af,za,ZAR,Shoprite;Checkers;Pick n Pay;Woolworths;Takealot,Oriental Plaza;halal grocers,0.85,Silk market-locale reference,قناة حلال للجالية المسلمة
+NGA,Nigeria,en,ha,ng,NGN,Jumia;Konga;Shoprite;SPAR;Justrite,northern halal markets,0.85,Silk market-locale reference,الإنجليزية لغة تجارة رسمية — البحث بها يعمل
+KEN,Kenya,sw,en,ke,KES,Naivas;Carrefour;Quickmart;Jumia,,0.8,Silk market-locale reference,السواحيلية والإنجليزية كلتاهما تجاريتان
+ETH,Ethiopia,am,en,et,ETB,Queens Supermarket;Shoa;Fresh Corner,,0.75,Silk market-locale reference,تجارة إلكترونية محدودة — قد يقلّ الرصد
+GHA,Ghana,en,,gh,GHS,Melcom;Shoprite;Jumia;MaxMart,,0.8,Silk market-locale reference,
+IND,India,hi,en,in,INR,BigBasket;Amazon.in;Flipkart;JioMart;DMart,halal-certified brands,0.85,Silk market-locale reference,الإنجليزية تجارية واسعة — الهندية ترفع الرصد المحلي
+PAK,Pakistan,ur,en,pk,PKR,Daraz;Carrefour;Imtiaz;Metro,,0.85,Silk market-locale reference,السوق المحلي حلال أصلاً
+BGD,Bangladesh,bn,en,bd,BDT,Daraz;Chaldal;Shwapno;Meena Bazar,,0.85,Silk market-locale reference,ابحث بالبنغالية للرصد المحلي
+IDN,Indonesia,id,en,id,IDR,Tokopedia;Shopee;Alfamart;Indomaret;Blibli,,0.85,Silk market-locale reference,شهادة حلال MUI أساسية — السوق حلال أصلاً
+MYS,Malaysia,ms,en,my,MYR,Lazada;Shopee;Lotus's;AEON;Jaya Grocer,,0.85,Silk market-locale reference,حلال JAKIM أساسي — الملايوية والإنجليزية تجاريتان
+SGP,Singapore,en,zh,sg,SGD,FairPrice;Shopee;Lazada;RedMart;Cold Storage,halal aisle (MUIS),0.85,Silk market-locale reference,الإنجليزية أساس التجارة؛ الصينية للجالية
+THA,Thailand,th,en,th,THB,Lazada;Shopee;Tops;Big C;Lotus's,halal shops (south),0.85,Silk market-locale reference,ابحث بالتايلندية — النتائج الإنجليزية ضعيفة
+VNM,Vietnam,vi,en,vn,VND,Shopee;Lazada;Tiki;Bách Hóa Xanh;WinMart,,0.85,Silk market-locale reference,ابحث بالفيتنامية للرصد المحلي
+CHN,China,zh-CN,en,cn,CNY,Tmall;JD.com;Taobao;Pinduoduo;Sam's Club,清真 (halal) sections,0.85,Silk market-locale reference,ابحث بالصينية المبسّطة — البحث الإنجليزي يفشل هنا غالباً
+JPN,Japan,ja,en,jp,JPY,Rakuten;Amazon.co.jp;AEON;Ito-Yokado,,0.85,Silk market-locale reference,ابحث باليابانية — النتائج الإنجليزية ضعيفة
+KOR,South Korea,ko,en,kr,KRW,Coupang;Gmarket;Emart;Lotte Mart;Naver Shopping,,0.85,Silk market-locale reference,ابحث بالكورية — Naver محرك البحث الأساسي محلياً
+GBR,United Kingdom,en,,gb,GBP,Tesco;Sainsbury's;Asda;Amazon.co.uk;Ocado,halal grocers;World Foods aisles,0.9,Silk market-locale reference,قناة حلال قوية للجالية المسلمة
+DEU,Germany,de,tr,de,EUR,Amazon.de;REWE;Edeka;Aldi;Lidl,Turkish/Arab grocers (diaspora),0.9,Silk market-locale reference,ابحث بالألمانية؛ جالية تركية/عربية كبيرة قناة مهمة
+FRA,France,fr,,fr,EUR,Carrefour;Amazon.fr;Auchan;Leclerc;Intermarché,épiceries halal (Maghreb diaspora),0.9,Silk market-locale reference,ابحث بالفرنسية؛ قناة حلال مغاربية قوية
+ITA,Italy,it,en,it,EUR,Amazon.it;Esselunga;Conad;Coop;Carrefour,negozi halal,0.9,Silk market-locale reference,ابحث بالإيطالية
+ESP,Spain,es,ca,es,EUR,Amazon.es;Mercadona;Carrefour;El Corte Inglés;Dia,tiendas halal,0.9,Silk market-locale reference,ابحث بالإسبانية
+NLD,Netherlands,nl,en,nl,EUR,Albert Heijn;Jumbo;Bol.com;Amazon.nl;Picnic,toko/halal slagers,0.9,Silk market-locale reference,ابحث بالهولندية؛ الإنجليزية تعمل جزئياً
+USA,United States,en,es,us,USD,Amazon;Walmart;Kroger;Costco;Instacart,halal markets;Middle Eastern grocers,0.9,Silk market-locale reference,قناة بقالة شرق-أوسطية/حلال للجالية
+CAN,Canada,en,fr,ca,CAD,Amazon.ca;Loblaws;Walmart;Metro;Costco,halal markets;Adonis,0.9,Silk market-locale reference,قناة حلال/شرق-أوسطية (Adonis) للجالية

@@ -1,0 +1,24 @@
+name: Live smoke (opt-in)
+
+# مسار تكامل حي اختياري — NEVER runs on push/pull_request. تشغيل يدوي فقط
+# (Actions → "Live smoke (opt-in)" → Run workflow). يضرب مصادر مجانية بلا
+# مفتاح فقط (البنك الدولي) — لا مفاتيح مدفوعة، لا حرق أرصدة كلود/كومتريد.
+# يبدأ إغلاق فجوة "لا اختبار تكامل حي" دون المخاطرة بالميزانية أو CI العادي.
+on:
+  workflow_dispatch:
+
+jobs:
+  live-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest httpx
+      - name: Run the live smoke lane (World Bank only — free, keyless)
+        env:
+          SILK_RUN_LIVE: "1"
+        run: python -m pytest tests/test_live_smoke.py -m live -q

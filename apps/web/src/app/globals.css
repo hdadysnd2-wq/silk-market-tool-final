@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f6f7f5;
+  --foreground: #1a1c1a;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Latin numerals even inside Arabic text, for prices and scores. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}

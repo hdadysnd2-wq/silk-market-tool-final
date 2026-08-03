@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# One pipeline for the whole monorepo:
+#   guard-pandas  — invariant I7 (pandas confined to etl/)
+#   silk_intel    — vendored engine hermetic suite (packages/silk_intel)
+#   api           — apps/api ruff + migrations + pytest (Postgres + Redis)
+#   web           — apps/web lint + typecheck + build
+#   e2e           — apps/web Playwright against mocked APIs (no backend needed)
+
+jobs:
+  guard-pandas:
+    name: Guard — no pandas outside etl/ (I7)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python tools/check_no_pandas.py
+
+  silk_intel:
+    name: Engine — silk_intel hermetic tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: packages/silk_intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install engine deps
+        # Mirrors Repo A's proven hermetic CI: pinned runtime deps + pytest.
+        # pandas arrives transitively via pytrends (test fixtures only).
+        run: pip install -r silk_intel/requirements.txt pytest httpx
+      - name: Run hermetic engine tests
+        # Root conftest puts the engine dir on sys.path and anchors cwd there;
+        # pyproject sets testpaths = silk_intel/tests.
+        run: python -m pytest
+
+  api:
+    name: API — apps/api
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: silk
+          POSTGRES_PASSWORD: silk
+          POSTGRES_DB: silk_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U silk"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://silk:silk@localhost:5432/silk_test
+      REDIS_URL: redis://localhost:6379/0
+      STORAGE_BACKEND: local
+      COMTRADE_OFFLINE: "1"
+      MOCK_EMIT_ENGAGEMENT: "0"
+      SECRET_KEY: ci-secret-key-at-least-32-bytes-long-000
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - name: Sync dependencies
+        run: uv sync --extra dev
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Migrate (verifies migrations apply cleanly)
+        run: uv run alembic upgrade head
+      - name: Test
+        run: uv run pytest -q
+
+  web:
+    name: Web — apps/web
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
+
+  e2e:
+    name: Web — Playwright e2e (mocked)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e

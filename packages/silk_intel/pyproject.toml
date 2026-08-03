@@ -1,0 +1,134 @@
+[project]
+name = "silk-intel"
+version = "0.1.0"
+description = "Silk market-intelligence engine (vendored from Silk-market-intelligence) — HS resolution, world-market ranking, competitor/correlation agents, provenance-first DataPoint model, unified render/reports. Consumed in-process by the Celery workers in apps/api."
+requires-python = ">=3.11"
+# Runtime deps mirror the vendored engine's pinned production requirements
+# (silk_intel/requirements.txt). Kept in sync deliberately; bump together.
+dependencies = [
+    "requests==2.34.2",
+    "fastapi==0.139.0",
+    "uvicorn==0.50.0",
+    "python-docx==1.2.0",
+    "pytrends==4.9.2",
+    "bcrypt==4.2.1",
+    "python-multipart==0.0.20",
+]
+
+[project.optional-dependencies]
+# Test deps kept out of the pinned production set (matches Repo A's split).
+# pandas is pulled transitively by pytrends and is used ONLY by two test
+# fixtures that construct mock Google-Trends DataFrames — never by engine code
+# (enforced by tools/check_no_pandas.py at repo root).
+test = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+]
+
+# ---------------------------------------------------------------------------
+# Build configuration.
+#
+# The engine keeps Repo A's flat-module house style: every module is a
+# top-level import (`import silk_data_layer`), and the modules resolve their
+# reference data (data/*.csv) relative to their own location. To preserve that
+# — and to keep the 2,500+ vendored tests byte-identical — the import root is
+# the inner `silk_intel/` directory, mapped onto the root namespace here. An
+# editable install (`pip install -e packages/silk_intel`) therefore exposes
+# `silk_data_layer`, `silk_market_ranker`, `silk_platform`, … as top-level
+# imports, which is exactly how the Celery workers in apps/api consume them
+# (Phase 1 wiring). CI does not depend on this install: the hermetic test job
+# runs pytest directly with the engine dir on sys.path (see the root conftest),
+# mirroring Repo A's own proven CI.
+# ---------------------------------------------------------------------------
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "" = "silk_intel" }
+py-modules = [
+    "api",
+    "correlation",
+    "fix_agent",
+    "silk_agents",
+    "silk_ai_judge",
+    "silk_blocs",
+    "silk_cache",
+    "silk_channels_agent",
+    "silk_circuit",
+    "silk_collectors",
+    "silk_competitors_agent",
+    "silk_context",
+    "silk_data_layer",
+    "silk_data_layer_v2",
+    "silk_decision",
+    "silk_diagnostics",
+    "silk_discovery",
+    "silk_dynamics_agent",
+    "silk_engine",
+    "silk_eurostat_agent",
+    "silk_evals",
+    "silk_explee_agent",
+    "silk_faostat_agent",
+    "silk_gdelt_agent",
+    "silk_gmaps",
+    "silk_google_news_agent",
+    "silk_hs_attributes",
+    "silk_hs_classifier",
+    "silk_hs_confirm",
+    "silk_hs_dialog",
+    "silk_hs_resolver",
+    "silk_imf_agent",
+    "silk_importers_agent",
+    "silk_llm_provider",
+    "silk_llm_runtime",
+    "silk_localprice_agent",
+    "silk_maps_agent",
+    "silk_market_analyst",
+    "silk_market_ranker",
+    "silk_market_resolver",
+    "silk_missions",
+    "silk_narrative",
+    "silk_openalex_agent",
+    "silk_ops_log",
+    "silk_plausibility",
+    "silk_prerun",
+    "silk_pricing",
+    "silk_product_intake",
+    "silk_profiles",
+    "silk_quality",
+    "silk_quality_gate",
+    "silk_render",
+    "silk_reports",
+    "silk_requirements_agent",
+    "silk_research",
+    "silk_seed_data",
+    "silk_source_coverage",
+    "silk_staleness",
+    "silk_storage",
+    "silk_store",
+    "silk_style_contract",
+    "silk_synthesis",
+    "silk_tariffs_agent",
+    "silk_trace",
+    "silk_trend",
+    "silk_trends_agent",
+    "silk_usage",
+    "silk_volza_agent",
+    "silk_watchdog",
+    "silk_websearch_agent",
+    "silk_wto_tariff",
+]
+
+[tool.setuptools.packages.find]
+where = ["silk_intel"]
+include = ["silk_platform*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.csv", "*.json", "*.yaml", "*.yml"]
+
+[tool.pytest.ini_options]
+# The vendored hermetic suite lives beside the engine modules (Repo A layout).
+testpaths = ["silk_intel/tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]

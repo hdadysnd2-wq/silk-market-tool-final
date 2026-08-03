@@ -1,0 +1,122 @@
+{
+  "peanut_butter_200811": {
+    "hs_code": {
+      "value": "200811",
+      "source_url": "https://comtradeplus.un.org/",
+      "review_date": "2026-07-24",
+      "note": "Nuts; ground-nuts, prepared (HS 200811) — data/hs_reference.csv."
+    },
+    "parent_chapter": {
+      "value": "2008",
+      "source_url": "https://comtradeplus.un.org/",
+      "review_date": "2026-07-24"
+    },
+    "product_class": {
+      "value": "processed_food",
+      "source_url": "https://comtradeplus.un.org/",
+      "review_date": "2026-07-24"
+    },
+    "ingredient_class": {
+      "value": "plant",
+      "source_url": "https://comtradeplus.un.org/",
+      "review_date": "2026-07-24",
+      "note": "نباتيٌّ خالص — يُقرّر قواعدَ الحلال/الشهادة الصحّية حتمياً (نباتيّ ⇒ حلالٌ غيرُ إلزاميٍّ افتراضياً)."
+    },
+    "production_category": {
+      "value": "groundnuts",
+      "source_url": "https://www.fao.org/faostat/en/",
+      "review_date": "2026-07-24"
+    },
+    "storage_regime": {
+      "value": "ambient",
+      "source_url": "https://www.fsis.usda.gov/food-safety/safe-food-handling-and-preparation/food-safety-basics/shelf-stable-food",
+      "review_date": "2026-07-24",
+      "note": "صنفٌ «shelf-stable» يُخزَّن بحرارة الغرفة (USDA FSIS) — يفتح ممرّاتِ البحر/البرّ."
+    },
+    "shelf_life_days": {
+      "value": 365,
+      "source_url": "https://www.fsis.usda.gov/food-safety/safe-food-handling-and-preparation/food-safety-basics/shelf-stable-food",
+      "review_date": "2026-07-24",
+      "note": "قيمةٌ تشغيليةٌ محافِظةٌ مشتقّةٌ من صنف «shelf-stable» (المصدرُ يدعم الصنفَ لا اليومَ الدقيق) — تُراجَع ضدّ ملصق المُصنِّع.",
+      "reviewer": "Claude Code (افتراضٌ تشغيليّ)"
+    },
+    "unit_convention": {
+      "value": "kg",
+      "source_url": "https://comtradeplus.un.org/",
+      "review_date": "2026-07-24"
+    },
+    "plausibility_band": {
+      "per_capita_kg_min": {
+        "value": 0.0,
+        "source_url": "https://www.fao.org/faostat/en/#data/FBS",
+        "review_date": "2026-07-24"
+      },
+      "per_capita_kg_max": {
+        "value": 8.0,
+        "source_url": "https://www.fao.org/faostat/en/#data/FBS",
+        "review_date": "2026-07-24",
+        "note": "حدُّ سلامةٍ محافِظ لزبدة/محضَّر الفول السودانيّ (نصيبُ الفرد الفعليُّ أدنى بكثيرٍ في غالب الأسواق). (حدُّ سلامةٍ فوق نصيبِ الفرد المرصود في موازين FAOSTAT الغذائية — لا قياسٌ مباشرٌ للبند)."
+      }
+    }
+  },
+  "dates_080410": {
+    "hs_code": {
+      "value": "080410",
+      "source_url": "https://comtradeplus.un.org/",
+      "review_date": "2026-07-24",
+      "note": "Fruit, edible; dates, fresh or dried (HS 080410) — data/hs_reference.csv."
+    },
+    "parent_chapter": {
+      "value": "0804",
+      "source_url": "https://comtradeplus.un.org/",
+      "review_date": "2026-07-24"
+    },
+    "product_class": {
+      "value": "dried_produce",
+      "source_url": "https://comtradeplus.un.org/",
+      "review_date": "2026-07-24",
+      "note": "تمورٌ طازجةٌ أو مجفّفة — غالبُ التجارةِ مجفَّف."
+    },
+    "ingredient_class": {
+      "value": "plant",
+      "source_url": "https://comtradeplus.un.org/",
+      "review_date": "2026-07-24"
+    },
+    "production_category": {
+      "value": "dates",
+      "source_url": "https://www.fao.org/faostat/en/",
+      "review_date": "2026-07-24"
+    },
+    "storage_regime": {
+      "value": "ambient",
+      "source_url": "https://www.fsis.usda.gov/food-safety/safe-food-handling-and-preparation/food-safety-basics/shelf-stable-food",
+      "review_date": "2026-07-24",
+      "note": "صنفٌ «shelf-stable» يُخزَّن بحرارة الغرفة (USDA FSIS) — يفتح ممرّاتِ البحر/البرّ."
+    },
+    "shelf_life_days": {
+      "value": 365,
+      "source_url": "https://www.fsis.usda.gov/food-safety/safe-food-handling-and-preparation/food-safety-basics/shelf-stable-food",
+      "review_date": "2026-07-24",
+      "note": "قيمةٌ تشغيليةٌ محافِظةٌ مشتقّةٌ من صنف «shelf-stable» (المصدرُ يدعم الصنفَ لا اليومَ الدقيق) — تُراجَع ضدّ ملصق المُصنِّع.",
+      "reviewer": "Claude Code (افتراضٌ تشغيليّ)"
+    },
+    "unit_convention": {
+      "value": "kg",
+      "source_url": "https://comtradeplus.un.org/",
+      "review_date": "2026-07-24"
+    },
+    "plausibility_band": {
+      "per_capita_kg_min": {
+        "value": 0.0,
+        "source_url": "https://www.fao.org/faostat/en/#data/FBS",
+        "review_date": "2026-07-24"
+      },
+      "per_capita_kg_max": {
+        "value": 40.0,
+        "source_url": "https://www.fao.org/faostat/en/#data/FBS",
+        "review_date": "2026-07-24",
+        "note": "حدُّ سلامةٍ يستوعب الاستهلاكَ الخليجيَّ المرتفعَ للتمر (نصيبُ الفرد في السعودية/الخليج من الأعلى عالمياً). (حدُّ سلامةٍ فوق نصيبِ الفرد المرصود في موازين FAOSTAT الغذائية — لا قياسٌ مباشرٌ للبند)."
+      }
+    }
+  }
+}

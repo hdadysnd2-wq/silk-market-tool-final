@@ -1,0 +1,7 @@
+# ETL-only dependencies. pandas + comtradeapicall are permitted HERE ONLY (I7);
+# they must never be added to apps/api or packages/silk_intel requirements.
+# Installed on demand for offline bulk jobs, not by `make dev` or CI's app jobs.
+pandas>=2.2
+comtradeapicall>=0.7
+SQLAlchemy>=2.0
+psycopg[binary]>=3.2

@@ -1,0 +1,15 @@
+# مثبَّتة بإصدارات محدّدة (M0) — pinned for reproducible builds; bump deliberately.
+# Versions = the exact set proven green in CI on 2026-07-06.
+requests==2.34.2
+fastapi==0.139.0
+uvicorn==0.50.0
+python-docx==1.2.0
+pytrends==4.9.2
+# منصّة سِلك (silk_platform/): تجزئة كلمات المرور بـbcrypt عامل 12 (المواصفة §11).
+# عجلة Rust مستقلّة (لا cffi)؛ حين تغيب يرجع الكود إلى hashlib.scrypt القياسي.
+# Silk platform password hashing (bcrypt cost 12, spec §11); scrypt fallback if absent.
+bcrypt==4.2.1
+# منصّة سِلك: تحليل multipart/form-data لرفع الصور الحقيقي (PR-8) — FastAPI
+# يحتاجها فعلياً عند استعمال UploadFile/File/Form، وإلا يفشل عند التسجيل.
+# Silk platform: multipart/form-data parser FastAPI's UploadFile/File/Form need.
+python-multipart==0.0.20

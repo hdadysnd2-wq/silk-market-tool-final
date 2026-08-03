@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Node
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Playwright
+playwright-report/
+test-results/
+apps/web/playwright/.cache/
+
+# Env & secrets
+.env
+.env.local
+.env.*.local
+
+# Local runtime artifacts
+storage/
+outbox/
+*.log
+*.sqlite
+*.db
+.cache/
+# engine local caches / traces (replaced by Postgres+Redis in Phase 1)
+packages/silk_intel/silk_intel/data/cache/
+packages/silk_intel/silk_intel/data/traces/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# OS
+.DS_Store

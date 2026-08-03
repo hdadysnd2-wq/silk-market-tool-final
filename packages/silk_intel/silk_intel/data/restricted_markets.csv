@@ -1,0 +1,13 @@
+market_iso3,hs_prefix,kind,reason_ar,source_url
+SAU,0203,restricted_chapter,لحوم الخنزير محظورة الاستيراد في السوق السعودي (لائحة جمركية),https://zatca.gov.sa
+SAU,2208,restricted_chapter,المشروبات الروحية محظورة الاستيراد في السوق السعودي,https://zatca.gov.sa
+ARE,0203,restricted_chapter,لحوم الخنزير مقيّدة الاستيراد (قنوات مرخّصة فقط) في الإمارات,https://www.fca.gov.ae
+ARE,2208,restricted_chapter,المشروبات الروحية مقيّدة الاستيراد (تراخيص خاصة) في الإمارات,https://www.fca.gov.ae
+QAT,0203,restricted_chapter,لحوم الخنزير محظورة الاستيراد في السوق القطري,https://www.customs.gov.qa
+QAT,2208,restricted_chapter,المشروبات الروحية مقيّدة الاستيراد في السوق القطري,https://www.customs.gov.qa
+KWT,0203,restricted_chapter,لحوم الخنزير محظورة الاستيراد في السوق الكويتي,https://www.customs.gov.kw
+KWT,2208,restricted_chapter,المشروبات الروحية محظورة الاستيراد في السوق الكويتي,https://www.customs.gov.kw
+OMN,0203,restricted_chapter,لحوم الخنزير مقيّدة الاستيراد في السوق العُماني,https://www.customs.gov.om
+OMN,2208,restricted_chapter,المشروبات الروحية مقيّدة الاستيراد في السوق العُماني,https://www.customs.gov.om
+BHR,0203,restricted_chapter,لحوم الخنزير مقيّدة الاستيراد (قنوات مرخّصة) في البحرين,https://www.customs.gov.bh
+BHR,2208,restricted_chapter,المشروبات الروحية مقيّدة الاستيراد (تراخيص) في البحرين,https://www.customs.gov.bh

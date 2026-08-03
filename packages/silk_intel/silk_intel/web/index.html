@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>سِلك — ذكاء الأسواق</title>
+<!-- خطوط مستضافة ذاتياً (task 12) — لا CDN خارجي؛ الملفات في web/fonts/ -->
+<link href="fonts/fonts.css" rel="stylesheet">
+<style>
+  /* نظام تصميم سِلك — مطابق للنموذج الملزم docs/mockups/silk_prototype.html */
+  :root{
+    --bg:#FBFAF7;--panel:#FFFFFF;--ink:#1A2420;--ink-soft:#5C665F;
+    --line:#ECE8DF;--line-2:#DFDACF;--gold:#A9772F;--gold-soft:#F4ECDC;
+    --go:#3B7355;--go-soft:#E6F0EA;--warn:#A9791F;--warn-soft:#F7EEDA;
+    --bad:#A2402F;--bad-soft:#F6E7E2;--muted:#9C978A;--side:#F6F3EC;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);height:100vh;overflow:hidden;
+    font-family:"IBM Plex Sans Arabic",sans-serif;line-height:1.65;-webkit-font-smoothing:antialiased}
+  .num{font-family:"IBM Plex Mono",monospace;font-feature-settings:"tnum";direction:ltr;unicode-bidi:plaintext}
+  .app{display:grid;grid-template-columns:230px 1fr;height:100vh}
+  @media(max-width:840px){.app{grid-template-columns:1fr}.rail{display:none!important}}
+  .rail{background:var(--side);border-inline-end:1px solid var(--line);display:flex;flex-direction:column;padding:16px 12px}
+  .rail .brand{display:flex;align-items:baseline;gap:8px;padding:6px 8px 16px}
+  .rail .brand b{font-family:"Markazi Text",serif;font-size:26px;font-weight:700;line-height:1}
+  .rail .brand span{font-size:11px;color:var(--muted)}
+  .navbtn{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--ink-soft);
+    padding:11px 12px;border-radius:10px;cursor:pointer;font-weight:500;margin-bottom:3px}
+  .navbtn:hover{background:#EEEAE0}.navbtn.on{background:var(--ink);color:#fff}
+  .rail-lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;padding:14px 10px 8px;font-weight:600}
+  .hist{font-size:12.5px;color:var(--ink-soft);padding:8px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hist:hover{background:#EEEAE0}
+  .hist-rich{white-space:normal}
+  .hist-top{display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .hist-top b{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hist-badge{flex-shrink:0;font-size:10px;padding:2px 7px}
+  .hist-meta{font-size:11px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hist-resume{margin-top:6px;font-size:11px;font-weight:600;color:var(--gold);background:var(--gold-soft);border:none;border-radius:6px;padding:4px 9px;cursor:pointer}
+  .hist-note{font-size:11.5px;color:var(--muted);padding:8px 10px;line-height:1.5}
+  .rail-foot{margin-top:auto}
+  .gear{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-soft);padding:11px 12px;border-radius:10px;cursor:pointer}
+  .gear:hover{background:#EEEAE0}
+  .stage{overflow-y:auto;position:relative}
+  .view{display:none;min-height:100vh}.view.on{display:block}
+  .wrap{max-width:940px;margin:0 auto;padding:0 30px}
+  .topbar{height:56px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;background:var(--bg);z-index:5;gap:10px}
+  .topbar .ttl{font-family:"Markazi Text",serif;font-size:21px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .modes{display:flex;gap:4px;background:#EFEBE2;border-radius:9px;padding:3px}
+  .mode{font-size:13px;padding:6px 14px;border-radius:7px;cursor:pointer;color:var(--ink-soft)}
+  .mode.on{background:#fff;color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+  .band{padding:34px 0 6px}
+  .eyebrow{color:var(--gold);font-size:12px;font-weight:700;letter-spacing:2px;margin-bottom:8px}
+  .band h1{font-family:"Markazi Text",serif;font-size:36px;font-weight:700;line-height:1.15}
+  .band .sub{color:var(--ink-soft);font-size:15px;margin-top:4px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px;margin-top:22px}
+  .card.dash{border-style:dashed;border-color:var(--line-2);background:#FDFBF6}
+  .flabel{font-size:14px;font-weight:600;margin-bottom:10px;display:block}
+  .search{position:relative}
+  .search input{width:100%;height:54px;border:1.5px solid var(--line-2);border-radius:12px;padding:0 50px 0 16px;font-family:inherit;font-size:16px;background:#fff;color:var(--ink)}
+  .search input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 4px var(--gold-soft)}
+  .drop{position:absolute;top:58px;inset-inline:0;background:#fff;border:1px solid var(--line-2);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.08);z-index:20;max-height:260px;overflow-y:auto;padding:6px;display:none}
+  .drop.open{display:block}
+  .drow{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:14px}
+  .drow:hover{background:var(--gold-soft)}
+  .drow .hs{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted)}
+  .resolved{display:none;align-items:center;gap:8px;margin-top:11px;font-size:13px;color:var(--go);background:var(--go-soft);border-radius:8px;padding:8px 12px;width:fit-content}
+  .resolved.on{display:flex}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media(max-width:840px){.row2{grid-template-columns:1fr}}
+  .allm{font-size:13px;color:var(--ink-soft);padding:10px;border-radius:8px;cursor:pointer;border:1px dashed var(--line-2);text-align:center;margin-bottom:6px}
+  .allm:hover,.allm.sel{border-color:var(--gold);color:var(--gold);background:var(--gold-soft)}
+  .marketbox{max-height:210px;overflow-y:auto;border:1px solid var(--line);border-radius:12px;padding:6px}
+  .mrow{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:14px}
+  .mrow:hover{background:var(--gold-soft)}.mrow.sel{background:var(--go-soft)}
+  .mrow .iso{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);margin-inline-start:auto}
+  .presets{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .preset{font-size:13px;padding:7px 13px;border:1px solid var(--line-2);border-radius:8px;cursor:pointer;background:#fff;color:var(--ink-soft)}
+  .preset.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .yval{font-family:"IBM Plex Mono",monospace;font-size:20px;font-weight:600;color:var(--gold)}
+  .fourcol{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
+  @media(max-width:840px){.fourcol{grid-template-columns:repeat(2,1fr)}}
+  .mini label{font-size:12px;color:var(--ink-soft);display:block;margin-bottom:6px}
+  .mini input,.mini select{width:100%;height:42px;border:1px solid var(--line-2);border-radius:9px;padding:0 11px;font-family:inherit;font-size:14px;background:#fff;color:var(--ink)}
+  .opthead{display:flex;align-items:center;gap:10px;margin-bottom:5px}
+  .opthead b{font-family:"Markazi Text",serif;font-size:21px;font-weight:600}
+  .opttag{font-size:11px;color:var(--ink-soft);background:var(--line);padding:3px 9px;border-radius:6px}
+  .runbar{display:flex;align-items:center;justify-content:space-between;margin:26px 0 50px;gap:20px;flex-wrap:wrap}
+  .rsum{font-size:14px;color:var(--ink-soft)}.rsum b{color:var(--ink)}
+  .runbtn{background:var(--ink);color:#fff;border:none;border-radius:12px;padding:15px 32px;font-family:inherit;font-size:16px;font-weight:600;cursor:pointer}
+  .runbtn:hover{background:#0f1712}.runbtn:disabled{opacity:.5;cursor:default}
+  .verdict{margin:24px 0;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px 28px;display:grid;grid-template-columns:1fr auto;gap:26px;align-items:center}
+  @media(max-width:840px){.verdict{grid-template-columns:1fr}}
+  .vtag{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;padding:5px 12px;border-radius:20px;margin-bottom:12px;background:var(--warn-soft);color:var(--warn)}
+  .vtag.go{background:var(--go-soft);color:var(--go)}.vtag.no{background:var(--bad-soft);color:var(--bad)}
+  .vtag .d{width:8px;height:8px;border-radius:50%;background:currentColor}
+  .verdict h2{font-family:"Markazi Text",serif;font-size:28px;font-weight:700;line-height:1.25;margin-bottom:10px}
+  .verdict p{color:var(--ink-soft);font-size:15px;max-width:62ch}
+  .conf{text-align:center;padding-inline-start:24px;border-inline-start:1px solid var(--line);min-width:140px}
+  .conf .lvl{font-family:"Markazi Text",serif;font-size:24px;font-weight:700;color:var(--warn)}
+  .conf .cap{font-size:12px;color:var(--muted);margin-top:3px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:840px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .kpi .lab{font-size:12.5px;color:var(--ink-soft);margin-bottom:8px}
+  .kpi .val{font-size:24px;font-weight:600;margin-bottom:7px}.kpi .val small{font-size:14px;color:var(--ink-soft);font-weight:500}
+  .state{font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:12px}
+  .s-good{background:var(--go-soft);color:var(--go)}.s-warn{background:var(--warn-soft);color:var(--warn)}.s-mut{background:var(--line);color:var(--ink-soft)}
+  .kpi .src{font-size:11px;color:var(--muted);margin-top:9px}
+  .grid{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;margin:18px 0}
+  @media(max-width:840px){.grid{grid-template-columns:1fr}}
+  .bcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;min-width:0}
+  .bcard h3{font-family:"Markazi Text",serif;font-size:22px;font-weight:600;margin-bottom:3px}
+  .bcard .note{font-size:12px;color:var(--muted);margin-bottom:16px}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:start;font-size:12px;color:var(--muted);font-weight:600;padding-bottom:9px;border-bottom:1px solid var(--line)}
+  td{padding:12px 0;border-bottom:1px solid var(--line);font-size:14px}tr:last-child td{border-bottom:none}
+  .rowname{font-weight:600}
+  .bar{height:6px;border-radius:4px;background:var(--line);width:90px;display:inline-block;overflow:hidden;vertical-align:middle}
+  .bar i{display:block;height:100%;background:var(--gold)}
+  .you td{background:var(--gold-soft)}.you .rowname{color:var(--gold)}
+  .funnel{display:flex;flex-direction:column;gap:8px}
+  .fl{border-radius:8px;padding:12px 15px;color:#fff}.fl .k{font-size:12px;opacity:.9}.fl .v{font-size:18px;font-weight:600;font-family:"IBM Plex Mono",monospace;direction:ltr}
+  .f1{background:#2C4A43}.f2{background:#3E6A5E;margin:0 8%}.f3{background:var(--gold);margin:0 18%}
+  .price{grid-column:1/-1;background:linear-gradient(180deg,#fff,#FDFBF6);border-color:var(--line-2)}
+  .newbadge{background:var(--go);color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;margin-inline-start:8px}
+  .rec{text-align:center;padding:14px 18px;background:var(--go-soft);border:1px solid var(--go);border-radius:12px;width:fit-content}
+  .rec .k{font-size:12px;color:var(--go);font-weight:600}.rec .v{font-family:"IBM Plex Mono",monospace;font-size:22px;font-weight:600;margin:3px 0;direction:ltr}.rec .s{font-size:11px;color:var(--ink-soft)}
+  .next{background:var(--ink);color:#fff;border-radius:14px;padding:22px 26px;margin:18px 0;display:flex;align-items:center;justify-content:space-between;gap:22px;flex-wrap:wrap}
+  .next h4{font-family:"Markazi Text",serif;font-size:21px;font-weight:600;margin-bottom:5px}
+  .next ol{margin-top:10px;padding-inline-start:18px;color:#D4DEDA;font-size:13px}
+  .next .cta{background:var(--gold);color:#fff;border:none;border-radius:8px;padding:11px 20px;font-family:inherit;font-weight:600;font-size:14px;white-space:nowrap;cursor:pointer}
+  .toc{border-top:1px solid var(--line);padding:20px 0 50px}
+  .toc .h{font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:12px}
+  .tocg{display:grid;grid-template-columns:repeat(4,1fr);gap:7px 24px}
+  @media(max-width:840px){.tocg{grid-template-columns:repeat(2,1fr)}}
+  .ti{display:flex;gap:9px;font-size:12.5px;padding:5px 0;color:var(--ink-soft)}.ti b{color:var(--gold);font-family:"IBM Plex Mono",monospace;font-size:11px}
+  .expbtn{display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .gap{color:var(--muted)}
+  .empty{padding:70px 20px;text-align:center;color:var(--ink-soft);font-size:15px}
+  .cstream{padding:30px 0;flex:1;overflow-y:auto}
+  .turn{max-width:700px;margin:0 auto 24px;padding:0 24px}
+  .turn.me{display:flex;justify-content:flex-start}
+  .me .txt{background:var(--gold-soft);border-radius:16px 16px 16px 5px;padding:12px 18px;font-size:15px;max-width:80%}
+  .ai{display:flex;gap:13px}
+  .ava{width:30px;height:30px;border-radius:8px;background:var(--ink);color:#fff;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:"Markazi Text",serif;font-weight:700;font-size:16px}
+  .aibody{flex:1;min-width:0}.aibody>p{font-size:15px;margin-bottom:12px}
+  .agents{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:14px;background:var(--panel)}
+  .ahead{display:flex;align-items:center;gap:9px;padding:11px 15px;font-size:13px;font-weight:600;background:#FCFBF8}
+  .ahead .p{margin-inline-start:auto;font-size:12px;color:var(--muted);font-weight:500}
+  .alist{padding:4px 8px 8px}
+  .arow{display:flex;align-items:center;gap:10px;padding:7px 8px;font-size:13px;border-radius:7px}
+  .abadge{width:6px;height:6px;border-radius:50%}.b-done{background:var(--go)}.b-off{border:1px solid var(--line-2)}
+  .aname{flex:1}.aout{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--go);direction:ltr}.aout.off{color:var(--muted);font-family:inherit}
+  .rescard{border:1px solid var(--line-2);border-radius:14px;padding:20px;margin-bottom:12px;background:var(--panel)}
+  .rescard h4{font-family:"Markazi Text",serif;font-size:22px;font-weight:600;margin:8px 0}
+  .rescard p{font-size:14.5px;color:var(--ink-soft)}
+  .acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  .abtn{font-size:13px;padding:9px 15px;border-radius:9px;border:1px solid var(--line-2);background:#fff;cursor:pointer;color:var(--ink);font-family:inherit}
+  .abtn.main{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .composer{border-top:1px solid var(--line);padding:14px 24px 20px}
+  .cbox{max-width:700px;margin:0 auto;background:#fff;border:1.5px solid var(--line-2);border-radius:15px;padding:8px 8px 8px 16px;display:flex;align-items:flex-end;gap:10px}
+  .cbox:focus-within{border-color:var(--gold)}
+  .cbox textarea{flex:1;border:none;resize:none;font-family:inherit;font-size:15px;background:transparent;padding:9px 0;min-height:24px;outline:none;color:var(--ink)}
+  .sendb{width:38px;height:38px;border-radius:11px;background:var(--ink);color:#fff;border:none;cursor:pointer;font-size:16px}
+  .fnote{max-width:700px;margin:8px auto 0;font-size:11px;color:var(--muted);text-align:center}
+  .overlay{position:fixed;inset:0;background:rgba(26,36,32,.28);opacity:0;visibility:hidden;transition:.2s;z-index:40}
+  .overlay.open{opacity:1;visibility:visible}
+  .drawer{position:fixed;inset-block:0;inset-inline-start:0;width:400px;max-width:92vw;background:var(--bg);box-shadow:6px 0 30px rgba(0,0,0,.12);transform:translateX(-100%);transition:.25s;z-index:41;display:flex;flex-direction:column}
+  [dir="rtl"] .drawer{transform:translateX(100%)}
+  .drawer.open{transform:translateX(0)!important}
+  .dhead{padding:20px 22px 15px;border-bottom:1px solid var(--line)}
+  .dhead h3{font-family:"Markazi Text",serif;font-size:22px;font-weight:600}
+  .dhead .shared{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--go);background:var(--go-soft);padding:3px 9px;border-radius:6px;margin-top:6px}
+  .dbody{flex:1;overflow-y:auto;padding:15px 18px 30px}
+  .slbl{font-size:10.5px;color:var(--muted);font-weight:600;letter-spacing:1px;margin:12px 4px 9px}
+  .acard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin-bottom:10px}
+  .atop{display:flex;align-items:center;gap:11px}.aname2{flex:1}.aname2 b{font-size:13.5px;font-weight:600;display:block}.aname2 span{font-size:11px;color:var(--muted)}
+  .tg{width:40px;height:23px;border-radius:12px;background:var(--go);position:relative;cursor:pointer;flex-shrink:0}.tg.off{background:var(--line-2)}
+  .tg i{position:absolute;top:2.5px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;inset-inline-end:2.5px}.tg.off i{inset-inline-end:19.5px}
+  .cmd{margin-top:11px}.cmd label{font-size:11px;color:var(--ink-soft);display:block;margin-bottom:6px}
+  .cmd textarea{width:100%;font-family:inherit;font-size:12.5px;line-height:1.55;border:1px solid var(--line-2);border-radius:9px;padding:9px 11px;background:#FCFBF7;color:var(--ink);resize:none;min-height:48px}
+  .cmd textarea:focus{outline:none;border-color:var(--gold)}
+  .paidtag{font-size:10px;font-weight:700;color:var(--gold);background:var(--gold-soft);padding:2px 7px;border-radius:5px;margin-inline-start:6px}
+  .dfoot{padding:13px 20px;border-top:1px solid var(--line);display:flex;gap:10px}
+  .saveb{flex:1;background:var(--ink);color:#fff;border:none;border-radius:10px;padding:12px;font-family:inherit;font-weight:600;font-size:14px;cursor:pointer}
+  .resetb{background:#fff;border:1px solid var(--line-2);border-radius:10px;padding:12px 16px;font-family:inherit;font-size:13px;color:var(--ink-soft);cursor:pointer}
+  .keyrow{display:flex;gap:8px;margin-top:8px}
+  .keyrow input{flex:1;height:38px;border:1px solid var(--line-2);border-radius:8px;padding:0 10px;font-family:"IBM Plex Mono",monospace;font-size:12px;background:#fff;color:var(--ink)}
+  .toast{position:fixed;bottom:22px;inset-inline-start:50%;transform:translateX(50%);background:var(--ink);color:#fff;padding:11px 20px;border-radius:10px;font-size:13.5px;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+  ::-webkit-scrollbar{width:9px}::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:5px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="rail">
+    <div class="brand"><b>سِلك</b><span data-t="tag">ذكاء الأسواق</span></div>
+    <div class="modes" id="langSeg" style="margin:0 4px 12px;align-self:flex-start"><span class="mode on" data-lang="ar">العربية</span><span class="mode" data-lang="en">EN</span></div>
+    <div class="navbtn on" data-go="input">＋ <span data-t="navNew">تحليل جديد</span></div>
+    <div class="navbtn" data-go="board">▦ <span data-t="navBoard">اللوحة الأخيرة</span></div>
+    <div class="navbtn" data-go="chat">✎ <span data-t="navChat">دردشة</span></div>
+    <div class="rail-lbl" data-t="recent">التحليلات الأخيرة</div>
+    <div id="histList"></div>
+    <!-- تقرير الحارس (LAW — تسلسل القيادة: أداةٌ مملوكة للمالك حصراً) —
+         مدخلٌ منفصلٌ تماماً عن أي تحليل: وجهةٌ خاصّتها (v-watchdog) لا قسمٌ
+         داخل عرض تحليل. صفر سطرٍ حارسٍ يصل أي سطح عميل (مبدأ عدم التلوّث). -->
+    <div class="navbtn" id="watchdogNav" data-go="watchdog">🛡 <span data-t="navWatchdog">تقرير الحارس</span></div>
+    <div class="rail-foot"><div class="gear" id="gearBtn">⚙ <span data-t="agentSettings">إعدادات الوكلاء</span></div>
+      <div class="gear" id="svcKeyBtn" title="مفتاح الخدمة X-API-Key — خارج لوحة الوكلاء">🔑 <span data-t="svcKey">مفتاح الخدمة</span></div></div>
+  </div>
+
+  <div class="stage">
+    <!-- ===== INPUT ===== -->
+    <div class="view on" id="v-input">
+      <div class="topbar"><span class="ttl" data-t="navNew">تحليل جديد</span>
+        <div class="modes"><span class="mode on" data-t="modeInput">إدخال</span><span class="mode" data-go="chat" data-t="navChat">دردشة</span></div></div>
+      <div class="wrap">
+        <div class="band"><div class="eyebrow" data-t="eyebrow">ابدأ بمنتجك</div><h1 data-t="h1">حلّل سوق تصدير</h1>
+          <div class="sub" data-t="h1sub">اكتب المنتج، اختر السوق، وحدّد سنوات الدراسة — والمنصة تسحب البيانات الحقيقية.</div></div>
+        <div class="card">
+          <label class="flabel" data-t="q1">١ · ما المنتج؟</label>
+          <div class="itabs" id="intakeTabs" hidden style="display:flex;gap:6px;margin-bottom:8px">
+            <button type="button" class="itab sel" data-mode="name" data-t="tabName" style="flex:1;padding:7px 6px;font-size:12.5px;border:1px solid var(--line);border-radius:9px;background:var(--card);cursor:pointer">اكتب الاسم</button>
+            <button type="button" class="itab" data-mode="product" data-t="tabProduct" style="flex:1;padding:7px 6px;font-size:12.5px;border:1px solid var(--line);border-radius:9px;background:transparent;cursor:pointer">صوّر المنتج</button>
+            <button type="button" class="itab" data-mode="ingredients_label" data-t="tabLabel" style="flex:1;padding:7px 6px;font-size:12.5px;border:1px solid var(--line);border-radius:9px;background:transparent;cursor:pointer">صوّر بطاقة المكوّنات</button>
+          </div>
+          <div class="search"><input id="pSearch" placeholder="تمر، زعفران، عسل، رطب…" autocomplete="off">
+            <div class="drop" id="pDrop"></div></div>
+          <input type="file" id="pCam" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
+          <div id="intakeCard" hidden style="margin-top:9px;padding:10px 11px;border:1px solid var(--line);border-radius:11px;background:var(--card)"></div>
+          <div class="resolved" id="pResolved"></div>
+        </div>
+        <div class="row2">
+          <div class="card">
+            <label class="flabel" data-t="q2">٢ · السوق المستهدف</label>
+            <div class="allm sel" id="allMarkets" data-t="allMarkets">قارن كل الأسواق — الافتراضي يرتّب أكبر مستوردي منتجك عالمياً</div>
+            <div class="marketbox" id="marketBox"></div>
+          </div>
+          <div class="card">
+            <label class="flabel" data-t="q3">٣ · سنوات الدراسة</label>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+              <span class="yval" id="yearLabel"></span><span style="font-size:13px;color:var(--ink-soft)" id="yearSpanLbl"></span></div>
+            <div class="presets">
+              <span class="preset on" data-span="5" data-t="p5">آخر ٥ سنوات</span>
+              <span class="preset" data-span="3" data-t="p3">٣ سنوات</span>
+              <span class="preset" data-span="1" data-t="p1">سنة واحدة</span></div>
+          </div>
+        </div>
+        <div class="card dash">
+          <div class="opthead"><b data-t="q4">٤ · بطاقة منتجك</b><span class="opttag" data-t="optional">اختياري</span></div>
+          <div style="font-size:13px;color:var(--ink-soft);margin-bottom:16px" data-t="q4sub">أدخل تكلفتك لتفعيل «موقعك التنافسي» واقتراح التسعير.</div>
+          <div class="fourcol">
+            <div class="mini"><label data-t="cost">تكلفتك / وحدة</label><input class="num" id="cCost" type="number" step="0.01"></div>
+            <div class="mini"><label data-t="price">سعرك المستهدف</label><input class="num" id="cPrice" type="number" step="0.01"></div>
+            <div class="mini"><label data-t="tier">الفئة</label><select id="cTier"><option value="premium">فاخر</option><option value="standard">قياسي</option><option value="economy">اقتصادي</option></select></div>
+            <div class="mini"><label data-t="cap">الطاقة الشهرية</label><input class="num" id="cCap" type="number"></div>
+          </div>
+          <div class="mini" style="margin-top:10px"><label data-t="certs">الشهادات (مفصولة بفواصل)</label><input id="cCerts" type="text" placeholder="مثال: HALAL, ISO22000, SFDA"></div>
+        </div>
+        <div class="runbar">
+          <div class="rsum" id="runSum">اختر منتجاً للبدء</div>
+          <button class="runbtn" id="researchBtn" disabled title="يتطلب اختيار سوق واحد — ١٢ بعثة كلود + محلل شامل + تقرير مراجَع">بحث عميق (كلود) ←</button>
+          <button class="runbtn" id="runBtn" disabled data-t="run" title="مسح أوّلي: يرتّب الأسواق المرشّحة على بيانات تجارة/اقتصاد حرة + حكم كلود تقريبي (تفعيلة واحدة إن كان مفتاح كلود مضبوطاً) — للحكم الموثوق على سوق واحد استخدم «بحث عميق»">مسح الأسواق ←</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== BOARD ===== -->
+    <div class="view" id="v-board">
+      <div class="topbar"><span class="ttl" id="bTitle">اللوحة</span>
+        <div style="display:flex;gap:8px">
+          <button class="expbtn" id="pdfBtn" data-t="export" title="المُسلَّم النهائي للعميل — PDF غير قابل للتحرير (القسم 3، اتفاق المالك)">⇩ تصدير التقرير (PDF)</button>
+          <button class="abtn" id="wordBtn" title="نسخة تشغيلية قابلة للتحرير — للمشغّل لا العميل">Word (نسخة قابلة للتحرير)</button>
+          <button class="abtn" id="mdBtn">Markdown</button>
+          <button class="abtn" id="regenBtn" title="يعيد نداء الكاتب على البحث المحفوظ (بقروش، بلا إعادة بحث كامل) — لإنقاذ تقرير فشل توليد سرده">↻ إعادة توليد التقرير</button>
+        </div></div>
+      <div class="wrap" id="boardBody"><div class="empty" data-t="boardEmpty">شغّل تحليلاً من «تحليل جديد» أو الدردشة — اللوحة تُبنى من نتائج حقيقية.</div></div>
+    </div>
+
+    <!-- ===== CHAT ===== -->
+    <div class="view" id="v-chat" style="flex-direction:column;height:100vh">
+      <div class="topbar"><span class="ttl" data-t="navChat">دردشة</span>
+        <div class="modes"><span class="mode" data-go="input" data-t="modeInput">إدخال</span><span class="mode on" data-t="navChat">دردشة</span></div></div>
+      <div class="cstream" id="cStream">
+        <div class="turn"><div class="ai"><div class="ava">س</div><div class="aibody">
+          <p data-t="chatIntro">اسأل عن أي منتج وسوق — مثال: «حلّل التمور في الصين لآخر ٥ سنوات». أستخدم نفس الوكلاء ونفس إعداداتهم في المسار الأساسي.</p>
+        </div></div></div>
+      </div>
+      <div class="composer"><div class="cbox"><textarea id="chatBox" placeholder="اسأل عن أي منتج أو سوق…" rows="1"></textarea>
+        <button class="sendb" id="sendBtn">↑</button></div>
+        <div class="fnote" data-t="chatNote">كل سؤال يُطلق الوكلاء المفعّلين · نفس إعدادات المسار الأساسي</div></div>
+    </div>
+
+    <!-- ===== الحارس (تقرير مراقبة منفصل تماماً — LAW: للمالك حصراً) ===== -->
+    <div class="view" id="v-watchdog">
+      <div class="topbar"><span class="ttl" data-t="navWatchdog">تقرير الحارس</span></div>
+      <div class="wrap">
+        <div class="card" id="wdBadgeCard" style="margin-bottom:16px">
+          <div id="wdBadge" style="font-weight:700;font-size:16px">…</div>
+          <div id="wdBacklog" style="font-size:12px;color:var(--ink-soft);margin-top:6px"></div>
+          <div style="margin-top:12px"><button class="resetb" id="wdExportBtn">⇩ تنزيل تقرير مراقبة المنصّة (md)</button>
+            <button class="resetb" id="wdRefreshBtn" style="margin-inline-start:8px">↻ تحديث</button></div>
+        </div>
+        <div class="card">
+          <table style="width:100%;border-collapse:collapse;font-size:13px" id="wdTable">
+            <thead><tr style="text-align:start;border-bottom:1px solid var(--line)">
+              <th style="padding:8px 6px">التشغيلة</th><th style="padding:8px 6px">التاريخ</th>
+              <th style="padding:8px 6px">المنتج/السوق</th><th style="padding:8px 6px">الحالة</th>
+              <th style="padding:8px 6px">ما رُصد</th><th style="padding:8px 6px">الشدة</th></tr></thead>
+            <tbody id="wdRows"><tr><td colspan="6" style="padding:16px;color:var(--ink-soft)">جارٍ التحميل…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- shared settings drawer — إعدادات الوكلاء المشتركة بين الإدخال والدردشة -->
+<div class="overlay" id="ov"></div>
+<div class="drawer" id="dr">
+  <div class="dhead"><h3 data-t="agentSettings">إعدادات الوكلاء</h3>
+    <div class="shared" data-t="sharedNote">✓ مشتركة بين الإدخال والدردشة — التوجيه يوجّه التركيز فقط ولا يخترع بيانات · مفاتيح المصادر تُضبط في بيئة الخادم (Railway) لا هنا</div></div>
+  <div class="dbody" id="drawerBody"></div>
+  <div class="dfoot"><button class="saveb" id="savePrefs" data-t="save">حفظ التوجيهات</button><button class="resetb" id="resetPrefs" data-t="reset">استعادة الافتراضي</button></div>
+</div>
+
+<script>
+(function(){
+"use strict";
+var $=function(s){return document.querySelector(s)},$$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s))};
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function base(){return (localStorage.getItem("silk_api")||"").trim().replace(/\/+$/,"")}
+var CURY=new Date().getFullYear();
+/* i18n (P3 — بلاغ المالك: «لا يوجد لغة إنجليزي») — نصوص الهيكل بالاتجاهين؛
+   محتوى التقرير نفسه يصل من الخادم بالعربية (ترجمته الكاملة طبقة خادم لاحقة). */
+var T={
+ tag:{ar:"ذكاء الأسواق",en:"Market Intelligence"},
+ navNew:{ar:"تحليل جديد",en:"New analysis"},navBoard:{ar:"اللوحة الأخيرة",en:"Latest board"},navChat:{ar:"دردشة",en:"Chat"},
+ navWatchdog:{ar:"تقرير الحارس",en:"Watchdog report"},
+ recent:{ar:"التحليلات الأخيرة",en:"RECENT ANALYSES"},agentSettings:{ar:"إعدادات الوكلاء",en:"Agent settings"},
+ modeInput:{ar:"إدخال",en:"Form"},eyebrow:{ar:"ابدأ بمنتجك",en:"START WITH YOUR PRODUCT"},
+ h1:{ar:"حلّل سوق تصدير",en:"Analyze an export market"},
+ h1sub:{ar:"اكتب المنتج، اختر السوق، وحدّد سنوات الدراسة — والمنصة تسحب البيانات الحقيقية.",en:"Type the product, pick a market, set the study years — the platform pulls real data."},
+ q1:{ar:"١ · ما المنتج؟",en:"1 · What product?"},q2:{ar:"٢ · السوق المستهدف",en:"2 · Target market"},
+ allMarkets:{ar:"قارن كل الأسواق — الافتراضي يرتّب أكبر مستوردي منتجك عالمياً",en:"Compare all markets — default ranks your product's top global importers"},
+ q3:{ar:"٣ · سنوات الدراسة",en:"3 · Study years"},p5:{ar:"آخر ٥ سنوات",en:"Last 5 years"},p3:{ar:"٣ سنوات",en:"3 years"},p1:{ar:"سنة واحدة",en:"1 year"},
+ q4:{ar:"٤ · بطاقة منتجك",en:"4 · Your product card"},optional:{ar:"اختياري",en:"optional"},
+ q4sub:{ar:"أدخل تكلفتك لتفعيل «موقعك التنافسي» واقتراح التسعير.",en:"Enter your cost to unlock competitive position and price suggestion."},
+ cost:{ar:"تكلفتك / وحدة",en:"Cost / unit"},price:{ar:"سعرك المستهدف",en:"Your target price"},tier:{ar:"الفئة",en:"Tier"},cap:{ar:"الطاقة الشهرية",en:"Monthly capacity"},
+ certs:{ar:"الشهادات (مفصولة بفواصل)",en:"Certifications (comma-separated)"},
+ run:{ar:"مسح الأسواق ←",en:"Screen markets →"},running:{ar:"جارٍ المسح…",en:"Screening…"},
+ export:{ar:"⇩ تصدير التقرير (PDF)",en:"⇩ Export report (PDF)"},
+ boardEmpty:{ar:"شغّل تحليلاً من «تحليل جديد» أو الدردشة — اللوحة تُبنى من نتائج حقيقية.",en:"Run an analysis from “New analysis” or chat — the board is built from real results."},
+ chatIntro:{ar:"اسأل عن أي منتج وسوق — مثال: «حلّل التمور في الصين لآخر ٥ سنوات». أستخدم نفس الوكلاء ونفس إعداداتهم في المسار الأساسي.",en:"Ask about any product and market — e.g. “analyze dates in China for the last 5 years”. Same agents, same settings as the main flow."},
+ chatNote:{ar:"كل سؤال يُطلق الوكلاء المفعّلين · نفس إعدادات المسار الأساسي",en:"Every question runs the enabled agents · same settings as the main flow"},
+ sharedNote:{ar:"✓ مشتركة بين الإدخال والدردشة — التوجيه يوجّه التركيز فقط ولا يخترع بيانات · مفاتيح المصادر تُضبط في بيئة الخادم (Railway) لا هنا",en:"✓ Shared between form and chat — a directive steers focus only, it never fabricates data · source API keys live in server env (Railway), never here"},
+ svcKey:{ar:"مفتاح الخدمة",en:"Service key"},
+ save:{ar:"حفظ التوجيهات",en:"Save directives"},reset:{ar:"استعادة الافتراضي",en:"Restore defaults"},
+ marketsCount:{ar:"سوقاً في القائمة — و«قارن كل الأسواق» قد يتجاوزها ديناميكياً",en:"markets listed — “compare all” may extend beyond them dynamically"},
+ worldGroup:{ar:"كل دول العالم",en:"All world countries"},worldCov:{ar:"تغطية أساسية — بيانات محلية محدودة",en:"Basic coverage — limited local data"},
+ readyFor:{ar:"جاهز لتحليل",en:"Ready to analyze"},inM:{ar:"في",en:"in"},over:{ar:"عبر",en:"over"},allM:{ar:"كل الأسواق",en:"all markets"},pickFirst:{ar:"اختر منتجاً للبدء",en:"Pick a product to start"},
+ yearsWord:{ar:"سنوات",en:"years"},yearWord:{ar:"سنة",en:"year"},resolvedAs:{ar:"رمز HS: ",en:"HS code: "},
+ searchPh:{ar:"تمر، زعفران، عسل، رطب…",en:"dates, saffron, honey…"},chatPh:{ar:"اسأل عن أي منتج أو سوق…",en:"Ask about any product or market…"},
+ tabName:{ar:"اكتب الاسم",en:"Type name"},tabProduct:{ar:"صوّر المنتج",en:"Photo product"},tabLabel:{ar:"صوّر بطاقة المكوّنات",en:"Photo label"},
+ intakeReading:{ar:"جارٍ قراءة الصورة…",en:"Reading image…"},intakeConfirm:{ar:"أكّد اسم المنتج قبل التحليل:",en:"Confirm the product name before analysis:"},intakeConfirmBtn:{ar:"تأكيد ومتابعة",en:"Confirm & continue"},intakeCat:{ar:"الفئة",en:"Category"},intakeAttrs:{ar:"قياسات البطاقة",en:"Label measurements"},intakeIng:{ar:"المكوّنات",en:"Ingredients"},intakeConf:{ar:"ثقة القراءة",en:"Read confidence"},
+ keyPh:{ar:"مفتاح الخدمة X-API-Key (إن كانت المصادقة مفعّلة)",en:"Service key X-API-Key (if auth is enabled)"}
+};
+var LANG=localStorage.getItem("silk_lang")||"ar";
+function t(k){var e=T[k];return e?(e[LANG]||e.ar):k}
+function applyLang(){
+  document.documentElement.lang=LANG;document.documentElement.dir=(LANG==="ar")?"rtl":"ltr";
+  document.querySelectorAll("[data-t]").forEach(function(el){el.textContent=t(el.dataset.t)});
+  var ps=document.getElementById("pSearch");if(ps)ps.placeholder=t("searchPh");
+  var cb=document.getElementById("chatBox");if(cb)cb.placeholder=t("chatPh");
+  var ak=document.getElementById("adminKey");if(ak)ak.placeholder=t("keyPh");
+  document.querySelectorAll("#langSeg .mode").forEach(function(m){m.classList.toggle("on",m.dataset.lang===LANG)});
+}
+/* أسماء الأسواق بالعربية (مرآة silk_narrative.COUNTRY_AR) + الوكلاء الثمانية */
+var CAR={SAU:"السعودية",ARE:"الإمارات",QAT:"قطر",KWT:"الكويت",OMN:"عُمان",BHR:"البحرين",JOR:"الأردن",LBN:"لبنان",EGY:"مصر",MAR:"المغرب",TUN:"تونس",DZA:"الجزائر",IRQ:"العراق",TUR:"تركيا",YEM:"اليمن",ZAF:"جنوب أفريقيا",NGA:"نيجيريا",KEN:"كينيا",ETH:"إثيوبيا",GHA:"غانا",IND:"الهند",PAK:"باكستان",BGD:"بنغلاديش",IDN:"إندونيسيا",MYS:"ماليزيا",SGP:"سنغافورة",THA:"تايلند",VNM:"فيتنام",CHN:"الصين",JPN:"اليابان",KOR:"كوريا الجنوبية",GBR:"بريطانيا",DEU:"ألمانيا",FRA:"فرنسا",ITA:"إيطاليا",ESP:"إسبانيا",NLD:"هولندا",USA:"الولايات المتحدة",CAN:"كندا"};
+var AGENT_AR={market_size:{ar:"حجم السوق",en:"Market size"},competitor:{ar:"المنافسة",en:"Competition"},regulatory:{ar:"الاشتراطات",en:"Regulatory"},pricing:{ar:"التسعير",en:"Pricing"},risk:{ar:"المخاطر",en:"Risk"},consumer_demand:{ar:"ثقافة المستهلك",en:"Consumer demand"},supplier:{ar:"المورّدون",en:"Suppliers"},logistics:{ar:"اللوجستيات",en:"Logistics"}};
+function agentName(k){var e=AGENT_AR[k];return e?(e[LANG]||e.ar):"بيانات إضافية"}
+var S={product:"",hs:"",hsConfirmed:false,market:null,span:5,raw:null,view:null,busy:false,
+  adminKey:localStorage.getItem("silk_admin_key")||"",
+  prefs:JSON.parse(localStorage.getItem("silk_agent_prefs")||"null"),
+  hist:JSON.parse(localStorage.getItem("silk_hist")||"[]")};
+/* خطّافُ اختبارٍ فقط (Playwright/rung 3) — يضبط اسم منتجٍ حرٍّ لا يتطلّب
+   تطابقاً في فهرس البحث `#pSearch` (بعض عيّنات الاختبار — كتحقيق «زبدة الفول
+   السوداني» — غائبةٌ عمداً عن الفهرس، فهذا بالضبط سبب حاجتها لبوّابة
+   التصنيف العام). لا يُغيّر أيّ سلوك إنتاجي — مجرّد بديلٍ لنقر صفّ فهرسٍ. */
+window.__silkTestSetProduct=function(name){
+  S.product=name;S.hs=null;S.hsConfirmed=false;
+  $("#pSearch").value=name;$("#pResolved").classList.remove("on");sync()};
+
+/* الوكلاء المعروضون في الدرج — مرآة سجل الخادم (silk_agents.AGENT_CATALOG).
+   القائمة القانونية تُجلب من GET /settings/agents عند فتح الدرج؛ هذه نسخة
+   احتياط للعمل دون خادم فقط. المدفوع مطفأ افتراضياً. لا حقول مفاتيح هنا. */
+var AGENTS=[
+ {k:"trade",n:"وكيل التجارة",d:"حجم استيراد/تصدير السوق وحجم الفرصة · UN Comtrade",paid:false},
+ {k:"economic",n:"الوكيل الاقتصادي",d:"دخل الفرد والسكان · World Bank",paid:false},
+ {k:"competition",n:"وكيل المنافسة",d:"الدول المورّدة وحصصها ومنافسون بالاسم · UN Comtrade",paid:false},
+ {k:"regulatory",n:"وكيل الاشتراطات",d:"اشتراطات الدخول والتعريفة · مرجع L1 + WITS",paid:false},
+ {k:"risk",n:"وكيل المخاطر",d:"استقرار ولوجستيات وعملة · البنك الدولي",paid:false},
+ {k:"trends",n:"وكيل الاتجاهات",d:"اهتمام البحث والموسمية · Google Trends",paid:false},
+ {k:"maps",n:"وكيل الأعمال بالاسم",d:"مصانع وموزّعون بالاسم · Google Maps",paid:false},
+ {k:"channels",n:"وكيل قنوات التوزيع",d:"أبواب الدخول ومستوردون مرشّحون (الطبقة الحرة)",paid:false},
+ {k:"consumer",n:"وكيل ثقافة المستهلك",d:"هل المنتج مرغوب؟ · بحث + كلود",paid:false},
+ {k:"dynamics",n:"وكيل الديناميكيات",d:"دوافع وكوابح وفرص · بحث + كلود",paid:false},
+ {k:"synthesis",n:"حكم التوليف",d:"حكم كلود فوق حقائق الوكلاء المعزولة",paid:false},
+ {k:"pricing",n:"وكيل التسعير",d:"أسعار التجزئة الفعلية · تعميق مدفوع",paid:true},
+ {k:"importers",n:"وكيل المستوردين",d:"مستوردون بالاسم · Volza (تعميق)",paid:true},
+ {k:"contacts",n:"وكيل جهات الاتصال",d:"مشترون B2B · Explee (تعميق)",paid:true}];
+function defaultPrefs(){var p={};AGENTS.forEach(function(a){p[a.k]={on:!a.paid,cmd:""}});return p}
+if(!S.prefs)S.prefs=defaultPrefs();
+/* سجل الخادم القانوني — يحدّث AGENTS والإعدادات المحفوظة خادمياً عند التوفر.
+   بلاغ: اللوحة كانت تعرض الوكلاء الأربعة عشر القدامى فقط بصمت على أي نشر
+   محمي بـSILK_API_KEY قبل ضبط مفتاح الخدمة في المتصفح — fetch يعود 401،
+   catch القديم كان يبتلعه بلا أثر فيبقى AGENTS على القائمة الاحتياطية
+   للأبد. الآن: catalogStatus صريح يقرأه drawDrawer ليُظهر تحذيراً مرئياً. */
+S.catalogStatus="loading";
+function loadAgentCatalog(){return fetch(base()+"/settings/agents",{headers:hdrs(false)})
+  .then(function(r){if(!r.ok){var err=new Error("HTTP "+r.status);err.status=r.status;throw err}return r.json()})
+  .then(function(d){
+    if(d&&Array.isArray(d.agents)&&d.agents.length)
+      AGENTS=d.agents.map(function(a){return{k:a.key,n:a.name,d:a.role,paid:!!a.paid}});
+    if(d&&d.saved&&d.settings){S.prefs=d.settings;localStorage.setItem("silk_agent_prefs",JSON.stringify(S.prefs))}
+    AGENTS.forEach(function(a){if(!S.prefs[a.k])S.prefs[a.k]={on:!a.paid,cmd:""}});
+    S.catalogStatus="ok"})
+  .catch(function(e){
+    S.catalogStatus=(e&&e.status===401)?"unauthorized":"error";
+    AGENTS.forEach(function(a){if(!S.prefs[a.k])S.prefs[a.k]={on:!a.paid,cmd:""}})})}
+
+/* ── تنقّل ── */
+function nav(v){$$(".view").forEach(function(x){x.classList.remove("on");x.style.display="none"});
+  var t=$("#v-"+v);t.classList.add("on");t.style.display=(v==="chat")?"flex":"block";
+  $$(".navbtn").forEach(function(b){b.classList.toggle("on",b.dataset.go===v)})}
+$$(".navbtn,[data-go]").forEach(function(b){if(b.dataset.go)b.addEventListener("click",function(){nav(this.dataset.go)})});
+$$("#langSeg .mode").forEach(function(m){m.addEventListener("click",function(){LANG=this.dataset.lang;localStorage.setItem("silk_lang",LANG);applyLang();sync();if(S.view)renderBoard();if(S.marketsCache)drawMarkets(S.marketsCache)})});
+
+/* ── الشبكة ── */
+function hdrs(json){var h=json?{"Content-Type":"application/json"}:{};if(S.adminKey)h["X-API-Key"]=S.adminKey;return h}
+function toast(m){var el=document.createElement("div");el.className="toast";el.textContent=m;document.body.appendChild(el);setTimeout(function(){el.remove()},3200)}
+function detailText(d,raw){var x=d&&d.detail;if(x==null)return raw;if(typeof x==="string")return x;return x.message||x.reason||x.error||JSON.stringify(x)}
+function post(path,body){return fetch(base()+path,{method:"POST",headers:hdrs(true),body:JSON.stringify(body)}).then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}if(!r.ok){var er=new Error("HTTP "+r.status+" — "+detailText(d,t).toString().slice(0,200));er.__status=r.status;er.__detail=(d&&d.detail!=null)?d.detail:d;throw er}return d})})}
+/* حادثة نفاد الاعتمادات — الطلب لا يساوي التشغيلة (P0): GET بسيط لاستطلاع
+   الحالة، تُستعمل مع /research/{id}/status و/analyses/{id}. */
+function getJSON(path){return fetch(base()+path,{headers:hdrs(false)}).then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}if(!r.ok)throw new Error("HTTP "+r.status+" — "+detailText(d,t).toString().slice(0,200));return d})})}
+
+/* ── بحث المنتج ── */
+var pT;$("#pSearch").addEventListener("input",function(){var q=this.value.trim();clearTimeout(pT);
+  // MED (تدقيق الواجهة، M12): أي تعديل يُبطل الحلّ السابق فوراً — وإلا يبقى
+  // S.product/S.hs قديمَين (من اختيار سابق) فيُحلَّل منتج غير الظاهر في
+  // الصندوق صامتاً حين يُنقَر «مسح الأسواق» بلا اختيار صفٍّ جديد من القائمة.
+  if(S.product&&q!==S.product){S.product=null;S.hs=null;S.hsConfirmed=false;S.intakeIngredients=null;S.intakeCategory=null;S.intakeAttributes=null;$("#pResolved").classList.remove("on");sync()}
+  if(!q){$("#pDrop").classList.remove("open");return}
+  pT=setTimeout(function(){fetch(base()+"/index?q="+encodeURIComponent(q)+"&limit=10").then(function(r){return r.json()}).then(function(list){
+    if(!Array.isArray(list)||!list.length){$("#pDrop").classList.remove("open");return}
+    $("#pDrop").innerHTML=list.map(function(it){return '<div class="drow" data-n="'+esc(it.name)+'" data-hs="'+esc(it.hs)+'"><span>'+esc(it.name)+'</span><span class="hs">'+esc(it.hs)+'</span></div>'}).join("");
+    $("#pDrop").classList.add("open")}).catch(function(){})},200)});
+$("#pDrop").addEventListener("click",function(e){var r=e.target.closest(".drow");if(!r)return;
+  S.product=r.dataset.n;S.hs=r.dataset.hs;S.hsConfirmed=false;$("#pSearch").value=S.product;$("#pDrop").classList.remove("open");
+  // بلاغ حي (الموجة ٤ — اختيار الفهرس كان يتجاوز البوّابة): رمز صفّ الفهرس
+  // كان يُعرَض فوراً كـ«محسوم» بلا أيّ تحقّق تداخل (نفس فخّ «زبدة»→040510
+  // لو اختير صفٌّ لفظياً قريباً لا صحيحاً). المُصنِّف مُطفأ => السلوك كاليوم
+  // (رمز الفهرس نقطة انطلاق؛ بوّابة الخادم عند الإرسال تحسم فعلياً). مفعَّل
+  // => نفس نقطة اختناق التصنيف (`ensureHs`) — لا شارة «محسوم» قبل التحقّق.
+  if(!(S.cfg&&S.cfg.hs_classifier)){
+    $("#pResolved").classList.add("on");$("#pResolved").textContent=t("resolvedAs")+S.hs;sync();return}
+  $("#pResolved").classList.remove("on");sync();
+  ensureHs(function(){})});
+
+/* ── استقبال المنتج متعدّد الوسائط (الميزة ب) — three-tab intake ──
+   التبويبات مخفيّة حتى يؤكّد /config أن SILK_IMAGE_INTAKE مفعَّل (الافتراضي
+   مُطفأ => الواجهة كاليوم حرفياً). مسار الصورة يُرسَل لكلود فقط، والاستخلاص
+   يُعرَض في بطاقةٍ قابلة للتعديل تُؤكَّد قبل أن يبدأ أيّ تحليل — لا اختلاق. */
+var INTAKE_KIND="name";
+fetch(base()+"/config").then(function(r){return r.json()}).then(function(c){
+  S.cfg=c||{};
+  if(c&&c.image_intake){$("#intakeTabs").hidden=false}}).catch(function(){});
+$("#intakeTabs").addEventListener("click",function(e){var b=e.target.closest(".itab");if(!b)return;
+  $$(".itab").forEach(function(x){x.classList.remove("sel");x.style.background="transparent"});
+  b.classList.add("sel");b.style.background="var(--card)";INTAKE_KIND=b.dataset.mode;
+  $("#intakeCard").hidden=true;
+  if(INTAKE_KIND==="name"){$("#pSearch").style.display="";}
+  else{$("#pSearch").style.display="none";$("#pCam").value="";$("#pCam").click();}});
+$("#pCam").addEventListener("change",function(){var f=this.files&&this.files[0];if(!f)return;
+  if(f.size>5*1024*1024){intakeCardMsg(t("readFailMsg")||"حجم الصورة يتجاوز ٥ ميغابايت — اكتب الاسم يدوياً");return}
+  var rd=new FileReader();rd.onload=function(){
+    var b64=String(rd.result).split(",")[1]||"";
+    intakeCardMsg(t("intakeReading"));
+    fetch(base()+"/products/intake",{method:"POST",headers:hdrs(true),
+      body:JSON.stringify({image_base64:b64,kind:INTAKE_KIND,media_type:f.type||"image/jpeg"})})
+      .then(function(r){return r.json()}).then(renderIntake)
+      .catch(function(){intakeCardMsg("تعذّرت القراءة — اكتب الاسم يدوياً")})};
+  rd.readAsDataURL(f)});
+function intakeCardMsg(msg){var c=$("#intakeCard");c.hidden=false;c.innerHTML='<div style="font-size:12.5px;color:var(--muted)">'+esc(msg)+'</div>'}
+function renderIntake(res){
+  if(!res||res.ok!==true){
+    // تعذّر القراءة الصادق — أعِد المستخدم لتبويب الاسم بلا اختلاق منتج.
+    intakeCardMsg((res&&res.message)||"تعذّرت القراءة — اكتب الاسم يدوياً");
+    $("#pSearch").style.display="";return}
+  var x=res.extraction||{};var c=$("#intakeCard");c.hidden=false;
+  var ing=(x.ingredients&&x.ingredients.length)?('<div style="font-size:11.5px;color:var(--muted);margin-top:5px">'+esc(t("intakeIng"))+": "+esc(x.ingredients.slice(0,8).join("، "))+'</div>'):"";
+  var cat=x.category_hint?('<div style="font-size:11.5px;color:var(--muted);margin-top:3px">'+esc(t("intakeCat"))+": "+esc(x.category_hint)+'</div>'):"";
+  /* سماتُ البطاقة الرقمية (نسبة دهن/حجم/وزن) — تُعرَض للمستخدم كي يرى ما
+     قُرئ فعلاً، وتُخزَّن كي تحسم عتبةَ الترويسة لاحقاً بلا سؤاله عنها. */
+  var at=(x.attributes&&x.attributes.length)?('<div style="font-size:11.5px;color:var(--muted);margin-top:3px">'+esc(t("intakeAttrs"))+": "
+    +esc(x.attributes.slice(0,6).map(function(a){return a.name+" "+a.value+(a.unit||"")}).join("، "))+'</div>'):"";
+  c.innerHTML='<div style="font-size:12px;font-weight:700;margin-bottom:6px">'+esc(t("intakeConfirm"))+'</div>'
+    +'<input id="intakeName" value="'+esc(res.product_name||"")+'" style="width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:9px;background:var(--card);font-size:13px">'
+    +cat+ing+at
+    +'<div style="font-size:11px;color:var(--muted);margin-top:5px">'+esc(t("intakeConf"))+": "+Math.round((x.confidence||0)*100)+'%</div>'
+    +'<button type="button" id="intakeGo" style="margin-top:8px;padding:7px 12px;border:0;border-radius:9px;background:var(--accent,#6b4e2e);color:#fff;font-size:12.5px;cursor:pointer">'+esc(t("intakeConfirmBtn"))+'</button>';
+  // خزّن تلميحات الاستخلاص (مكوّنات/فئة) كي يُرسي عليها مُصنِّف HS لاحقًا (Wave 1).
+  S.intakeIngredients=(x.ingredients&&x.ingredients.length)?x.ingredients.slice(0,20):null;
+  S.intakeCategory=x.category_hint||null;
+  S.intakeAttributes=(x.attributes&&x.attributes.length)?x.attributes.slice(0,12):null;
+  $("#intakeGo").addEventListener("click",function(){
+    var nm=($("#intakeName").value||"").trim();if(!nm)return;
+    // بلاغ حي (الموجة ٤ — مسار الصورة كان يتجاوز البوّابة): كان يُحلّ عبر
+    // `/resolve` الحتمي الخام مباشرةً — يُظهر رمزاً «محسوماً» بلا أيّ تحقّق
+    // درجات، وهو بالضبط نفس فخّ «زبدة الفول السوداني» (تطابقٌ لفظيٌّ خاطئ)
+    // لكن من استخلاص صورةٍ لا بحثٍ مكتوب. الآن يمرّ عبر `ensureHs` — **نفس**
+    // نقطة اختناق التصنيف التي يستعملها الاسم المكتوب: تلقائيٌّ صارمٌ فقط
+    // حين محسومٌ فعلاً، وإلا صندوق حوار المرشّحين — لا ثقةٌ عمياء بـhs6.
+    $("#pSearch").style.display="";$("#pSearch").value=nm;S.product=nm;S.hs=null;S.hsConfirmed=false;
+    $("#pResolved").classList.remove("on");
+    c.hidden=true;sync();
+    ensureHs(function(){})})}
+
+/* ── الأسواق ── */
+function drawMarkets(list){
+  S.marketsCache=list;
+  var mname=function(m){return (LANG==="ar")?(m.name_ar||CAR[m.iso3]||m.name):m.name};
+  // تغطية العالم: صفوف الفئة-٢ (tier===2) تُسبَق بترويسة مجموعة «كل دول العالم»
+  // مع وسم التغطية الأساسية. مُطفأ افتراضياً (لا صفوف فئة-٢) => العرض كاليوم.
+  var t2hdr=false;
+  $("#marketBox").innerHTML=list.map(function(m){
+    var pre="";
+    if(m.tier===2&&!t2hdr){t2hdr=true;
+      pre='<div class="mgroup" style="font-size:11px;font-weight:700;color:var(--muted);padding:10px 10px 4px;border-top:1px solid var(--line);margin-top:4px">'
+        +esc(t("worldGroup"))+'<div style="font-weight:400;font-size:10.5px;margin-top:2px">'+esc(m.coverage||t("worldCov"))+'</div></div>';}
+    return pre+'<div class="mrow" data-iso3="'+esc(m.iso3)+'" data-name="'+esc(mname(m))+'" data-en="'+esc(m.name)+'" data-tier="'+(m.tier||1)+'">'+esc(mname(m))+'<span class="iso">'+esc(m.iso3)+'</span></div>'}).join("")
+    +'<div style="font-size:11.5px;color:var(--muted);padding:9px 10px 4px" class="num-count">'+list.length+' '+t("marketsCount")+'</div>';
+  if(S.market){var sel=$("#marketBox .mrow[data-iso3=\'"+S.market.iso3+"\']");if(sel)sel.classList.add("sel")}}
+fetch(base()+"/markets").then(function(r){return r.json()}).then(function(list){
+  if(Array.isArray(list))drawMarkets(list)}).catch(function(){});
+$("#marketBox").addEventListener("click",function(e){var r=e.target.closest(".mrow");if(!r)return;
+  var was=r.classList.contains("sel");$$(".mrow").forEach(function(x){x.classList.remove("sel")});$("#allMarkets").classList.remove("sel");
+  if(was){$("#allMarkets").classList.add("sel");S.market=null}else{r.classList.add("sel");S.market={iso3:r.dataset.iso3,name:r.dataset.name}}sync()});
+$("#allMarkets").addEventListener("click",function(){$$(".mrow").forEach(function(x){x.classList.remove("sel")});this.classList.add("sel");S.market=null;sync()});
+
+/* ── السنوات ── */
+$$(".preset").forEach(function(p){p.addEventListener("click",function(){$$(".preset").forEach(function(x){x.classList.remove("on")});this.classList.add("on");S.span=+this.dataset.span;sync()})});
+function years(){var to=CURY-1,from=to-S.span+1;return[from,to]}
+function sync(){var y=years();$("#yearLabel").textContent=y[0]+" – "+y[1];$("#yearSpanLbl").textContent=S.span+" "+(S.span>2?t("yearsWord"):t("yearWord"));
+  $("#runBtn").disabled=!S.product||S.busy;
+  $("#researchBtn").disabled=!S.product||!S.market||S.busy;
+  // تدقيق الواجهة (HIGH#1): زر الإرسال في الدردشة كان يبقى فعّالاً بصرياً أثناء
+  // انشغال المحرّك، فالنقر يعود بصمت (نفس صنف #98). عطّله مع S.busy كبقية الأزرار.
+  var sd=$("#sendBtn");if(sd)sd.disabled=S.busy;
+  $("#runSum").innerHTML=S.product?(t("readyFor")+" <b>"+esc(S.product)+"</b> "+t("inM")+" <b>"+esc(S.market?S.market.name:t("allM"))+"</b> "+t("over")+" <b>"+y[0]+"–"+y[1]+"</b>"):t("pickFirst")}
+applyLang();sync();
+
+/* ── التحليل ── */
+function certList(){return ($("#cCerts").value||"").split(",").map(function(s){return s.trim()}).filter(Boolean)}
+function buildBody(){var y=years();
+  var b={product:S.product,year:y[1],persist:true,trend_span:S.span<2?2:S.span,agent_prefs:S.prefs};
+  if(S.market)b.markets=[S.market.iso3];
+  // بلاغ حي (الموجة ٣ — بوّابة HS العامة): /analyze لم يكن يرسل hs_code
+  // إطلاقاً، فبوّابة التأكيد (preflight_block) كانت تحسم رمزاً من الصفر
+  // في كل مرة بلا أثرٍ لاختيار المستخدم السابق عبر صندوق الحوار.
+  if(S.hs)b.hs_code=S.hs;
+  if(S.hsConfirmed)b.hs_confirmed=true;
+  // قياساتُ بطاقة العبوة تُرسَل كي تحسم عتبةَ الترويسة على الخادم قبل أيّ
+  // حوارٍ يسأل التاجرَ عن رقمٍ يُجيب عنه المنتجُ نفسُه.
+  if(S.intakeAttributes)b.label_attributes=S.intakeAttributes;
+  var cost=parseFloat($("#cCost").value),price=parseFloat($("#cPrice").value),cap=parseFloat($("#cCap").value),certs=certList();
+  if(!isNaN(cost))b.product_card={cost_per_unit:cost,tier:$("#cTier").value,monthly_capacity:isNaN(cap)?null:cap,shipping_per_unit:null,certifications:certs.length?certs:null};
+  if(!isNaN(price))b.own_price=price;return b}
+function runAnalysis(then){if(!S.product||S.busy)return;S.busy=true;sync();$("#runBtn").textContent=t("running");
+  post("/analyze",buildBody()).then(function(res){S.raw=res;S.view=res.view||null;S.busy=false;$("#runBtn").textContent=t("run");sync();
+    pushHist(res&&res.analysis_id||null);renderBoard();if(then)then(res);else nav("board")})
+  .catch(function(e){S.busy=false;$("#runBtn").textContent=t("run");sync();
+    var d=e&&e.__detail;
+    // بوّابة تأكيد HS (422، الموجة ٣): صندوقُ حوارٍ حاجبٌ بمرشّحين فعليّين
+    // — لا توصيةٌ صامتة، ولا «✓» أبداً على ردٍّ مرفوض.
+    if(d&&d.error==="hs_confirmation_needed"){return showHsCandidates(d,function(){runAnalysis(then)})}
+    if(d&&d.error==="hs_ambiguous"){return showHsCandidates(d,function(){runAnalysis(then)})}
+    // رمز HS غير محسوم إطلاقاً (بوّابة SILK_REQUIRE_HS6، إن فُعِّلت) — نفس
+    // مسار /research (كان غائباً هنا تماماً قبل الموجة ٣).
+    if(d&&d.error==="unresolved_hs"){S.hs=null;S.hsConfirmed=false;return ensureHs(function(){runAnalysis(then)})}
+    toast("فشل الطلب: "+e.message)})}
+$("#runBtn").addEventListener("click",function(){runAnalysis()});
+
+/* بحث عميق — ١٢ بعثة كلود + محلل شامل + كاتب/مراجع (POST /research، لا
+   /analyze). يتطلب سوقاً واحداً محدداً (S.market) — البحث العميق يحلّل سوقاً
+   بعينه بعمق، لا يرتّب أسواقاً مرشّحة. 409 من البوابة المسبقة (كلود غير
+   متاح) يُعرض كرسالة واضحة — لا إعادة محاولة تلقائية بـallow_degraded.
+
+   حادثة نفاد الاعتمادات (P0): async_run=true — الطلب يعيد analysis_id
+   فوراً (202) بدل انتظار اتصال HTTP واحد قد تقطعه بوّابة عكسية منتصف
+   الطريق؛ اللوحة تستطلع GET /research/{id}/status دورياً وتعرض تقدّم
+   البعثات (س/١٢)، ثم تجلب النتيجة الكاملة عند الاكتمال. تشغيلة فاشلة
+   تُخزَّن معرّفها (S.lastFailedResearchId) — النقر مجدداً **يستأنفها**
+   بدل تشغيلة كاملة جديدة (لا حرق اعتمادات مضاعف). */
+function stopResearchPoll(){if(S.researchPollTimer){clearTimeout(S.researchPollTimer);S.researchPollTimer=null}}
+/* تقدّم حيّ بالتكلفة (المرحلة/الزمن/النداءات/التكلفة حتى الآن) — من نفس
+   حقول /research/{id}/status المُغذّاة من عدّاد البيانات القائم (لا عدّاد
+   جديد). التكلفة دوماً بعلامة "~" (تقدير من دفتر أسعار مُسعَّر لا رقم
+   مؤكَّد)، ونموذج غير مُسعَّر يظهر كعلَم صدق صريح لا صفراً مخفياً. */
+function fmtElapsed(s){if(s==null)return null;return s<60?(s+" ث"):(Math.round(s/60)+" د")}
+function researchProgressText(st){
+  if(!st.stage_label)return "…جارٍ البحث ("+st.missions_completed+"/"+st.missions_total+")";
+  var t="…"+st.stage_label;
+  if(st.stage==="missions")t+=" ("+st.missions_completed+"/"+st.missions_total+")";
+  var el=fmtElapsed(st.elapsed_seconds);if(el)t+=" · "+el;
+  if(st.llm_calls!=null)t+=" · نداءات: "+st.llm_calls;
+  if(st.cost_usd_estimate!=null){
+    t+=" · التكلفة حتى الآن: ~$"+st.cost_usd_estimate.toFixed(2);
+    if(st.cost_unpriced_models&&st.cost_unpriced_models.length)t+=" ⚠"}
+  return t}
+function pollResearchStatus(analysisId,lbl){
+  getJSON("/research/"+analysisId+"/status").then(function(st){
+    if(st.status==="running"){
+      $("#researchBtn").textContent=researchProgressText(st);
+      S.researchPollTimer=setTimeout(function(){pollResearchStatus(analysisId,lbl)},1500);return}
+    stopResearchPoll();
+    if(st.status==="completed"){
+      getJSON("/analyses/"+analysisId).then(function(res){
+        S.raw=res;S.view=res.view||null;S.busy=false;S.lastFailedResearchId=null;$("#researchBtn").textContent=lbl;sync();
+        pushHist(analysisId);renderBoard();nav("board")})
+      .catch(function(e){S.busy=false;$("#researchBtn").textContent=lbl;sync();toast("اكتمل البحث لكن تعذّرت قراءة النتيجة: "+e.message)});
+      return}
+    // 'failed' — البعثات المكتملة محفوظة؛ النقر القادم يستأنف بنفس المعرّف لا يبدأ من الصفر.
+    S.busy=false;S.lastFailedResearchId=analysisId;$("#researchBtn").textContent=lbl;sync();
+    toast("تعذّر إكمال البحث (رقم "+analysisId+") — البعثات المكتملة محفوظة، انقر مجدداً للاستئناف")})
+  .catch(function(e){stopResearchPoll();S.busy=false;
+    // HIGH#3: عطل استطلاع عابر لا يعني فشل التشغيلة — هي مستمرة على الخادم. احفظ
+    // معرّفها (كفرع 'failed') كي يستأنف النقر التالي بدل تشغيلة كاملة جديدة (منع
+    // إنفاق مضاعف — نفس ضمانة async/resume، راجع تعليق L486-491).
+    S.lastFailedResearchId=analysisId;$("#researchBtn").textContent=lbl;sync();
+    toast("تعذّر استطلاع الحالة (رقم "+analysisId+") — التشغيلة مستمرة على الخادم، انقر «بحث عميق» للاستئناف")})}
+/* ── تدفّق ما قبل التشغيل الموحّد (Wave 1، مندوبات المالك) ──
+   اسم/صورة → استخلاص (إن صورة) → تصنيف HS (اقتراحٌ يؤكّده المستخدم) → استشارات
+   (بلد المنشأ/خارج التغطية) → موافقة → حجز → تشغيل. كل الخطوات أعلامٌ افتراضها
+   مُطفأ (السلوك كاليوم): بلا مُصنِّف مفعّل يمرّ برمز /resolve كما اليوم؛ استشارة
+   بلد المنشأ تظهر فقط على 422 من الخادم. */
+function modal(inner){
+  var ov=document.createElement("div");ov.className="prov";
+  ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;z-index:9999";
+  var card=document.createElement("div");
+  card.style.cssText="background:var(--card,#fff);color:var(--text,#1a1a1a);max-width:440px;width:calc(100% - 40px);border:1px solid var(--line,#e3ddd2);border-radius:14px;padding:18px;box-shadow:0 12px 40px rgba(0,0,0,.25);font-size:13px;line-height:1.7";
+  card.innerHTML=inner;ov.appendChild(card);document.body.appendChild(ov);
+  ov.close=function(){ov.remove()};
+  ov.addEventListener("click",function(e){if(e.target===ov)ov.close()});
+  return ov}
+/* اضمن رمز HS مؤكَّدًا قبل التشغيل — إن كان محسومًا (قائمة/تصنيف سابق) تابِع؛
+   وإلا والمُصنِّف مفعّل: استدعِ /classify_hs واعرض الاقتراح للتأكيد. مُطفأ =>
+   السلوك كاليوم (يمرّ برمز فارغ؛ الخادم يقرّر عبر بوّابته). */
+function ensureHs(cb){
+  // المُصنِّف مُطفأ => السلوك كاليوم (يمرّ برمز /resolve؛ الخادم يقرّر ببوّابته).
+  if(!(S.cfg&&S.cfg.hs_classifier)){return cb()}
+  // مُفعَّل — الموجة ٣ (المصنّف العام): `/classify_hs` يعيد نفس شكل
+  // `classify_general` (tier/candidates)، لا شكل الاقتراح الفردي القديم.
+  // tier="auto" فقط يُقبَل بلا صندوق حوار (فشل-آمن: الشكّ يعني السؤال لا
+  // التخمين). يغطّي كِلا مساري الإدخال (اسمٌ مكتوب أو صورة — S.intake*
+  // تصل من استخلاص الصورة إن وُجد).
+  toast("…جارٍ تصنيف المنتج");
+  post("/classify_hs",{product:S.product,ingredients:S.intakeIngredients||null,category:S.intakeCategory||null})
+    .then(function(res){
+      if(res&&res.tier==="auto"&&res.hs6){
+        S.hs=res.hs6;S.hsConfirmed=true;
+        $("#pResolved").classList.add("on");
+        $("#pResolved").textContent="✓ صُنّف تلقائياً — "+t("resolvedAs")+res.hs6;sync();
+        return cb()
+      }
+      showHsCandidates(res,cb)})
+    .catch(function(){showHsCandidates(null,cb)})}
+function _pct(c){return Math.round((c||0)*100)}
+/* صندوق حوار المرشّحين — نقطة اختناقٍ واجهةٍ واحدة (الموجة ٣): تُستعمَل
+   لكِلا مسارَي /classify_hs (ما قبل التشغيل) و422 hs_confirmation_needed
+   (وقت الإرسال، /analyze و/research معاً) — نفس شكل المرشّح
+   {hs6, description_ar, reason_ar, confidence, verified} في كلا المصدرين.
+   **لا تُعرَض شارة الحسم التلقائيّ هنا إطلاقاً** — هذا الصندوق بحكم تعريفه
+   حالة «غير محسوم»؛ تلك الشارة الوحيدة (نصّها في ensureHs) تظهر فقط حين
+   tier==="auto"، لا بعد اختيار المستخدم من هذا الصندوق. */
+function showHsCandidates(detail,cb){
+  var cands=((detail&&detail.candidates)||[]).filter(function(c){return c&&c.hs6});
+  var msg=(detail&&detail.message)||"لم يُحسَم رمز HS بثقة — اختر من المرشّحين أدناه أو أدخل رمزاً يدوياً.";
+  if(!cands.length){return showHsManual(cb)}
+  /* تقريرُ القياس (بلاغ المُشرِف): الحوارُ لم يعد يسأل التاجرَ عن عتبةٍ
+     جمركية — يعرض ما قيس وما نقص، وحدَّ كلِّ بندٍ بلغةٍ مفهومة («حتى 1%
+     نسبة الدهن») بدل تركه يترجم أرقام التعريفة بنفسه. */
+  var probe=(detail&&detail.attribute_probe)||null;
+  var ranges={};
+  ((probe&&probe.bands_ar)||[]).forEach(function(b){if(b&&b.hs6)ranges[b.hs6]=b.range_ar||""});
+  var probeHtml="";
+  if(probe&&probe.label_ar){
+    var tried=((probe.searched||[]).map(function(x){return "<li>"+esc(x)+"</li>"}).join(""));
+    probeHtml='<div style="margin-top:9px;padding:8px 10px;border:1px solid var(--line,#e3ddd2);border-radius:9px;font-size:11.5px;color:var(--muted,#8a8175)">'
+      +'<div style="font-weight:700;color:var(--text,#1a1a1a)">الفارق بين البنود قياسٌ رقميّ: '+esc(probe.label_ar)+'</div>'
+      +(probe.missing_ar?('<div style="margin-top:3px">'+esc(probe.missing_ar)+'</div>'):'')
+      +(tried?('<div style="margin-top:4px">ما جُرّب:</div><ul style="margin:2px 0 0;padding-inline-start:16px">'+tried+'</ul>'):'')
+      +'</div>'}
+  /* لا اقتطاعَ للقائمة: الخادمُ يُرسل أشقّاءَ المحور الرقميّ **كاملين**،
+     وقصُّها هنا كان يُخفي البندَ الصحيح (سقط 040140/040150 فلم يجد منتجٌ
+     كامل الدسم خياراً). الاكتمالُ شرطُ صحّةٍ لا تفضيلُ عرض. */
+  var rows=cands.map(function(c){
+    var badge=c.verified?'<span style="font-size:10px;color:#2e7d32;margin-inline-start:6px">✓ من مرجعنا</span>'
+      :'<span style="font-size:10px;color:var(--muted,#8a8175);margin-inline-start:6px">اقتراح</span>';
+    /* حدُّ البند من الخادم (مشتقٌّ من الوصف الرسميّ) — `band_ar` هو المصدر،
+       و`ranges` من تقرير القياس احتياطٌ للردود القديمة. */
+    var rtxt=c.band_ar||ranges[c.hs6]||"";
+    var rng=rtxt?('<div style="margin-top:2px;font-weight:700;color:var(--accent,#6b4e2e)">'+esc(rtxt)+'</div>'):'';
+    return '<button type="button" class="hsCand" data-hs="'+esc(c.hs6)+'" style="display:block;width:100%;text-align:right;margin-top:7px;padding:9px 11px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12.5px">'
+      +'<div style="font-weight:700">HS '+esc(c.hs6)+badge+'</div>'
+      +rng
+      /* بندٌ حقيقيٌّ لا وصفَ رسميّ له في نسختنا (ثلاثةَ عشرَ بنداً تعرفها
+         البذرةُ وحدها) — **فجوةٌ معلَنة** لا سطرٌ فارغٌ صامت، ولا نصٌّ
+         مُختلَقٌ يسدّها. */
+      +(c.description_ar?('<div style="margin-top:2px">'+esc(c.description_ar)+'</div>')
+        :'<div style="margin-top:2px;color:var(--muted,#8a8175)">لا وصفَ رسميّ لهذا البند في مرجعنا</div>')
+      +(c.reason_ar?('<div style="margin-top:2px;color:var(--muted,#8a8175)">'+esc(c.reason_ar)+'</div>'):'')
+      +'</button>'}).join('');
+  var m=modal('<div style="font-weight:700;font-size:14px;margin-bottom:8px">تأكيد رمز HS</div>'
+    +'<div style="font-size:12px;color:var(--muted,#8a8175)">'+esc(msg)+'</div>'
+    +probeHtml
+    +rows
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button type="button" id="hsCandManual" style="flex:1;padding:8px 12px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">إدخال رمز يدوياً</button>'
+    +'<button type="button" id="hsCandCancel" style="padding:8px 12px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">إلغاء</button>'
+    +'</div>');
+  m.querySelectorAll(".hsCand").forEach(function(b){b.addEventListener("click",function(){
+    var code=this.dataset.hs;S.hs=code;S.hsConfirmed=true;
+    $("#pResolved").classList.add("on");$("#pResolved").textContent=t("resolvedAs")+code;sync();
+    m.close();cb()})});
+  $("#hsCandManual",m).addEventListener("click",function(){m.close();
+    showHsManual(cb,cands.map(function(c){return{hs6:c.hs6,label:c.description_ar}}))});
+  $("#hsCandCancel",m).addEventListener("click",function(){m.close()})}
+function showHsManual(cb,alts){
+  alts=(alts||[]).filter(function(a){return a&&a.hs6});
+  var altHtml=alts.length?('<div style="font-size:11.5px;color:var(--muted,#8a8175);margin-top:8px">اقتراحات قريبة:</div>'
+    +alts.map(function(a){return '<button type="button" class="hsAlt" data-hs="'+esc(a.hs6)+'" style="display:block;width:100%;text-align:right;margin-top:5px;padding:7px 9px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">HS '+esc(a.hs6)+(a.label?(' — '+esc(a.label)):'')+'</button>'}).join('')):'';
+  var m=modal('<div style="font-weight:700;font-size:14px;margin-bottom:6px">تعذّر التصنيف — اختر الرمز يدويًا</div>'
+    +'<div style="color:var(--muted,#8a8175);font-size:12px">ابحث عن المنتج أو اكتب رمز HS (٦ أرقام):</div>'
+    +'<input id="hsPick" placeholder="ابحث… أو 190219" style="width:100%;margin-top:8px;padding:8px 9px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:var(--card,#fff);font-size:13px">'
+    +'<div id="hsPickDrop"></div>'+altHtml
+    +'<button type="button" id="hsPickGo" style="margin-top:12px;width:100%;padding:8px 12px;border:0;border-radius:9px;background:var(--accent,#6b4e2e);color:#fff;cursor:pointer;font-size:13px">تأكيد الرمز</button>');
+  function commit(code){code=(code||"").replace(/\D/g,"");if(code.length<4)return;S.hs=code;S.hsConfirmed=true;$("#pResolved").classList.add("on");$("#pResolved").textContent=t("resolvedAs")+code;sync();m.close();cb()}
+  m.querySelectorAll(".hsAlt").forEach(function(b){b.addEventListener("click",function(){commit(this.dataset.hs)})});
+  var pk=$("#hsPick",m),dp=$("#hsPickDrop",m),tmr;
+  pk.addEventListener("input",function(){var q=this.value.trim();clearTimeout(tmr);if(!q||/^\d+$/.test(q)){dp.innerHTML="";return}
+    tmr=setTimeout(function(){fetch(base()+"/index?q="+encodeURIComponent(q)+"&limit=8").then(function(r){return r.json()}).then(function(list){
+      if(!Array.isArray(list)||!list.length){dp.innerHTML="";return}
+      dp.innerHTML=list.map(function(it){return '<button type="button" class="hsIdx" data-hs="'+esc(it.hs)+'" style="display:block;width:100%;text-align:right;margin-top:5px;padding:6px 9px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">'+esc(it.name)+' <span style="color:var(--muted,#8a8175)">'+esc(it.hs)+'</span></button>'}).join("");
+      dp.querySelectorAll(".hsIdx").forEach(function(b){b.addEventListener("click",function(){commit(this.dataset.hs)})})}).catch(function(){})},220)});
+  $("#hsPickGo",m).addEventListener("click",function(){commit(pk.value)})}
+/* استشارة بلد المنشأ — تأكيدٌ صريح ثم إعادة الإرسال بموافقة (لا حجب نهائي). */
+function showProducerAdvisory(adv,onOk){
+  var exp=(adv.top_exporters||[]).slice(0,5).join("، ");
+  var m=modal('<div style="font-weight:700;font-size:14px;margin-bottom:8px">⚠ تنبيه: سوقٌ منتِجة</div>'
+    +'<div>'+esc(adv.message||"هذه الدولة من أكبر مصدّري هذا المنتج عالميًا — دراسة دخولها تنافسية جدًّا. أكمل؟")+'</div>'
+    +(exp?('<div style="font-size:11.5px;color:var(--muted,#8a8175);margin-top:8px">أكبر المصدّرين: '+esc(exp)+'</div>'):'')
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button type="button" id="advOk" style="flex:1;padding:8px 12px;border:0;border-radius:9px;background:var(--accent,#6b4e2e);color:#fff;cursor:pointer;font-size:13px">أكمل رغم ذلك</button>'
+    +'<button type="button" id="advNo" style="padding:8px 12px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">إلغاء</button>'
+    +'</div>');
+  $("#advOk",m).addEventListener("click",function(){m.close();onOk()});
+  $("#advNo",m).addEventListener("click",function(){m.close()})}
+/* لوحة «جاهزية الدراسة» (Wave 1.5، عائلة D) — كلُّ تدهورٍ معروفٍ قبل الحجز
+   كسطر ✓/⚠/✗، فلا يعرف المالك تدهورًا بعد الدفع. مُفعَّلة حين
+   S.cfg.prerun_advisories (الصمّام الجديد)؛ غيرها => المسار كاليوم (نوافذ
+   الاستشارة التفاعلية من Wave 1). */
+function _rdIcon(s){return s==="ok"?"✓":(s==="blocked"?"✗":(s==="advisory"?"⚠":"•"))}
+function _rdColor(s){return s==="ok"?"#2e7d32":(s==="blocked"?"#c62828":(s==="advisory"?"#b26a00":"var(--muted,#8a8175)"))}
+function showReadiness(run){
+  if(!(S.cfg&&S.cfg.prerun_advisories)){return run({})}   // الصمّام مُطفأ => كاليوم
+  getJSON("/research/readiness?product="+encodeURIComponent(S.product||"")
+    +"&market="+encodeURIComponent(S.market.iso3)+"&hs_code="+encodeURIComponent(S.hs||""))
+    .then(function(rd){
+      if(!rd||!rd.checks){return run({})}
+      if(rd.can_run&&!rd.needs_ack){return run({})}         // كله ✓ => شغّل مباشرة
+      showReadinessPanel(rd,run)})
+    .catch(function(){run({})})}                            // عطل قياس => لا حجب
+function showReadinessPanel(rd,run){
+  var rows=(rd.checks||[]).map(function(c){
+    return '<div style="display:flex;gap:8px;align-items:flex-start;margin-top:6px">'
+      +'<span style="color:'+_rdColor(c.status)+';font-weight:700;min-width:14px">'+_rdIcon(c.status)+'</span>'
+      +'<div><div style="font-size:12.5px;font-weight:600">'+esc(c.label_ar||c.key)+'</div>'
+      +'<div style="font-size:11px;color:var(--muted,#8a8175)">'+esc(c.detail_ar||"")+'</div></div></div>'}).join("");
+  var blocked=!rd.can_run;
+  var m=modal('<div style="font-weight:700;font-size:14px;margin-bottom:8px">جاهزية الدراسة</div>'
+    +'<div style="font-size:11.5px;color:var(--muted,#8a8175);margin-bottom:4px">راجِع الحالة قبل بدء الدراسة (وقبل أيّ حجز):</div>'
+    +rows
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button type="button" id="rdGo"'+(blocked?' disabled':'')
+      +' style="flex:1;padding:8px 12px;border:0;border-radius:9px;background:'
+      +(blocked?'#ccc':'var(--accent,#6b4e2e)')+';color:#fff;cursor:'
+      +(blocked?'not-allowed':'pointer')+';font-size:13px">'
+      +(blocked?'لا يمكن البدء — عالِج الحاجب أعلاه':'أكمل الدراسة')+'</button>'
+    +'<button type="button" id="rdNo" style="padding:8px 12px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">إلغاء</button>'
+    +'</div>');
+  $("#rdNo",m).addEventListener("click",function(){m.close()});
+  if(!blocked)$("#rdGo",m).addEventListener("click",function(){m.close();
+    // زرّ التأكيد الواحد يرسل الموافقات الموحّدة (بلد المنشأ + الأشقّاء).
+    run({producer_ack:true,advisories_ack:true})})}
+function runDeepResearch(){if(S.busy)return;
+  var resuming=!!S.lastFailedResearchId;
+  if(!resuming&&(!S.product||!S.market))return;
+  if(resuming){return startResearch({})}
+  ensureHs(function(){showReadiness(function(acks){startResearch(acks)})})}
+function startResearch(extra){if(S.busy)return;
+  S.busy=true;sync();stopResearchPoll();
+  var lbl=$("#researchBtn").textContent;$("#researchBtn").textContent="…جارٍ البحث";
+  var resuming=!!S.lastFailedResearchId,b;
+  if(resuming){b={resume:S.lastFailedResearchId,async_run:true}}
+  else{
+    b={product:S.product,market:S.market.iso3,hs_code:S.hs||null,persist:true,agent_prefs:S.prefs,async_run:true};
+    if(S.hsConfirmed)b.hs_confirmed=true;
+    if(S.intakeAttributes)b.label_attributes=S.intakeAttributes;
+    var cost=parseFloat($("#cCost").value),price=parseFloat($("#cPrice").value),cap=parseFloat($("#cCap").value),certs=certList();
+    if(!isNaN(cost))b.product_card={cost_per_unit:cost,tier:$("#cTier").value,monthly_capacity:isNaN(cap)?null:cap,shipping_per_unit:null,certifications:certs.length?certs:null};
+    else toast("بدون بطاقة المنتج سيغيب عمود الربحية — أكملها الآن؟ دقيقتان");  // تنبيه لا حجب (الموجة ١٠)
+    if(!isNaN(price))b.own_price=price}  // بلاغ حي (الموجة ٩): كان يُقرَأ ولا يُرسَل إطلاقاً
+  for(var k in extra){b[k]=extra[k]}
+  post("/research",b).then(function(res){
+    if(res&&res.analysis_id&&res.status==="running"){pollResearchStatus(res.analysis_id,lbl);return}
+    // توافق رجعي: رد متزامن كامل (لو عُطِّل async_run مستقبلاً من الخادم).
+    S.raw=res;S.view=res.view||null;S.busy=false;S.lastFailedResearchId=null;$("#researchBtn").textContent=lbl;sync();
+    pushHist(res&&res.analysis_id||null);renderBoard();nav("board")})
+  .catch(function(e){S.busy=false;$("#researchBtn").textContent=lbl;sync();
+    var d=e&&e.__detail;
+    // استشارة بلد المنشأ (422): أظهر تأكيدًا وأعد الإرسال بموافقة صريحة.
+    if(d&&d.error==="producer_country_advisory"){return showProducerAdvisory(d,function(){startResearch({producer_ack:true})})}
+    // بوّابة تأكيد HS (422، الموجة ٣): صندوقُ حوارٍ حاجبٌ بمرشّحين فعليّين
+    // من التصنيف العام — نفس الصندوق المستعمَل في /analyze (نقطة اختناق
+    // واجهة واحدة، لا نسخة مكرّرة لكل مسار).
+    if(d&&d.error==="hs_confirmation_needed"){return showHsCandidates(d,function(){startResearch({})})}
+    // بوّابةُ الالتباس داخل الترويسة (422): نفسُ الصندوق — كانت تسقط في
+    // «فشل البحث العميق: …» فلا يرى المستخدم مرشّحاً ولا سبباً.
+    if(d&&d.error==="hs_ambiguous"){return showHsCandidates(d,function(){startResearch({})})}
+    // رمز HS غير محسوم (بوّابة صلبة 422): وجّه المستخدم للتصنيف/الاختيار اليدوي.
+    if(d&&d.error==="unresolved_hs"){S.hs=null;S.hsConfirmed=false;return ensureHs(function(){startResearch({})})}
+    toast("فشل البحث العميق: "+e.message)})}
+$("#researchBtn").addEventListener("click",function(){runDeepResearch()});
+/* بحوثي السابقة (ITEM ١، بلاغ حي التكلفة): كانت localStorage محضة — لكل
+   متصفّح لا خادم، فتُفقد عبر الأجهزة ولا تعكس الحقيقة الخادمية. الآن مصدرها
+   GET /analyses (خادمي، مُعتمَد) — فتح صفٍّ يمرّ عبر GET /analyses/{id} فقط،
+   بلا أي نداء كلود جديد (إثبات: tests/test_analysis_history_storage.py
+   test_reopening_stored_analyses_never_calls_claude). S.hist القديمة تبقى
+   احتياطاً محلياً عند تعذّر تحميل الخادم — لا شاشة فارغة صامتة أبداً. */
+S.serverHist=null;S.serverHistStatus="idle";
+var VERDICT_TONE={"التوصية بالدخول":"s-good","دخول مشروط":"s-warn",
+  "مراقبة السوق":"s-warn","عدم الدخول حالياً":"s-mut",
+  "نتيجة مبدئية — غير محسومة":"s-warn","تعذّر إصدار توصية":"s-mut"};
+function loadServerHistory(){
+  S.serverHistStatus="loading";
+  return getJSON("/analyses").then(function(list){
+    S.serverHist=Array.isArray(list)?list:[];S.serverHistStatus="ok";drawHist()})
+  .catch(function(e){
+    S.serverHistStatus=/^HTTP 401\b/.test(e.message)?"unauthorized":"error";
+    drawHist()})}
+function histRowHtml(r){
+  var badge=r.verdict_label
+    ?'<span class="state '+(VERDICT_TONE[r.verdict_label]||"s-mut")+' hist-badge">'+esc(r.verdict_label)+'</span>'
+    :(r.status==="running"?'<span class="state s-warn hist-badge">جارٍ التشغيل…</span>'
+      :(r.status==="failed"?'<span class="state s-warn hist-badge">فشلت</span>':""));
+  var cost=r.cost_usd!=null?(" · ~$"+r.cost_usd.toFixed(2)):"";
+  var date=(r.created_at||"").slice(0,10);
+  var meta=esc(r.market_name||r.product||"—")+cost+(date?(" · "+date):"");
+  var resumeBtn=(r.status==="failed"||r.status==="running")
+    ?'<button class="hist-resume" data-resume-id="'+r.id+'">↻ استئناف</button>':"";
+  return '<div class="hist hist-rich" data-id="'+r.id+'"><div class="hist-top"><b>'+esc(r.product||"—")+'</b>'+badge+'</div>'
+    +'<div class="hist-meta">'+meta+'</div>'+resumeBtn+'</div>'}
+function pushHist(id){var label=S.product+" · "+((S.view&&S.view.header&&S.view.header.target_market)||"—");
+  S.hist=[{label:label,id:id||null}].concat(S.hist.filter(function(h){return h.label!==label})).slice(0,5);
+  localStorage.setItem("silk_hist",JSON.stringify(S.hist));drawHist();loadServerHistory()}
+function drawHist(){
+  var el=$("#histList");
+  if(S.serverHistStatus==="loading"){el.innerHTML='<div class="hist-note">…جارٍ التحميل</div>';return}
+  if(S.serverHistStatus==="unauthorized"){el.innerHTML='<div class="hist-note">أدخل مفتاح الخدمة لعرض بحوثك السابقة</div>';return}
+  if(S.serverHistStatus==="ok"&&S.serverHist&&S.serverHist.length){
+    el.innerHTML=S.serverHist.slice(0,12).map(histRowHtml).join("");return}
+  if(S.serverHistStatus==="ok"){el.innerHTML='<div class="hist-note">لا بحوث سابقة بعد</div>';return}
+  // تعذّر التحميل الخادمي أو لم يبدأ بعد — احتياط محلي صريح، لا شاشة فارغة صامتة.
+  if(S.hist.length){
+    el.innerHTML='<div class="hist-note">تعذّر تحميل السجلّ من الخادم — عرض احتياطي من هذا المتصفح</div>'
+      +S.hist.map(function(h){return '<div class="hist" data-id="'+(h.id||"")+'">'+esc(h.label)+'</div>'}).join("");return}
+  el.innerHTML='<div class="hist-note">تعذّر تحميل السجلّ من الخادم</div>'}
+/* بلاغ حي: عناصر «التحليلات الأخيرة» تبدو قابلة للنقر (cursor:pointer) منذ
+   البداية لكن لم تُربَط بأي معالج نقر قط — سقوط صامت بلا أي فِعل مرئي عند
+   النقر (نفس نمط بلاغ ٢: catch فارغ يُخفي 401). مُصلَح هنا: نقر يفتح
+   التحليل المخزَّن، أو يظهر رسالة عربية مرئية دوماً — أبداً لا فعل صامت. */
+function openStoredAnalysis(id){
+  getJSON("/analyses/"+id).then(function(res){
+    S.raw=res;S.view=res.view||null;sync();pushHist(id);renderBoard();nav("board")})
+  .catch(function(e){
+    if(/^HTTP 401\b/.test(e.message))toast("يتطلب مفتاح الخدمة — أدخله من القائمة");
+    else toast("تعذّر فتح التحليل رقم "+id+": "+e.message)})}
+/* استئناف تشغيلة عالقة/فاشلة (ITEM ١ج) — POST /research {resume,async_run}
+   يُكمل فقط البعثات الناقصة (silk_storage.load_mission_checkpoints)، لا
+   إعادة تشغيل كاملة — يحمي من حرق اعتمادات مضاعف (docs/DEEP_RESEARCH_DECISIONS.md). */
+function resumeAnalysis(id){
+  if(S.busy){toast("تشغيلة أخرى جارية — انتظر اكتمالها");return}
+  toast("…جارٍ استئناف التحليل رقم "+id);
+  S.busy=true;sync();
+  post("/research",{resume:Number(id),async_run:true}).then(function(res){
+    if(res&&res.analysis_id&&res.status==="running"){
+      pollResearchStatus(res.analysis_id,$("#researchBtn").textContent);nav("board");return}
+    // استئناف تشغيلة كانت مكتملة أصلاً يعيدها فوراً بلا 202 (لا حرق مضاعف).
+    S.raw=res;S.view=res.view||null;S.busy=false;sync();renderBoard();pushHist(res&&res.analysis_id||id);nav("board")})
+  .catch(function(e){S.busy=false;sync();toast("تعذّر الاستئناف رقم "+id+": "+e.message)})}
+$("#histList").addEventListener("click",function(e){
+  var rb=e.target.closest("[data-resume-id]");
+  if(rb){e.stopPropagation();resumeAnalysis(rb.getAttribute("data-resume-id"));return}
+  var el=e.target.closest(".hist");if(!el)return;
+  var id=el.getAttribute("data-id");
+  if(!id){toast("هذا العنصر قديم بلا معرّف مخزَّن — أعد البحث لفتحه");return}
+  openStoredAnalysis(id)});
+loadServerHistory();drawHist();
+
+/* ── اللوحة — تُبنى من view الحقيقي حصراً؛ الغائب «—» هادئة ── */
+function money(v){if(v==null)return"—";var n=+v;if(n>=1e9)return"$"+(n/1e9).toFixed(1)+" مليار";if(n>=1e6)return"$"+(n/1e6).toFixed(1)+" م";if(n>=1e3)return"$"+(n/1e3).toFixed(0)+" ألف";return"$"+n}
+function comp(m,k){var c=(m.components_detail||[]).filter(function(x){return x.name===k})[0]||{};return c}
+/* لوحة البحث العميق (الموجة ٤، V5) — تُبنى من v.deep_research حصراً؛
+   مختلفة عن renderBoard الكلاسيكية (لا ترتيب أسواق، سوق واحد مُحلَّل بعمق
+   بـ١٢ بعثة). القالب الموحّد نفسه (result.view) — لا مسار عرض موازٍ. */
+/* سدّ تسريب (الطبقة ٦): تصنيف الشارة يصل مُحسَّباً من الخادم
+   (view.deep_research.verdict_tone/verdict_label) — لا حساب موازٍ هنا
+   من الرمز الإنجليزي الخام، ولا عرض للرمز نفسه كنص ظاهر (كان
+   "CONDITIONAL-GO"/"WATCH" يظهر حرفياً على شارة الغلاف). */
+var TONE_CSS={go:"go",conditional:"go",preliminary:"go",nogo:"no",watch:"",
+  /* حكمٌ حتميٌّ بتغطيةٍ ناقصة — شارةُ تحذير، لا شارةُ «لا توصية». */
+  inconclusive:"",unknown:""};
+function renderDeepResearch(v){
+  var dr=v.deep_research,h=v.header||{},verdict=(dr.verdict||{}),ai=verdict.ai||{};
+  var tone=TONE_CSS[dr.verdict_tone]||"";
+  var vlabel=dr.verdict_label||"تعذّر إصدار توصية";
+  var html='';
+  if(dr.degraded||v.degraded){html+='<div style="background:#c00;color:#fff;font-weight:bold;padding:10px 14px;border-radius:6px;margin-bottom:14px">'
+    +'⚠ DEGRADED — نظام الذكاء الاصطناعي غير متاح: '+esc(dr.degraded_reason||v.degraded_reason||"طبقة كلود غير متاحة")
+    +'<div style="font-weight:normal;font-size:12.5px;margin-top:4px">هذا التقرير مبنيّ على مسار بلا حكم كلود — بعثات/محلل/تقرير قد تكون فارغة. غير مُنصَح بالاعتماد عليه للتسليم النهائي.</div></div>'}
+  html+='<div class="verdict"><div><span class="vtag '+tone+'"><span class="d"></span>'+esc(vlabel)+'</span>'
+    +'<h2>'+esc((v.brief||[])[0]||"")+'</h2><p>'+esc(ai.reasoning||(v.brief||[])[1]||"")+'</p></div>'
+    +'<div class="conf"><div class="lvl">بحث عميق — ١٢ بعثة</div><div class="cap">سوق '+esc((dr.market||{}).name_ar||(dr.market||{}).name_en||"")+'</div></div></div>';
+  // التقرير الكامل المكتوب والمراجَع — يُعرض أولاً مباشرة تحت بطاقة الحكم
+  // (كان مدفوناً أسفل جدول البعثات الخام في صندوق تمرير ضيّق؛ نفس الإصلاح
+  // المطبَّق أصلاً في نسخة docx — راجع silk_reports._docx_deep_research).
+  var rep=(dr.report||{});
+  if(rep.text){html+='<div class="bcard" style="margin:18px 0"><h3>التقرير الكامل (كاتب مراجَع، '+(rep.review_cycles||0)+' دورة مراجعة)</h3>'
+    +'<div style="font-size:14px;white-space:pre-wrap">'+esc(rep.text)+'</div>'
+    +(rep.unresolved_notes&&rep.unresolved_notes.length?('<div class="note" style="margin-top:10px">ملاحظات مراجعة لم تُحلّ:</div>'+rep.unresolved_notes.map(function(n){return '<p style="font-size:12.5px;color:var(--muted)">• '+esc(n)+'</p>'}).join("")):"")+'</div>'}
+  else html+='<div class="bcard" style="margin:18px 0"><h3>التقرير الكامل</h3><p class="gap">'+esc(rep.failure_reason||"يتطلب مفتاح كلود (ANTHROPIC_API_KEY) على الخادم — غير متوفر في هذا التشغيل")+'</p></div>';
+  // الخطوة التالية (تعميق) — فقط عند حكم GO، ملاصقة للتقرير لأنها دعوة الفعل
+  if(dr.next_step)html+='<div class="next"><div><h4>الخطوة التالية</h4><p>'+esc(dr.next_step)+'</p></div><button class="cta" id="deepBtn">فعّل التعميق ←</button></div>';
+  // إكمال بيانات المستوردين للتقارير السابقة — تعبئة رجعية فقط (أمر المالك
+  // المُحدَّث ITEM 2): التشغيلات الجديدة تُكمِل تلقائياً في المسار، وهذا الزرّ
+  // يخصّ التقارير المحفوظة قبل تفعيل المكشطة (POST /analyses/{id}/enrich-leads،
+  // بلا نداء كلود ولا إعادة تشغيل بعثات — قروش بدل ~3$). المكشطة غير مُهيَّأة
+  // ⇒ تعطيل نظيف بإبلاغ صريح.
+  html+='<div class="bcard" style="margin:18px 0"><h3>بيانات المستوردين للتواصل</h3>'
+    +'<div class="note">التشغيلات الجديدة تُكمِل الهاتف/الإيميل/الموقع تلقائياً. لتقرير محفوظ قبل تفعيل الخدمة، أكملها رجعياً عبر كشط الخرائط — بلا ذكاء اصطناعي، شبه مجاني.</div>'
+    +'<button class="cta" id="enrichLeadsBtn">إكمال بيانات المستوردين للتقارير السابقة</button>'
+    +'<span id="enrichLeadsStatus" class="note" style="display:block;margin-top:8px"></span></div>';
+  // الأدلة الخام (البعثات الاثنتا عشرة + تقاطعات المحلل) — قسم ثانوي مطويّ
+  // افتراضياً للتدقيق، بعد أن أصبح التقرير المكتوب هو المحتوى الأساسي أعلاه.
+  var missions=dr.missions||{},mkeys=Object.keys(missions);
+  var CAT_AR={demand:"الطلب الفعلي القابل للتوجيه",entry_cost:"تكلفة وصعوبة الدخول",price_competitiveness:"التنافسية السعرية",entry_door:"أبواب الدخول الأكثر أماناً",swot:"SWOT من منظور المصدّر السعودي"};
+  var byCat=((dr.analyst||{}).by_category)||{};
+  html+='<details class="bcard" style="margin:18px 0"><summary style="cursor:pointer"><h3 style="display:inline">الأدلة الخام (مصادر البحث وتقاطعات المحلل)</h3></summary>'
+    +'<div class="note" style="margin-top:10px">كل بعثة وكيل كلود بأدوات — الحالة والملخّص</div>'
+    +'<table><thead><tr><th>البعثة</th><th>الحالة</th><th>الملخّص</th></tr></thead><tbody>'
+    +mkeys.map(function(k){var mm=missions[k];var ok=!mm.failed;
+      /* الاسم العربي من النموذج القانوني (label) بدل المفتاح الداخلي الخام */
+      return '<tr><td class="rowname">'+esc(mm.label||k)+'</td><td><span class="state '+(ok?"s-good":"s-warn")+'">'+(ok?"ناجحة":"بلا أدلة")+'</span></td><td style="font-size:13px">'+esc((mm.summary||"").slice(0,140))+'</td></tr>'}).join("")
+    +'</tbody></table>'
+    +'<div class="grid" style="margin-top:14px">'+Object.keys(CAT_AR).map(function(cat){
+      var items=byCat[cat]||[];
+      return '<div class="bcard"><h3>'+CAT_AR[cat]+'</h3>'
+        +(items.length?items.map(function(f){return '<p style="font-size:14px;margin-bottom:8px">• '+esc(String(f.value))+'<span style="display:block;font-size:11.5px;color:var(--muted)">'+esc(f.source||"")+' · '+esc(f.confidence_badge||"")+'</span></p>'}).join("")
+          :'<div class="gap">دليل غير كافٍ لهذا التقاطع — فجوة معلنة</div>')+'</div>'}).join("")+'</div></details>';
+  // الحدود
+  if((dr.limits||[]).length)html+='<div class="bcard" style="margin:18px 0"><h3>حدود هذا البحث</h3>'
+    +dr.limits.slice(0,8).map(function(x){return '<p style="font-size:12.5px;color:var(--muted)">• '+esc(x)+'</p>'}).join("")+'</div>';
+  var de=v.data_economics;
+  if(de&&de.note){
+    // التكلفة الفعلية النهائية — محسوبة أصلاً (estimate_cost_usd) ولم تكن
+    // تُعرَض هنا إطلاقاً. علامة "~" دوماً (تقدير من دفتر أسعار)، ونموذج غير
+    // مُسعَّر يظهر صراحةً بدل رقم يبدو تاماً وهو ناقص.
+    var costLine="";
+    if(de.cost_usd_estimate!=null){
+      costLine='<p style="font-size:13px;color:var(--ink-soft);margin-top:4px">التكلفة الفعلية المُقدَّرة: ~$'+de.cost_usd_estimate.toFixed(2)
+        +(de.cost_unpriced_models&&de.cost_unpriced_models.length?' ⚠ (يستثني نماذج غير مُسعَّرة: '+esc(de.cost_unpriced_models.join("، "))+')':'')+'</p>'}
+    html+='<div class="bcard" style="margin:18px 0"><h3>اقتصاد البيانات</h3><p style="font-size:14px">'+esc(de.note)+'</p>'+costLine+'</div>'}
+  // R2 (تفعيل الدردشة فوق الدراسة العميقة): نفس بطاقة «اسأل» ونفس askAnalysis
+  // المستعملتين في لوحة /analyze — كانتا تُبنيان بعد renderDeepResearch...return
+  // فلا تظهران للدراسات الرئيسية إطلاقاً. الآن مؤسَّسة على كامل الدراسة
+  // (analysis_context وسّع ليقرأ شكل deep_research).
+  html+='<div class="bcard" style="margin:18px 0 50px"><h3>اسأل عن الدراسة</h3>'
+    +'<div class="note">إجابات من نتائج هذه الدراسة حصراً — بمصادرها؛ ما لم يُرصد يُقال صراحةً · كل سؤال يُحتسب من السقف اليومي</div>'
+    +'<div id="askThread"></div>'
+    +'<div class="cbox" style="margin-top:10px"><textarea id="askBox" rows="1" placeholder="مثال: ليش حصة السعودية منخفضة؟ وش أكبر عائق للدخول؟"></textarea>'
+    +'<button class="sendb" id="askBtn">↑</button></div></div>';
+  $("#boardBody").innerHTML=html;
+  var dq=$("#deepBtn");if(dq)dq.addEventListener("click",function(){toast("التعميق يتطلب مفاتيح مصادر مدفوعة تُضبط على الخادم (Railway) — غير متاح في هذا التشغيل")});
+  var eb=$("#enrichLeadsBtn");if(eb)eb.addEventListener("click",enrichLeads);
+  var ab=$("#askBtn");if(ab)ab.addEventListener("click",askAnalysis);
+  var ax=$("#askBox");if(ax)ax.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();askAnalysis()}});
+}
+/* إكمال بيانات المستوردين للتقارير السابقة (تعبئة رجعية) — POST
+   /analyses/{id}/enrich-leads بالمفتاح المخزَّن، بلا نداء كلود. يعطّل الزرّ
+   أثناء الطلب ويعرض التقدّم ثم عدد جهات الاتصال بالعربية. */
+function enrichLeads(){
+  var id=S.raw&&S.raw.analysis_id;
+  var btn=$("#enrichLeadsBtn"),st=$("#enrichLeadsStatus");
+  if(id==null){toast("شغّل تحليلاً أولاً");return}
+  var label=btn?btn.textContent:"";
+  if(btn){btn.disabled=true;btn.textContent="جارٍ إكمال البيانات…"}
+  if(st)st.textContent="يجري كشط الخرائط لجهات الاتصال… قد يستغرق دقائق";
+  fetch(base()+"/analyses/"+id+"/enrich-leads",{method:"POST",headers:hdrs(true)})
+    .then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}
+      if(!r.ok)throw new Error(detailText(d,t).toString().slice(0,200));return d||{}})})
+    .then(function(d){
+      var n=d.leads_count!=null?d.leads_count:0;
+      if(st)st.textContent=d.enriched?("اكتمل — "+n+" جهة اتصال مرصودة (تظهر في تصدير Word/Markdown)"):("لم تُحدَّث — "+(d.note||"لا جديد"));
+      if(btn){btn.disabled=false;btn.textContent=label||"إكمال بيانات المستوردين للتقارير السابقة"}
+      toast(d.enriched?("حُدِّثت بيانات المستوردين — "+n+" جهة اتصال"):(d.note||"لم تُرصَد جهات اتصال جديدة"))})
+    .catch(function(e){
+      if(st)st.textContent="تعذّر الإكمال: "+e.message;
+      if(btn){btn.disabled=false;btn.textContent=label||"إكمال بيانات المستوردين للتقارير السابقة"}
+      toast("تعذّر إكمال البيانات: "+e.message)})}
+/* HIGH#4 (تدقيق الواجهة): إفصاح سنة البيانات — لوحة الويب كانت الوحيدة التي
+   تُسقط تنبيه تراجُع السنة الذي يُظهره Word/Markdown/الطرفية (silk_reports._data_year_label)،
+   فتُقرأ أرقام سنةٍ أقدم كأنها للسنة المطلوبة — خرقٌ لمبدأ «الفجوات تُعلَن».
+   الإشارة متاحة في view مباشرة (data_year/year/year_fell_back، silk_render.py:1081-1083). */
+function dataYearNote(v){
+  if(!v||v.data_year==null)return"";
+  if(v.year_fell_back&&v.year!=null&&v.data_year!=v.year)
+    return '<div class="note" style="margin:2px 0 14px">سنة البيانات المعتمدة: '+v.data_year+' (أحدث سنة منشورة؛ '+v.year+' لم تُنشر بعد)</div>';
+  return '<div class="note" style="margin:2px 0 14px">سنة البيانات المعتمدة: '+v.data_year+'</div>';
+}
+function renderBoard(){var v=S.view;if(!v){$("#boardBody").innerHTML='<div class="empty">شغّل تحليلاً أولاً.</div>';return}
+  // MED (تدقيق الواجهة، M8): [] صادقة في JS، فتراجُع || القديم على مصفوفة
+  // markets فارغة (نتيجة بوّابة نطاق كالنفط/الفحم) لم يكن يُفعَّل أبداً —
+  // يبقى m=undefined فيرمي استثناءً عند أول m.trend/comp(m,...)، فتبقى اللوحة
+  // كما هي بلا رسالة مرئية (فشل صامت). التصحيح: تراجُع صريح لكائن فارغ.
+  var d=v.decision||{},m=(v.markets&&v.markets[0])||{},h=v.header||{};
+  $("#bTitle").textContent=(v.product||"")+" · "+(h.target_market||"");
+  if(v.deep_research){renderDeepResearch(v);return}
+  var tone=TONE_CSS[d.tone]||"";
+  var brief=(v.brief||[])[0]||"";
+  var ms=comp(m,"market_size"),sp=comp(m,"saudi_position"),tr=m.trend||{};
+  var kpi=function(lab,val,st,stTxt,src){return '<div class="kpi"><div class="lab">'+lab+'</div><div class="val num">'+val+'</div><span class="state '+st+'">'+stTxt+'</span><div class="src">'+esc(src||"—")+'</div></div>'};
+  var growth=tr.growth_pct!=null?((tr.growth_pct>=0?"+":"−")+Math.abs(tr.growth_pct)+"%"):"—";
+  var html='';
+  html+='<div class="verdict"><div><span class="vtag '+tone+'"><span class="d"></span>'+esc(brief.split("—")[0].replace("التوصية:","").trim()||"القرار")+'</span>'
+    +'<h2>'+esc(brief||"—")+'</h2><p>'+esc((v.brief||[])[1]||"")+'</p></div>'
+    +'<div class="conf"><div class="lvl">'+esc((brief.match(/ثقة ([^)]*)\(/)||[])[1]||"الثقة")+'</div><div class="cap">تغطية البيانات '+(h.coverage_pct!=null?h.coverage_pct+"%":"—")+'</div></div></div>';
+  html+=dataYearNote(v);
+  html+='<div class="kpis">'
+    +kpi("حجم السوق",ms.value!=null?money(ms.value):(ms.status==="fetch_failed"?"تعذّر الجلب":"—"),ms.value!=null?"s-good":(ms.status==="fetch_failed"?"s-warn":"s-mut"),ms.value!=null?"مرصود":(ms.status==="fetch_failed"?"أعد المحاولة":"غير متوفر"),ms.source)
+    +kpi("النمو",growth,tr.growth_pct!=null?(tr.growth_pct>=0?"s-good":"s-warn"):"s-mut",tr.cagr_pct!=null?("نمو مركّب "+tr.cagr_pct+"%"):"—",tr.source||"UN Comtrade")
+    +kpi("حصة السعودية",sp.value!=null?sp.value+"%":"—",sp.value!=null?(sp.value>=20?"s-good":"s-warn"):"s-mut",sp.value!=null?(sp.value>=20?"قوية":"قابلة للنمو"):"غير متوفر",sp.source)
+    +kpi("النقاط",m.score!=null?Math.round(m.score*100)+"/100":"—","s-good","الترتيب "+((v.markets||[]).indexOf(m)+1),"محرّك سِلك")+'</div>';
+  // المورّدون
+  var sup=(m.supplier_countries||[]).slice(0,6);
+  var supRows=sup.map(function(s){var you=/Saudi/.test(s.partner||"");return '<tr class="'+(you?"you":"")+'"><td class="rowname">'+esc(s.partner)+'</td><td class="num">'+money(s.value_usd)+'</td><td class="num">'+(s.share!=null?s.share+"%":"—")+'</td><td><span class="bar"><i style="width:'+Math.min(100,(s.share||0)*2)+'%"></i></span></td></tr>'}).join("");
+  // القمع من حزمة البحث
+  var ag=((m.research||{}).agents)||{},msA=ag.market_size||{};
+  function fnd(a,k){var f=(a.findings||[]).filter(function(x){return x.metric===k&&x.value!=null})[0];return f?f.value:null}
+  var tam=fnd(msA,"tam_usd"),sam=fnd(msA,"sam_usd"),som=fnd(msA,"som_usd");
+  html+='<div class="grid">';
+  html+='<div class="bcard"><h3>من يورّد للسوق؟</h3><div class="note">المنافسة: الدول المورّدة وحصصها · المصدر: UN Comtrade</div>'
+    +(supRows?('<table><thead><tr><th>الدولة</th><th>القيمة</th><th>الحصة</th><th></th></tr></thead><tbody>'+supRows+'</tbody></table>'):'<div class="gap">—</div>')+'</div>';
+  html+='<div class="bcard"><h3>حجم الفرصة</h3><div class="note">TAM / SAM / SOM — من حزمة البحث</div>'
+    +(tam!=null?('<div class="funnel"><div class="fl f1"><div class="k">السوق الكلي</div><div class="v">'+money(tam)+'</div></div>'
+      +(sam!=null?'<div class="fl f2"><div class="k">المتاح لك</div><div class="v">'+money(sam)+'</div></div>':"")
+      +(som!=null?'<div class="fl f3"><div class="k">المتوقع تحقيقه</div><div class="v">'+money(som)+'</div></div>':"")+'</div>'):'<div class="gap">—</div>')+'</div>';
+  // اقتراح التسعير — من قوائم حقيقية فقط
+  var prices=(m.prices||[]).map(function(p){return +p.price}).filter(function(x){return x>0}).sort(function(a,b){return a-b});
+  var pHtml;
+  if(prices.length>=3){var q1=prices[Math.floor((prices.length-1)*.25)],med=prices[Math.floor((prices.length-1)*.5)],avg=(prices.reduce(function(a,b){return a+b},0)/prices.length).toFixed(1);
+    pHtml='<div style="display:flex;gap:26px;align-items:center;flex-wrap:wrap"><div class="rec"><div class="k">النطاق المقترح</div><div class="v">'+q1+' – '+med+'</div><div class="s">من '+prices.length+' سعراً مرصوداً</div></div>'
+      +'<p style="font-size:13.5px;color:var(--ink-soft);max-width:46ch">بناءً على القوائم المرصودة (متوسط '+avg+'، مدى '+prices[0]+'–'+prices[prices.length-1]+'): سعّر بين <b>'+q1+' و'+med+'</b> لتبقى دون متوسط السوق بهامش موجب.</p></div>'}
+  else pHtml='<p class="gap">اقتراح التسعير يتطلب أسعار رفّ مرصودة — تتوافر مع الدراسة العميقة.</p>';
+  html+='<div class="bcard price"><div style="display:flex;align-items:center"><h3>السعر المقترح لمنتجك</h3><span class="newbadge">من بيانات مرصودة</span></div><div class="note">التسعير — مشتق من القوائم الحقيقية فقط</div>'+pHtml+'</div>';
+  html+='</div>';
+  // الخطوة التالية من قرار §8
+  var ed=m.entry_decision||{},steps=(ed.first_steps||ed.conditions||[]).slice(0,3);
+  if(steps.length)html+='<div class="next"><div><h4>الخطوة التالية</h4><ol>'+steps.map(function(s){return '<li>'+esc(s)+'</li>'}).join("")+'</ol></div><button class="cta" id="deepBtn">دراسة معمّقة ←</button></div>';
+  // ثقافة المستهلك — رؤى مستخلصة لا روابط خام (consumer_culture)
+  var cc=(v.consumer_culture||{}),ins=cc.insights||[];
+  if(ins.length){html+='<div class="bcard" style="margin:18px 0"><h3>ثقافة المستهلك ونبض السوق</h3><div class="note">رؤى مستخلصة من إشارات ويب حقيقية — كل رؤية بدليلها</div>'
+    +ins.slice(0,4).map(function(o){return '<p style="font-size:14px;margin-bottom:8px">• '+esc(o.point||"")+(o.evidence&&o.evidence.length?'<span style="display:block;font-size:11.5px;color:var(--muted)">الدليل: '+esc(o.evidence[0])+'</span>':'')+'</p>'}).join("")+'</div>'}
+  // الموردون والأعمال بالاسم — تحذير التجزئة يُحترم (business_hint)
+  var sups=(m.suppliers||[]);
+  if(sups.length){html+='<div class="bcard" style="margin:18px 0"><h3>أعمال مرصودة بالاسم</h3><div class="note">من الخرائط — للمراجعة اليدوية</div>'
+    +sups.slice(0,8).map(function(sx){var hint=(sx.business_hint==="retail_or_food_service")?' <span class="state s-warn">قد يكون محل تجزئة لا موزّعاً</span>':'';
+      return '<p style="font-size:14px;margin-bottom:6px">• '+esc(sx.name)+hint+' <span style="font-size:11px;color:var(--muted)">'+esc(sx.source||"")+'</span></p>'}).join("")+'</div>'}
+  // فهرس الأقسام الـ14
+  var toc=["الخلاصة","المنهجية","تعريف السوق","نظرة عامة","الديناميكيات","حجم السوق","التقسيم","التجارة","الإقليمي","المنافسة","استخبارات العميل","التنظيم والمخاطر (الاشتراطات)","الاتجاهات","التوصيات"];
+  html+='<div class="toc"><div class="h">أقسام التقرير الكامل — ١٤ قسماً (Word)</div><div class="tocg">'+toc.map(function(t,i){return '<div class="ti"><b>'+String(i+1).padStart(2,"0")+'</b> '+t+'</div>'}).join("")+'</div></div>';
+  // اقتصاد البيانات — عدّاد مرصود: مخزن/ذاكرة مقابل جلب حي (persist-5)
+  var de=v.data_economics;
+  if(de&&de.note){html+='<div class="bcard" style="margin:18px 0"><h3>اقتصاد البيانات</h3><div class="note">المنهجية — كم وفّر المخزن في هذا التحليل</div>'
+    +'<p style="font-size:14px">'+esc(de.note)+'</p>'
+    +'<p style="font-size:11.5px;color:var(--muted)">من المخزن: '+(de.store_hits||0)+' · من ذاكرة الطلبات: '+(de.cache_hits||0)+' · جلب حي: '+(de.live_fetches||0)+'</p></div>'}
+  html+='<div class="bcard" style="margin:18px 0 50px"><h3>اسأل عن هذا التحليل</h3>'
+    +'<div class="note">إجابات من النتائج المحسوبة أعلاه حصراً — بمصادرها؛ ما لم يُسحب يُقال صراحةً</div>'
+    +'<div id="askThread"></div>'
+    +'<div class="cbox" style="margin-top:10px"><textarea id="askBox" rows="1" placeholder="مثال: ليش حصة السعودية منخفضة؟ وش أكبر عائق للدخول؟"></textarea>'
+    +'<button class="sendb" id="askBtn">↑</button></div></div>';
+  $("#boardBody").innerHTML=html;
+  var ab=$("#askBtn");if(ab)ab.addEventListener("click",askAnalysis);
+  var ax=$("#askBox");if(ax)ax.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();askAnalysis()}});
+  var dq=$("#deepBtn");if(dq)dq.addEventListener("click",function(){toast("الدراسة العميقة تتطلب مفاتيح مصادر مدفوعة تُضبط على الخادم (Railway) — غير متاح في هذا التشغيل")});
+}
+/* تنزيل التقرير — fetch يحمل X-API-Key ثم blob (الرابط العادي لا يرسل الترويسة).
+   البلاغ الحي الثالث لعائلة 501: جسم الـ501 يسمّي المصطلح المرفوض بالضبط
+   (رسالة حارس التصدير) — كان يُبتلَع هنا فيصل المستخدم «HTTP 501» عارية بلا
+   أي قدرة على التشخيص (نفس عائلة «401 المبتلَع»، بلاغ ٢). يُقرأ الآن ويُعرَض. */
+function dlFail(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}
+  throw new Error("HTTP "+r.status+" — "+detailText(d,t).toString().slice(0,300))})}
+/* دالة تنزيل مساعدة لملف ثنائي (docx/pdf) — تحمل الترويسة، تفحص r.ok، تنزّل blob. */
+function dlBlob(url,accept,filename){return fetch(base()+url,{headers:Object.assign({Accept:accept},hdrs(false))})
+  .then(function(r){if(!r.ok)return dlFail(r);return r.blob()})
+  .then(function(b){var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000)})}
+// البند #7 (تدقيق v2 الموجة ٢): أزرار التصدير لم تكن تُعطَّل أثناء الجلب —
+// نقرٌ مزدوج = طلبا report.pdf متزامنان، كلٌّ يُشغّل تحويل LibreOffice (soffice)
+// على الخادم مرّتين + تنزيلٌ مكرّر. صمّامٌ واحد يعطّل الثلاثة أثناء أيّ تصدير.
+function _expBusy(on){S.exportBusy=on;["#pdfBtn","#wordBtn","#mdBtn"].forEach(function(s){var b=$(s);if(b)b.disabled=on})}
+function dlReport(kind){var id=S.raw&&S.raw.analysis_id;if(id==null){toast("شغّل تحليلاً أولاً");return}
+  if(S.exportBusy){toast("تنزيلٌ جارٍ — انتظر اكتماله");return}   // منع النقر المزدوج
+  _expBusy(true);var _done=function(){_expBusy(false)};
+  // PDF — المُسلَّم النهائي للعميل (§3، اتفاق المالك): غير قابل للتحرير.
+  // 503 = محرّك التحويل (LibreOffice) غائب على الخادم — رسالة عربية صريحة
+  // تقترح Word مؤقتاً، لا «HTTP 503» عارية (عائلة البلاغ المبتلَع، البند ٢/١١).
+  if(kind==="pdf"){fetch(base()+"/analyses/"+id+"/report.pdf",{headers:Object.assign({Accept:"application/pdf"},hdrs(false))})
+    .then(function(r){
+      if(r.status===503)return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}
+        var det=detailText(d,t);throw new Error("محرّك التحويل غير متاح — جرّب Word مؤقتاً"+(det?" ("+det.toString().slice(0,160)+")":""))});
+      if(!r.ok)return dlFail(r);return r.blob()})
+    .then(function(b){if(!b)return;var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="سِلك_تقرير_"+id+".pdf";document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000)})
+    .catch(function(e){toast("فشل التنزيل: "+e.message)}).then(_done,_done);return}
+  if(kind==="docx"){dlBlob("/analyses/"+id+"/report.docx","application/vnd.openxmlformats-officedocument.wordprocessingml.document","سِلك_تقرير_"+id+".docx")
+    .catch(function(e){toast("فشل التنزيل: "+e.message)}).then(_done,_done);return}
+  fetch(base()+"/analyses/"+id+"/report.md",{headers:hdrs(false)}).then(function(r){if(!r.ok)return dlFail(r);return r.text()}).then(function(t){
+    var w=window.open("","_blank");if(!w)return;var pre=w.document.createElement("pre");pre.style.cssText="white-space:pre-wrap;font-family:monospace;padding:28px;max-width:900px;margin:0 auto";pre.textContent=t;w.document.body.appendChild(pre)}).catch(function(e){toast("فشل: "+e.message)}).then(_done,_done)}
+$("#pdfBtn").addEventListener("click",function(){dlReport("pdf")});
+$("#wordBtn").addEventListener("click",function(){dlReport("docx")});
+$("#mdBtn").addEventListener("click",function(){dlReport("md")});
+/* إعادة توليد التقرير (بلاغ الكويت): يعيد نداء الكاتب+المراجع على نقاط تفتيش
+   البعثات المحفوظة (POST /analyses/{id}/report) — بقروش لا دولارات، بلا إعادة
+   البحث الكامل — لإنقاذ تقرير فشل توليد سرده (نداء الكاتب سقط بخطأ عابر). ثم
+   يعيد تحميل التحليل ويعرضه. */
+$("#regenBtn").addEventListener("click",function(){
+  var id=S.raw&&S.raw.analysis_id;if(id==null){toast("افتح تحليلاً أولاً");return}
+  var b=$("#regenBtn");if(b.disabled)return;var old=b.textContent;b.disabled=true;b.textContent="جارٍ إعادة التوليد…";
+  post("/analyses/"+id+"/report",{}).then(function(){return getJSON("/analyses/"+id)}).then(function(res){
+    S.raw=res;S.view=res.view||null;sync();renderBoard();
+    var ok=S.view&&S.view.deep_research&&S.view.deep_research.report&&S.view.deep_research.report.text;
+    toast(ok?"أُعيد توليد التقرير بنجاح":"أُعيد التوليد — راجع النتيجة")
+  }).catch(function(e){
+    var s=e&&e.__status;toast(s===409?"لا نقاط تفتيش محفوظة لهذه التشغيلة (أقدم من الميزة)":s===400?"هذه ليست نتيجة بحث عميق (/research)":"تعذّرت إعادة التوليد: "+((e&&e.message)||e))
+  }).then(function(){b.disabled=false;b.textContent=old})});
+
+/* ── تقرير الحارس — سطحٌ منفصلٌ تماماً عن أي تحليل (LAW: للمالك حصراً).
+   لا يقرأ S.raw/S.view (نتيجة التحليل الحالية) إطلاقاً — استقلالٌ بنيويٌّ
+   عن مسار العميل، لا فقط بصرياً. ── */
+var WD_SEV_AR={green:"أخضر",yellow:"أصفر",red:"أحمر"};
+function renderWatchdog(){
+  $("#wdBadge").textContent="…جارٍ التحميل";$("#wdRows").innerHTML='<tr><td colspan="6" style="padding:16px;color:var(--ink-soft)">جارٍ التحميل…</td></tr>';
+  getJSON("/watchdog?n=50").then(function(d){
+    var b=d&&d.badge||{};$("#wdBadge").textContent=(b.label_ar||"—");
+    $("#wdBacklog").textContent=d&&d.known_backlog_note||"";
+    var recs=(d&&d.records)||[];
+    if(!recs.length){$("#wdRows").innerHTML='<tr><td colspan="6" style="padding:16px;color:var(--ink-soft)">لا تشغيلات مرصودة بعد.</td></tr>';return}
+    $("#wdRows").innerHTML=recs.map(function(r){
+      var findings=(r.findings||[]).slice().sort(function(a,b){var rank={red:2,yellow:1,green:0};return (rank[b.severity]||0)-(rank[a.severity]||0)});
+      var top=findings[0];
+      var what=top?esc(top.message_ar):"لا ملاحظات";
+      var sev=top?top.severity:"green";
+      var pm=esc((r.product||"—")+" / "+(r.market||"—"));
+      return '<tr style="border-bottom:1px solid var(--line)">'+
+        '<td style="padding:8px 6px">'+esc(r.analysis_id!=null?r.analysis_id:"—")+'</td>'+
+        '<td style="padding:8px 6px">'+esc(r.created_at||"—")+'</td>'+
+        '<td style="padding:8px 6px">'+pm+'</td>'+
+        '<td style="padding:8px 6px">'+esc(WD_SEV_AR[r.overall]||r.overall)+'</td>'+
+        '<td style="padding:8px 6px">'+what+'</td>'+
+        '<td style="padding:8px 6px">'+esc(WD_SEV_AR[sev]||sev)+'</td></tr>'
+    }).join("")
+  }).catch(function(e){$("#wdBadge").textContent="تعذّر التحميل";$("#wdRows").innerHTML='<tr><td colspan="6" style="padding:16px;color:var(--ink-soft)">'+esc(e.message)+'</td></tr>'})
+}
+$("#watchdogNav").addEventListener("click",function(){nav("watchdog");renderWatchdog()});
+$("#wdRefreshBtn").addEventListener("click",renderWatchdog);
+$("#wdExportBtn").addEventListener("click",function(){
+  dlBlob("/watchdog/report.md","text/markdown","تقرير_مراقبة_المنصة_"+new Date().toISOString().slice(0,10)+".md")
+    .catch(function(e){toast("فشل التنزيل: "+e.message)})
+});
+
+/* ── الدردشة — نفس المحرّك ونفس الإعدادات ── */
+function chatAdd(html,me){var t=document.createElement("div");t.className="turn"+(me?" me":"");
+  t.innerHTML=me?('<div class="txt">'+esc(html)+'</div>'):('<div class="ai"><div class="ava">س</div><div class="aibody">'+html+'</div></div>');
+  $("#cStream").appendChild(t);$("#cStream").scrollTop=1e9;return t}
+var STOP={"حلل":1,"حلّل":1,"سوق":1,"في":1,"الى":1,"إلى":1,"لآخر":1,"لاخر":1,"اخر":1,"آخر":1,"سنوات":1,"سنة":1,"عبر":1,"عن":1,"من":1,"analyze":1,"market":1,"in":1,"for":1,"the":1,"last":1,"years":1,"year":1,"of":1};
+function parseChat(msg){ // P3: تقسيم الرسالة — الجملة الكاملة كانت لا تطابق أي منتج فيفشل كل شيء
+  var span=/٥|5/.test(msg)?5:(/٣|3/.test(msg)?3:S.span);
+  var words=msg.replace(/[؟?!.،,]/g," ").split(/\s+/).filter(function(w){return w&&!STOP[w]&&!/^[٠-٩0-9–-]+$/.test(w)});
+  var cands=[];
+  function push(w){if(w&&cands.indexOf(w)<0)cands.push(w)}
+  for(var i=0;i<words.length&&i<8;i++){
+    var w=words[i];
+    // «التمور» → «تمور»: أداة التعريف تُسقط أولاً — مرجع HS بلا "ال" غالباً.
+    if(/^ال./.test(w))push(w.slice(2));
+    push(w);
+    if(i+1<words.length)push(w+" "+words[i+1])}
+  function tryNext(idx){
+    if(idx>=cands.length)return Promise.resolve(null);
+    return fetch(base()+"/index?q="+encodeURIComponent(cands[idx])+"&limit=1").then(function(r){return r.json()})
+      .then(function(list){var hit=(Array.isArray(list)&&list[0])||null;return hit||tryNext(idx+1)}).catch(function(){return tryNext(idx+1)})}
+  return tryNext(0).then(function(prod){
+    return fetch(base()+"/markets").then(function(r){return r.json()}).then(function(mk){
+      var market=null;
+      (Array.isArray(mk)?mk:[]).forEach(function(m){
+        var ar=m.name_ar||CAR[m.iso3]||"";
+        if((ar&&msg.indexOf(ar)>=0)||msg.toLowerCase().indexOf(String(m.name||"").toLowerCase())>=0)market=m});
+      return{product:prod,market:market,span:span}})
+    // البند ٤ (حزمة الإغلاق): فشل جلب /markets كان يرفض السلسلة كلها بلا .catch،
+    // فيبقى مؤشّر الانتظار عالقاً أبداً (عائلة «العودة الصامتة» #98). الآن: أثر
+    // مرئي بالعربية + تدهور رشيق (المنتج مُحلَّل بلا سوق محدّد، لا تعليق صامت).
+    .catch(function(e){toast("تعذّر تحميل قائمة الأسواق: "+((e&&e.message)||e)+" — سأحلّل المنتج بلا سوق محدّد");return{product:prod,market:null,span:span}})})}
+$("#sendBtn").addEventListener("click",send);
+$("#chatBox").addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
+function send(){var msg=$("#chatBox").value.trim();if(!msg)return;
+  // HIGH#1: أثناء الانشغال أعطِ أثراً مرئياً (لا عودة صامتة) وأبقِ النص كما هو.
+  if(S.busy){toast("تحليل جارٍ — انتظر اكتماله ثم أرسل");return}
+  $("#chatBox").value="";chatAdd(msg,true);
+  var wait=chatAdd("<p>أطلق الوكلاء المفعّلين على طلبك…</p>");
+  parseChat(msg).then(function(p){
+    if(!p.product){wait.remove();chatAdd("<p>لم أتعرّف على منتج في رسالتك. جرّب صيغة مثل: <b>حلّل التمور في الصين</b> أو <b>عسل في ألمانيا</b> — أي منتج غير نفطي يعمل.</p>");return}
+    S.product=p.product.name;S.hs=p.product.hs;if(p.market)S.market={iso3:p.market.iso3,name:p.market.name};S.span=p.span;sync();
+    runAnalysis(function(res){wait.remove();
+      // M8 نفسها مكرَّرة هنا (مسار نتيجة الدردشة) — نفس التصحيح.
+      var v=res.view||{},m=(v.markets&&v.markets[0])||{},brief=(v.brief||[])[0]||"—";
+      var ag=((m.research||{}).agents)||{},done=0,total=0,rows="";
+      Object.keys(ag).forEach(function(k){total++;var a=ag[k]||{};var ok=a.status&&a.status!=="failed";if(ok)done++;
+        var f=(a.findings||[]).filter(function(x){return x&&x.value!=null})[0];
+        var out=ok?(f?(typeof f.value==="number"?(f.metric&&/usd/.test(f.metric)?money(f.value):(""+f.value)+(f.unit?" "+f.unit:"")):"✓"):"✓"):"—";
+        rows+='<div class="arow"><span class="abadge '+(ok?"b-done":"b-off")+'"></span><span class="aname">'+esc(agentName(k))+'</span><span class="aout'+(ok?"":" off")+'">'+esc(out)+'</span></div>'});
+      var agHtml=total?('<div class="agents"><div class="ahead">الوكلاء<span class="p">'+done+' / '+total+' أسهموا</span></div><div class="alist">'+rows+'</div></div>'):"";
+      var mIso=(v.markets&&v.markets[0]&&v.markets[0].iso3)||"";
+      var mName=(LANG==="ar"&&CAR[mIso])?CAR[mIso]:((v.header||{}).target_market||"");
+      chatAdd('<p>حلّلت <b>'+esc(v.product||"")+'</b>'+(mName?(' في <b>'+esc(mName)+'</b>'):'')+'.</p>'+agHtml
+        +'<div class="rescard"><h4>'+esc(brief)+'</h4><p>'+esc((v.brief||[])[1]||"")+'</p>'
+        +'<div class="acts"><button class="abtn main" data-act="board">افتح اللوحة الكاملة</button><button class="abtn" data-act="pdf">تصدير التقرير (PDF)</button></div></div>');
+      $$("#cStream [data-act]").forEach(function(b){b.onclick=function(){this.dataset.act==="board"?nav("board"):dlReport("pdf")}})})
+  }).catch(function(e){wait.remove();chatAdd("<p>تعذّر التحليل: "+esc(e.message)+"</p>")})}
+
+/* ── الدردشة السياقية فوق اللوحة (10b) — من الذاكرة حصراً ── */
+function askAnalysis(){
+  var id=S.raw&&S.raw.analysis_id,q=($("#askBox")&&$("#askBox").value.trim())||"";
+  if(!q)return;
+  if(id==null){toast("شغّل تحليلاً محفوظاً أولاً");return}
+  var th=$("#askThread");
+  th.innerHTML+='<p style="font-size:14px;font-weight:600;margin:10px 0 4px">'+esc(q)+'</p><p class="gap" data-wait="1">…</p>';
+  $("#askBox").value="";
+  post("/analyses/"+id+"/ask",{question:q}).then(function(d){
+    var w=th.querySelector("[data-wait]");if(w)w.remove();
+    th.innerHTML+='<p style="font-size:14px;color:var(--ink-soft);white-space:pre-wrap;border-inline-start:3px solid var(--gold);padding-inline-start:12px;margin-bottom:8px">'
+      +esc((d&&(d.answer||d.note))||"—")+'</p>'})
+  .catch(function(e){var w=th.querySelector("[data-wait]");if(w)w.remove();
+    th.innerHTML+='<p class="gap">تعذّر: '+esc(e.message)+'</p>'})}
+
+/* ── درج إعدادات الوكلاء المشترك ── */
+function drawDrawer(){var free=AGENTS.filter(function(a){return!a.paid}),paid=AGENTS.filter(function(a){return a.paid});
+  function card(a){var p=S.prefs[a.k]||{on:!a.paid,cmd:""};
+    return '<div class="acard" data-k="'+a.k+'"><div class="atop"><span class="aname2"><b>'+a.n+(a.paid?'<span class="paidtag">مدفوع</span>':'')+'</b><span>'+a.d+'</span></span><span class="tg'+(p.on?"":" off")+'"><i></i></span></div>'
+      +'<div class="cmd"><label>توجيه الوكيل (نص حر)</label><textarea placeholder="مثال: ركّز على الطلب في رمضان وأهمية الحلال">'+esc(p.cmd)+'</textarea></div></div>'}
+  // بلاغ: عرض قائمة احتياطية بصمت كان يُخفي أن سجل الخادم الكامل (٢٨ وكيلاً
+  // — ١٤ قديم + ١٢ بعثة بحث عميق + مراجع/كاتب) لم يُحمَّل. الآن تحذير مرئي.
+  var warn="";
+  if(S.catalogStatus==="unauthorized")
+    warn='<div class="note" style="background:#c00;color:#fff;padding:8px 10px;border-radius:6px;margin-bottom:10px">'
+      +'⚠ هذه قائمة احتياطية (١٤ وكيلاً قديماً فقط) — الخادم محمي بمفتاح خدمة. '
+      +'اضغط «مفتاح الخدمة» أدناه لعرض كل الوكلاء الـ٢٨ (منها بعثات البحث العميق الاثنتا عشرة).</div>';
+  else if(S.catalogStatus==="error")
+    warn='<div class="note" style="background:#c00;color:#fff;padding:8px 10px;border-radius:6px;margin-bottom:10px">'
+      +'⚠ تعذّر الاتصال بالخادم — هذه قائمة احتياطية (١٤ وكيلاً قديماً فقط)، لا سجل الخادم الكامل.</div>';
+  $("#drawerBody").innerHTML=warn+'<div class="slbl">الوكلاء المجانيون</div>'+free.map(card).join("")+'<div class="slbl">الوكلاء المدفوعون</div>'+paid.map(card).join("");
+  $$("#drawerBody .tg").forEach(function(t){t.addEventListener("click",function(){this.classList.toggle("off")})})}
+$("#gearBtn").addEventListener("click",function(){drawDrawer();loadAgentCatalog().then(drawDrawer);$("#ov").classList.add("open");$("#dr").classList.add("open")});
+/* مفتاح الخدمة X-API-Key — مصادقة المنصّة، خارج لوحة الوكلاء عمداً (اللوحة بلا حقول مفاتيح) */
+$("#svcKeyBtn").addEventListener("click",function(){
+  var k=window.prompt(t("keyPh"),S.adminKey||"");
+  if(k===null)return;S.adminKey=k.trim();localStorage.setItem("silk_admin_key",S.adminKey);
+  toast(S.adminKey?"حُفظ مفتاح الخدمة":"أُزيل مفتاح الخدمة")});
+$("#ov").addEventListener("click",function(){$("#ov").classList.remove("open");$("#dr").classList.remove("open")});
+function collectPrefs(){$$("#drawerBody .acard").forEach(function(c){var k=c.dataset.k;
+  S.prefs[k]={on:!c.querySelector(".tg").classList.contains("off"),cmd:c.querySelector("textarea").value.trim()}});
+  localStorage.setItem("silk_agent_prefs",JSON.stringify(S.prefs))}
+$("#savePrefs").addEventListener("click",function(){
+  collectPrefs();
+  post("/settings/agents",{settings:S.prefs})
+    .then(function(){toast("حُفظت التوجيهات في الخادم — تسري على الإدخال والدردشة معاً")})
+    .catch(function(e){toast("حُفظت محلياً فقط — تعذّر حفظ الخادم: "+e.message)});
+  $("#ov").classList.remove("open");$("#dr").classList.remove("open")});
+$("#resetPrefs").addEventListener("click",function(){
+  S.prefs=defaultPrefs();localStorage.setItem("silk_agent_prefs",JSON.stringify(S.prefs));
+  post("/settings/agents",{settings:{}}).catch(function(){});drawDrawer()});
+/* روابط تحليلية للمحلّل: report.md متاح من زر Markdown في اللوحة */
+})();
+</script>
+</body>
+</html>

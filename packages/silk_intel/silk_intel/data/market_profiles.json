@@ -1,0 +1,556 @@
+{
+  "QAT": {
+    "identity": {
+      "iso3": {
+        "value": "QAT",
+        "source_url": "https://github.com/mledoze/countries",
+        "review_date": "2026-07-24"
+      },
+      "region": {
+        "value": "Asia",
+        "source_url": "https://github.com/mledoze/countries",
+        "review_date": "2026-07-24",
+        "note": "التصنيفُ القاريّ من المصدر؛ الإقليمُ الفرعيّ: شبه الجزيرة العربية/الخليج (GCC)."
+      },
+      "currency": {
+        "value": "QAR",
+        "source_url": "https://github.com/mledoze/countries",
+        "review_date": "2026-07-24"
+      },
+      "fx_source_key": {
+        "value": "worldbank:PA.NUS.FCRF",
+        "source_url": "https://data.worldbank.org/indicator/PA.NUS.FCRF",
+        "review_date": "2026-07-24"
+      }
+    },
+    "trade_regime": {
+      "blocs": [
+        {
+          "value": "GCC",
+          "source_url": "https://gcc-sg.org",
+          "review_date": "2026-07-24"
+        },
+        {
+          "value": "GAFTA",
+          "source_url": "https://www.lasportal.org",
+          "review_date": "2026-07-24"
+        },
+        {
+          "value": "OIC",
+          "source_url": "https://www.oic-oci.org",
+          "review_date": "2026-07-24"
+        },
+        {
+          "value": "WTO",
+          "source_url": "https://www.wto.org/english/thewto_e/whatis_e/tif_e/org6_e.htm",
+          "review_date": "2026-07-24"
+        }
+      ],
+      "tariff_resolution_strategy": {
+        "value": [
+          "bloc_matrix",
+          "wits",
+          "wto"
+        ],
+        "source_url": "https://gcc-sg.org",
+        "review_date": "2026-07-24"
+      },
+      "mfn_default": {
+        "value": 5,
+        "source_url": "https://gcc-sg.org",
+        "review_date": "2026-07-24",
+        "note": "التعرفة الخارجية الموحّدة لمجلس التعاون 5% (مرجع agreements_l1.csv)؛ التفضيلُ للمنشأ السعوديّ إعفاءٌ كامل بين الأعضاء."
+      }
+    },
+    "reporting_quality": {
+      "value": "strong",
+      "source_url": "https://comtradeplus.un.org/",
+      "review_date": "2026-07-24",
+      "note": "تبليغُ كومتريد مكتملٌ نسبياً؛ يوافق سقفَ فجوات evals/golden_cases.json (qatar 0.30)."
+    },
+    "regulatory_regime": {
+      "standards_body": {
+        "value": "GSO",
+        "source_url": "https://www.gso.org.sa",
+        "review_date": "2026-07-24"
+      },
+      "labeling_languages": {
+        "value": [
+          "ar",
+          "en"
+        ],
+        "source_url": "https://www.gso.org.sa",
+        "review_date": "2026-07-24",
+        "note": "معيار البطاقة الغذائية الخليجيّ GSO يشترط العربية."
+      },
+      "halal_regime": {
+        "value": "gso_mandatory_animal",
+        "source_url": "https://www.gac.org.sa",
+        "review_date": "2026-07-24",
+        "note": "شهادة حلال إلزاميّة للّحوم/الدواجن ومشتقاتها؛ غيرُ إلزاميّةٍ للنباتيّ (requirements_l1.csv، regime=GCC)."
+      },
+      "inspection_authority": {
+        "value": "gcc_market_food_authority",
+        "source_url": "https://www.gso.org.sa",
+        "review_date": "2026-07-24"
+      },
+      "conformity_assessment": {
+        "value": "gso_conformity_gac",
+        "source_url": "https://www.gac.org.sa",
+        "review_date": "2026-07-24"
+      }
+    },
+    "logistics": {
+      "corridors": [
+        {
+          "origin": "SAU",
+          "destination": "QAT",
+          "mode": "sea",
+          "main_port": "Hamad Port",
+          "transit_time_days": null,
+          "gap_reason": "لا مصدرَ زمنِ عبورٍ بحريٍّ مُنسَّقٍ بعد (WS7).",
+          "source_url": "https://github.com/tayljordan/ports",
+          "review_date": "2026-07-24"
+        }
+      ]
+    },
+    "data_sources": {
+      "comtrade_reporter_files_netwgt": {
+        "value": true,
+        "source_url": "https://comtradeplus.un.org/",
+        "review_date": "2026-07-24"
+      },
+      "connectors_available": {
+        "value": [
+          "comtrade",
+          "world_bank",
+          "wits",
+          "wto_ttd",
+          "gdelt",
+          "google_news",
+          "google_trends"
+        ],
+        "source_url": "https://comtradeplus.un.org/",
+        "review_date": "2026-07-24",
+        "note": "موصّلاتٌ عالميةُ التغطية — تشمل هذا السوق."
+      }
+    },
+    "domestic_production": {
+      "value": [],
+      "source_url": "https://www.fao.org/faostat/en/",
+      "review_date": "2026-07-24",
+      "note": "لا فئةَ إنتاجٍ زراعيٍّ مُعتبَرة — قطر مستورِدٌ صافٍ للغذاء."
+    }
+  },
+  "NLD": {
+    "identity": {
+      "iso3": {
+        "value": "NLD",
+        "source_url": "https://github.com/mledoze/countries",
+        "review_date": "2026-07-24"
+      },
+      "region": {
+        "value": "Europe",
+        "source_url": "https://github.com/mledoze/countries",
+        "review_date": "2026-07-24",
+        "note": "التصنيفُ القاريّ من المصدر؛ الإقليمُ الفرعيّ: الاتحاد الأوروبي (EU)."
+      },
+      "currency": {
+        "value": "EUR",
+        "source_url": "https://github.com/mledoze/countries",
+        "review_date": "2026-07-24"
+      },
+      "fx_source_key": {
+        "value": "worldbank:PA.NUS.FCRF",
+        "source_url": "https://data.worldbank.org/indicator/PA.NUS.FCRF",
+        "review_date": "2026-07-24",
+        "note": "اليورو عملةُ السوق — لا تحويلَ في السوق نفسها."
+      }
+    },
+    "trade_regime": {
+      "blocs": [
+        {
+          "value": "EU",
+          "source_url": "https://taxation-customs.ec.europa.eu/customs-4/customs-union_en",
+          "review_date": "2026-07-24"
+        },
+        {
+          "value": "WTO",
+          "source_url": "https://www.wto.org/english/thewto_e/whatis_e/tif_e/org6_e.htm",
+          "review_date": "2026-07-24"
+        }
+      ],
+      "tariff_resolution_strategy": {
+        "value": [
+          "wits",
+          "wto",
+          "mfn"
+        ],
+        "source_url": "https://wits.worldbank.org/",
+        "review_date": "2026-07-24"
+      },
+      "mfn_default": {
+        "value": null,
+        "source_url": "https://wits.worldbank.org/",
+        "review_date": "2026-07-24",
+        "note": "تعرفةُ الاتحاد الأوروبيّ الخارجية خاصّةٌ بخطِّ HS — تُحلّ حيّاً عبر WITS؛ لا افتراضَ سوقيٌّ واحد (السعوديةُ قد تنال تفضيلَ GSP+ حسب البند)."
+      }
+    },
+    "reporting_quality": {
+      "value": "strong",
+      "source_url": "https://comtradeplus.un.org/",
+      "review_date": "2026-07-24",
+      "note": "مبلِّغٌ أوروبيٌّ قويّ (Eurostat + كومتريد)؛ سقفُ الحالة الذهبية 0.30."
+    },
+    "regulatory_regime": {
+      "standards_body": {
+        "value": "EU",
+        "source_url": "https://food.ec.europa.eu",
+        "review_date": "2026-07-24"
+      },
+      "labeling_languages": {
+        "value": [
+          "nl"
+        ],
+        "source_url": "https://eur-lex.europa.eu/eli/reg/2011/1169/oj",
+        "review_date": "2026-07-24",
+        "note": "اللائحة (EU) 1169/2011: لغةٌ يفهمها مستهلكو الدولة العضو — الهولندية في هولندا."
+      },
+      "halal_regime": {
+        "value": "none_state_certifier_driven",
+        "source_url": "https://food.ec.europa.eu",
+        "review_date": "2026-07-24",
+        "note": "لا نظامَ حلالٍ حكوميٌّ في الاتحاد — شهادةُ جهةٍ خاصّةٍ يطلبها المشتري/القناة."
+      },
+      "inspection_authority": {
+        "value": "eu_official_controls_2017_625",
+        "source_url": "https://eur-lex.europa.eu/eli/reg/2017/625/oj",
+        "review_date": "2026-07-24"
+      },
+      "conformity_assessment": {
+        "value": "eu_traces",
+        "source_url": "https://food.ec.europa.eu/horizontal-topics/traces_en",
+        "review_date": "2026-07-24"
+      }
+    },
+    "logistics": {
+      "corridors": [
+        {
+          "origin": "SAU",
+          "destination": "NLD",
+          "mode": "sea",
+          "main_port": "Rotterdam",
+          "transit_time_days": null,
+          "gap_reason": "لا مصدرَ زمنِ عبورٍ بحريٍّ مُنسَّقٍ بعد (WS7).",
+          "source_url": "https://github.com/tayljordan/ports",
+          "review_date": "2026-07-24"
+        }
+      ]
+    },
+    "data_sources": {
+      "comtrade_reporter_files_netwgt": {
+        "value": true,
+        "source_url": "https://comtradeplus.un.org/",
+        "review_date": "2026-07-24"
+      },
+      "connectors_available": {
+        "value": [
+          "comtrade",
+          "world_bank",
+          "wits",
+          "wto_ttd",
+          "eurostat",
+          "gdelt",
+          "google_news",
+          "google_trends"
+        ],
+        "source_url": "https://comtradeplus.un.org/",
+        "review_date": "2026-07-24"
+      }
+    },
+    "domestic_production": {
+      "value": [
+        "dairy",
+        "potatoes",
+        "vegetables"
+      ],
+      "source_url": "https://www.fao.org/faostat/en/",
+      "review_date": "2026-07-24",
+      "note": "لا تشمل الفول السوداني ولا التمور — market_size ≈ imports صالحٌ لهذين المنتجين."
+    }
+  },
+  "NGA": {
+    "identity": {
+      "iso3": {
+        "value": "NGA",
+        "source_url": "https://github.com/mledoze/countries",
+        "review_date": "2026-07-24"
+      },
+      "region": {
+        "value": "Africa",
+        "source_url": "https://github.com/mledoze/countries",
+        "review_date": "2026-07-24",
+        "note": "التصنيفُ القاريّ من المصدر؛ الإقليمُ الفرعيّ: غرب أفريقيا (ECOWAS)."
+      },
+      "currency": {
+        "value": "NGN",
+        "source_url": "https://github.com/mledoze/countries",
+        "review_date": "2026-07-24"
+      },
+      "fx_source_key": {
+        "value": "worldbank:PA.NUS.FCRF",
+        "source_url": "https://data.worldbank.org/indicator/PA.NUS.FCRF",
+        "review_date": "2026-07-24"
+      }
+    },
+    "trade_regime": {
+      "blocs": [
+        {
+          "value": "AfCFTA",
+          "source_url": "https://au-afcftahub.au.int",
+          "review_date": "2026-07-24"
+        },
+        {
+          "value": "OIC",
+          "source_url": "https://www.oic-oci.org",
+          "review_date": "2026-07-24"
+        },
+        {
+          "value": "WTO",
+          "source_url": "https://www.wto.org/english/thewto_e/whatis_e/tif_e/org6_e.htm",
+          "review_date": "2026-07-24"
+        }
+      ],
+      "tariff_resolution_strategy": {
+        "value": [
+          "wits",
+          "wto",
+          "mfn"
+        ],
+        "source_url": "https://wits.worldbank.org/",
+        "review_date": "2026-07-24",
+        "note": "غيرُ عضوٍ في اتحادٍ جمركيٍّ مع المنشأ السعوديّ — WITS/WTO أولاً (AfCFTA لا يشمل السعودية)."
+      },
+      "mfn_default": {
+        "value": null,
+        "source_url": "https://wits.worldbank.org/",
+        "review_date": "2026-07-24",
+        "note": "خاصّةٌ بخطِّ HS — تُحلّ حيّاً عبر WITS."
+      }
+    },
+    "reporting_quality": {
+      "value": "weak",
+      "source_url": "https://comtradeplus.un.org/",
+      "review_date": "2026-07-24",
+      "note": "المستورِدُ قد لا يبلّغ مباشرةً — تُرقّى إستراتيجيةُ المرآة (شركاء) مبكّراً؛ سقفُ فجوات evals/golden_cases.json (nigeria 0.45)."
+    },
+    "regulatory_regime": {
+      "standards_body": {
+        "value": "NAFDAC",
+        "source_url": "https://nafdac.gov.ng",
+        "review_date": "2026-07-24",
+        "note": "الوكالة الوطنية لإدارة ومراقبة الأغذية والأدوية؛ ومعايير SON (son.gov.ng) للمواصفات."
+      },
+      "labeling_languages": {
+        "value": [
+          "en"
+        ],
+        "source_url": "https://nafdac.gov.ng",
+        "review_date": "2026-07-24"
+      },
+      "halal_regime": {
+        "value": "importer_certifier_driven",
+        "source_url": "https://nafdac.gov.ng",
+        "review_date": "2026-07-24",
+        "note": "لا جهةَ حلالٍ حكوميّةٌ موحّدة — شهادةُ جهةٍ معترَفٍ بها يطلبها المستورد/القناة."
+      },
+      "inspection_authority": {
+        "value": "nafdac",
+        "source_url": "https://nafdac.gov.ng",
+        "review_date": "2026-07-24"
+      },
+      "conformity_assessment": {
+        "value": "nafdac_registration",
+        "source_url": "https://nafdac.gov.ng",
+        "review_date": "2026-07-24"
+      }
+    },
+    "logistics": {
+      "corridors": [
+        {
+          "origin": "SAU",
+          "destination": "NGA",
+          "mode": "sea",
+          "main_port": "Lagos (Apapa/Tin Can)",
+          "transit_time_days": null,
+          "gap_reason": "لا مصدرَ زمنِ عبورٍ بحريٍّ مُنسَّقٍ بعد (WS7).",
+          "source_url": "https://github.com/tayljordan/ports",
+          "review_date": "2026-07-24"
+        }
+      ]
+    },
+    "data_sources": {
+      "comtrade_reporter_files_netwgt": {
+        "value": false,
+        "source_url": "https://comtradeplus.un.org/",
+        "review_date": "2026-07-24",
+        "note": "تبليغٌ ضعيف — كثيراً ما يغيب netWgt؛ يُصرَّح فجوةً (لا يُخمَّن) وتُعتمَد المرآة."
+      },
+      "connectors_available": {
+        "value": [
+          "comtrade",
+          "world_bank",
+          "wits",
+          "wto_ttd",
+          "gdelt",
+          "google_news",
+          "google_trends"
+        ],
+        "source_url": "https://comtradeplus.un.org/",
+        "review_date": "2026-07-24"
+      }
+    },
+    "domestic_production": {
+      "value": [
+        "groundnuts",
+        "cassava",
+        "sorghum"
+      ],
+      "source_url": "https://www.fao.org/faostat/en/",
+      "review_date": "2026-07-24",
+      "note": "من كبار منتِجي الفول السوداني (groundnuts) عالمياً — الإنتاجُ المحليُّ مُعتبَرٌ لهذه الفئة."
+    }
+  },
+  "IND": {
+    "identity": {
+      "iso3": {
+        "value": "IND",
+        "source_url": "https://github.com/mledoze/countries",
+        "review_date": "2026-07-24"
+      },
+      "region": {
+        "value": "Asia",
+        "source_url": "https://github.com/mledoze/countries",
+        "review_date": "2026-07-24",
+        "note": "التصنيفُ القاريّ من المصدر؛ الإقليمُ الفرعيّ: جنوب آسيا."
+      },
+      "currency": {
+        "value": "INR",
+        "source_url": "https://github.com/mledoze/countries",
+        "review_date": "2026-07-24"
+      },
+      "fx_source_key": {
+        "value": "worldbank:PA.NUS.FCRF",
+        "source_url": "https://data.worldbank.org/indicator/PA.NUS.FCRF",
+        "review_date": "2026-07-24"
+      }
+    },
+    "trade_regime": {
+      "blocs": [
+        {
+          "value": "WTO",
+          "source_url": "https://www.wto.org/english/thewto_e/whatis_e/tif_e/org6_e.htm",
+          "review_date": "2026-07-24"
+        }
+      ],
+      "tariff_resolution_strategy": {
+        "value": [
+          "wits",
+          "wto",
+          "mfn"
+        ],
+        "source_url": "https://wits.worldbank.org/",
+        "review_date": "2026-07-24",
+        "note": "غيرُ عضوٍ في اتحادٍ جمركيٍّ مع المنشأ السعوديّ — WITS/WTO أولاً."
+      },
+      "mfn_default": {
+        "value": null,
+        "source_url": "https://wits.worldbank.org/",
+        "review_date": "2026-07-24",
+        "note": "خاصّةٌ بخطِّ HS — تُحلّ حيّاً عبر WITS."
+      }
+    },
+    "reporting_quality": {
+      "value": "moderate",
+      "source_url": "https://comtradeplus.un.org/",
+      "review_date": "2026-07-24",
+      "note": "تبليغٌ معقولٌ لكنّه دون الأوروبيّ — سقفُ فجوات evals/golden_cases.json (india 0.35)."
+    },
+    "regulatory_regime": {
+      "standards_body": {
+        "value": "FSSAI",
+        "source_url": "https://www.fssai.gov.in",
+        "review_date": "2026-07-24"
+      },
+      "labeling_languages": {
+        "value": [
+          "en",
+          "hi"
+        ],
+        "source_url": "https://www.fssai.gov.in",
+        "review_date": "2026-07-24",
+        "note": "لوائحُ FSSAI: الإنجليزية أو الهندية."
+      },
+      "halal_regime": {
+        "value": "certifier_driven",
+        "source_url": "https://www.fssai.gov.in",
+        "review_date": "2026-07-24",
+        "note": "شهادةُ حلالٍ من جهاتٍ خاصّةٍ معتمدة (لا نظامَ حكوميٌّ موحّد)."
+      },
+      "inspection_authority": {
+        "value": "fssai",
+        "source_url": "https://www.fssai.gov.in",
+        "review_date": "2026-07-24"
+      },
+      "conformity_assessment": {
+        "value": "fssai_import_clearance",
+        "source_url": "https://www.fssai.gov.in",
+        "review_date": "2026-07-24"
+      }
+    },
+    "logistics": {
+      "corridors": [
+        {
+          "origin": "SAU",
+          "destination": "IND",
+          "mode": "sea",
+          "main_port": "Jawaharlal Nehru Port (Nhava Sheva, Mumbai)",
+          "transit_time_days": null,
+          "gap_reason": "لا مصدرَ زمنِ عبورٍ بحريٍّ مُنسَّقٍ بعد (WS7).",
+          "source_url": "https://github.com/tayljordan/ports",
+          "review_date": "2026-07-24"
+        }
+      ]
+    },
+    "data_sources": {
+      "comtrade_reporter_files_netwgt": {
+        "value": true,
+        "source_url": "https://comtradeplus.un.org/",
+        "review_date": "2026-07-24"
+      },
+      "connectors_available": {
+        "value": [
+          "comtrade",
+          "world_bank",
+          "wits",
+          "wto_ttd",
+          "gdelt",
+          "google_news",
+          "google_trends"
+        ],
+        "source_url": "https://comtradeplus.un.org/",
+        "review_date": "2026-07-24"
+      }
+    },
+    "domestic_production": {
+      "value": [
+        "groundnuts",
+        "spices",
+        "rice"
+      ],
+      "source_url": "https://www.fao.org/faostat/en/",
+      "review_date": "2026-07-24",
+      "note": "منتِجٌ كبيرٌ للفول السوداني (groundnuts)؛ لا تشمل القائمةُ التمورَ (مستورِدٌ لها) — market_size ≈ imports صالحٌ للتمور لا للفول السودانيّ."
+    }
+  }
+}

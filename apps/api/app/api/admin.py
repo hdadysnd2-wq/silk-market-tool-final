@@ -25,9 +25,9 @@ from app.models import (
     SuppressionReason,
     User,
 )
-from app.schemas.common import AuditEntryOut, FactoryOut, MessageResponse
+from app.schemas.common import AuditEntryOut, ErasureRequest, FactoryOut, MessageResponse
 from app.security import require_staff
-from app.services import suppression
+from app.services import retention, suppression
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_staff)])
 
@@ -143,3 +143,19 @@ def audit_log(
         query = query.where(AuditLog.factory_id == factory_id)
     rows = db.scalars(query).all()
     return [AuditEntryOut.model_validate(r) for r in rows]
+
+
+# --- PDPL erasure (right to be forgotten) ----------------------------------
+
+
+@router.post("/pdpl/erasure", response_model=MessageResponse)
+def pdpl_erasure(
+    payload: ErasureRequest,
+    db: DbDep,
+    staff: User = Depends(require_staff),
+) -> MessageResponse:
+    """Honour a data-subject erasure request: anonymise every contact holding
+    the address and suppress it globally so it can never be re-contacted."""
+    erased = retention.erase_data_subject(db, email=payload.email, actor=staff)
+    db.commit()
+    return MessageResponse(detail=f"Erased {erased} contact(s); {payload.email} is now suppressed")

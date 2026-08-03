@@ -64,4 +64,8 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.tasks.poll_replies",
         "schedule": crontab(minute="*/15"),
     },
+    "pdpl-retention-daily": {
+        "task": "app.workers.tasks.run_pdpl_retention",
+        "schedule": crontab(hour=1, minute=30),
+    },
 }

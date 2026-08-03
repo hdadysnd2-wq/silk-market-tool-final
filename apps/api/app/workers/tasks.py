@@ -256,6 +256,17 @@ def reset_daily_counters() -> dict:
     return {"factories_reset": len(factories), "sender_accounts_reset": len(accounts)}
 
 
+@celery_app.task(name="app.workers.tasks.run_pdpl_retention")
+def run_pdpl_retention() -> dict:
+    """PDPL data-minimisation sweep: anonymise personal data on contacts whose
+    campaign work is done and that are older than the retention window."""
+    from app.services import retention
+
+    with session_scope() as db:
+        anonymised = retention.purge_stale_pii(db)
+    return {"contacts_anonymised": anonymised}
+
+
 @celery_app.task(name="app.workers.tasks.advance_sender_warmup")
 def advance_sender_warmup() -> dict:
     """Ramp each connected mailbox one warm-up stage per day (per the schedule)."""

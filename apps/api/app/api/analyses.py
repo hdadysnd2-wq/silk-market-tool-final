@@ -1,0 +1,69 @@
+"""Analysis runs — drive the world-funnel pipeline for a confirmed product.
+
+``POST /products/{id}/analysis`` runs the world funnel (Stage 1) for a product
+whose HS code has been human-confirmed (I2) and persists the ranked country
+shortlist ("world screened → top 5", transit-flagged). ``GET /analyses/{id}``
+returns a run with its rankings.
+"""
+
+from __future__ import annotations
+
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, status
+
+from app.api.deps import DbDep, get_owned_product
+from app.models import Analysis, CountryRanking, Product
+from app.models.product import Product as ProductModel
+from app.schemas.analysis import AnalysisOut, CountryRankingOut
+from app.security import CurrentUser, assert_factory_access
+from app.services.ranking import run_product_world_analysis
+
+router = APIRouter(tags=["analyses"])
+
+
+def _to_out(db: DbDep, analysis: Analysis) -> AnalysisOut:
+    rankings = (
+        db.query(CountryRanking)
+        .filter(CountryRanking.analysis_id == analysis.id)
+        .order_by(CountryRanking.rank)
+        .all()
+    )
+    out = AnalysisOut.model_validate(analysis)
+    out.rankings = [CountryRankingOut.model_validate(r) for r in rankings]
+    return out
+
+
+@router.post(
+    "/products/{product_id}/analysis",
+    response_model=AnalysisOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def start_analysis(
+    db: DbDep,
+    product: ProductModel = Depends(get_owned_product),
+) -> AnalysisOut:
+    # I2 — the world funnel runs only on a human-confirmed HS code. An unconfirmed
+    # or missing code is a 409, never a silent run on a guessed code.
+    if not (product.hs_code and product.hs_confirmed_by_user):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="HS code must be confirmed before running a world analysis",
+        )
+    analysis = run_product_world_analysis(db, product)
+    db.commit()
+    return _to_out(db, analysis)
+
+
+@router.get("/analyses/{analysis_id}", response_model=AnalysisOut)
+def get_analysis(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> AnalysisOut:
+    analysis = db.get(Analysis, analysis_id)
+    if analysis is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
+    # Authorize via the owning product's factory. An orphaned analysis (product
+    # deleted) cannot be authorized and is treated as not found.
+    product = db.get(Product, analysis.product_id) if analysis.product_id else None
+    if product is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
+    assert_factory_access(user, product.factory_id)
+    return _to_out(db, analysis)

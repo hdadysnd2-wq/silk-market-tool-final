@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     admin,
+    analyses,
     auth,
     buyers,
     campaigns,
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
         auth,
         factories,
         products,
+        analyses,
         markets,
         buyers,
         campaigns,

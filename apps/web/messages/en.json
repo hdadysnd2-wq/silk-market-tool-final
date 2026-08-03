@@ -84,7 +84,10 @@
     "mirror": "mirror data",
     "noData": "no data",
     "yearLabel": "{year}",
-    "cagr": "3-yr CAGR"
+    "cagr": "3-yr CAGR",
+    "decisiveNumbers": "Decisive numbers",
+    "competitivePosition": "Competitive position",
+    "limits": "Limits of this report"
   },
   "buyers": {
     "title": "Potential buyers",

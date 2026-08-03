@@ -3,17 +3,20 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { api, ApiError } from "@/lib/api";
-import type { Analysis, Product } from "@/lib/types";
+import type { Analysis, FunnelBrief, Product } from "@/lib/types";
 
 /**
  * Stage-1 world funnel for a product: screens every market locally and shows the
- * top-5 export candidates. The transit-port guard (I9) surfaces as a visible
- * badge, and the data year travels under every figure (decision #8). Running the
- * funnel requires a human-confirmed HS code (I2) — the API returns 409 otherwise.
+ * brief-first output (decision #7) — the decision, three sourced numbers and the
+ * "limits of this report" section — above the top-5 export candidates. The
+ * transit-port guard (I9) surfaces as a visible badge, and the data year travels
+ * under every figure (decision #8). Running the funnel requires a human-confirmed
+ * HS code (I2) — the API returns 409 otherwise.
  */
 export function WorldFunnel({ product }: { product: Product }) {
   const t = useTranslations("funnel");
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [brief, setBrief] = useState<FunnelBrief | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,9 +25,14 @@ export function WorldFunnel({ product }: { product: Product }) {
   async function screen() {
     setLoading(true);
     setError(null);
+    setBrief(null);
     try {
-      setAnalysis(await api.post<Analysis>(`/products/${product.id}/analysis`));
+      const run = await api.post<Analysis>(`/products/${product.id}/analysis`);
+      setAnalysis(run);
+      // Brief-first: the decision + sourced numbers + limits headline the result.
+      setBrief(await api.get<FunnelBrief>(`/analyses/${run.id}/brief`));
     } catch (err) {
+      setAnalysis(null);
       setError(
         err instanceof ApiError && err.status === 409
           ? t("confirmFirst")
@@ -56,6 +64,59 @@ export function WorldFunnel({ product }: { product: Product }) {
 
       {!confirmed && <p className="mt-2 text-sm text-gray-500">{t("confirmFirst")}</p>}
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+
+      {brief && (
+        <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50 p-4">
+          {/* The decision — the headline of the brief (decision #7). */}
+          <p className="text-base font-semibold text-gray-900">{brief.decision}</p>
+
+          {brief.decisive_numbers.length > 0 && (
+            <div className="mt-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                {t("decisiveNumbers")}
+              </h3>
+              <ul className="mt-1 space-y-1.5">
+                {brief.decisive_numbers.map((fig) => (
+                  <li key={fig.label} className="text-sm">
+                    <span className="font-medium text-gray-900">{fig.label}</span>
+                    {" · "}
+                    <span className="text-gray-900">{fig.value ?? t("noData")}</span>
+                    {/* The source line under every number — never omitted (decision #7). */}
+                    <span className="block text-xs text-gray-400">{fig.source}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {brief.competitive_position.length > 0 && (
+            <div className="mt-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                {t("competitivePosition")}
+              </h3>
+              <ul className="mt-1 list-disc space-y-1 ps-5 text-sm text-gray-600">
+                {brief.competitive_position.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* "Limits of this report" — the declared gaps, never compressed away. */}
+          {brief.limits.length > 0 && (
+            <div className="mt-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                {t("limits")}
+              </h3>
+              <ul className="mt-1 list-disc space-y-1 ps-5 text-sm text-gray-600">
+                {brief.limits.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {analysis && (
         <div className="mt-4">

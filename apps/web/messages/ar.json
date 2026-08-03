@@ -84,7 +84,10 @@
     "mirror": "بيانات معكوسة",
     "noData": "لا بيانات",
     "yearLabel": "{year}",
-    "cagr": "نمو مركّب ٣ سنوات"
+    "cagr": "نمو مركّب ٣ سنوات",
+    "decisiveNumbers": "الأرقام الحاسمة",
+    "competitivePosition": "الموقف التنافسي",
+    "limits": "حدود هذا التقرير"
   },
   "buyers": {
     "title": "المشترون المحتملون",

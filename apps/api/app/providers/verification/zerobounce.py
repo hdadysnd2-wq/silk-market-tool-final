@@ -37,7 +37,10 @@ class ZeroBounceVerifier:
                 )
                 response.raise_for_status()
                 status = response.json().get("status", "unknown")
-        except httpx.HTTPError as exc:
+        # Degrade on ANY failure — a network error, a non-JSON body, or an
+        # unexpected shape — to the safe outcome, never crash the caller (I1).
+        # `unknown` is not sendable, so a hiccup can never leak an unverified send.
+        except Exception as exc:
             log.warning("zerobounce_failed", email=email, error=str(exc))
             return VerificationResult(
                 email=email, outcome=VerificationOutcome.unknown, provider_name=self.name

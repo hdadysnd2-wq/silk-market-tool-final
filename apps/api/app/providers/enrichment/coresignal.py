@@ -47,7 +47,10 @@ class CoresignalProvider:
                 detail = client.get(f"{CORESIGNAL_COLLECT_URL}/{ids[0]}", headers=self._headers())
                 detail.raise_for_status()
                 data = detail.json()
-        except httpx.HTTPError as exc:
+        # Coresignal's schema varies by plan, so the search result may not be the
+        # assumed non-empty list; degrade on any failure (network, non-JSON body,
+        # unexpected shape) to None rather than crashing the discovery run (I1).
+        except Exception as exc:
             log.warning("coresignal_failed", company=name, error=str(exc))
             return None
 

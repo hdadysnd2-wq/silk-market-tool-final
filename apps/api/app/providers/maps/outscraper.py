@@ -37,7 +37,9 @@ class OutscraperMapsProvider:
                 response.raise_for_status()
                 data = response.json().get("data", [[]])
                 places = data[0] if data else []
-        except (httpx.HTTPError, IndexError, KeyError) as exc:
+        # Degrade on any failure (network, non-JSON body, unexpected shape) to an
+        # empty result rather than crashing the discovery run (I1).
+        except Exception as exc:
             log.warning("outscraper_failed", query=query, error=str(exc))
             return []
 

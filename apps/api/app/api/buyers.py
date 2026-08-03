@@ -20,10 +20,14 @@ def discover(
     db: DbDep,
     product: Product = Depends(get_owned_product),
 ) -> dict:
-    if not product.hs_code:
+    # I2 — buyer discovery fetches buyer PII, so it runs only on a *human-confirmed*
+    # HS code. The classifier pre-fills product.hs_code with its top candidate
+    # before the user confirms, so checking hs_code alone would let discovery run
+    # on a guess; the confirmation flag is the real gate (as on the analysis run).
+    if not (product.hs_code and product.hs_confirmed_by_user):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Confirm the product's HS code before discovering buyers",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="HS code must be confirmed before discovering buyers",
         )
     markets = [m.upper() for m in payload.markets]
     # Enqueue one discovery job per market. In eager mode (tests / local worker

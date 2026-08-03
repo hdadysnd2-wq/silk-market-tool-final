@@ -163,6 +163,15 @@
     "progressPending": "Pending review",
     "progressApproved": "Approved",
     "progressSent": "Sent",
+    "lia": {
+      "title": "EU market — Legitimate Interest Assessment required",
+      "explain": "Before emailing buyers in an EU market, GDPR requires a recorded Legitimate Interest Assessment. Sending stays blocked until it is on file.",
+      "purpose": "Purpose of processing",
+      "necessity": "Why direct contact is necessary",
+      "balancing": "Balancing test (your interest vs. the recipient's rights)",
+      "dataSources": "Data sources (optional)",
+      "submit": "Record assessment"
+    },
     "empty": "No emails yet. Click \"Draft emails\" to generate the drafts."
   },
   "deliverability": {

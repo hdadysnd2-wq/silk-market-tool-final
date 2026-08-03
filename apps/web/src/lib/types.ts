@@ -229,6 +229,9 @@ export interface Campaign {
   reported_meetings: number;
   reported_rfqs: number;
   created_at: string;
+  // EU markets require a Legitimate Interest Assessment before any send (I8).
+  market_is_eu: boolean;
+  lia_recorded: boolean;
 }
 
 export interface Email {

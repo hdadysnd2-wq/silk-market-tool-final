@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import { EmailReviewSplitView } from "@/components/EmailReviewSplitView";
+import { EuLiaGate } from "@/components/EuLiaGate";
 import type { BuyerMatch, Campaign, Email, EmailStatus } from "@/lib/types";
 
 // Which statuses roll up into each approval-gate bucket. `draft` still needs a
@@ -22,7 +23,7 @@ const SENT_STATUSES: EmailStatus[] = [
 export default function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const t = useTranslations("campaign");
-  const { data: campaign } = useApi<Campaign>(`/campaigns/${id}`);
+  const { data: campaign, reload: reloadCampaign } = useApi<Campaign>(`/campaigns/${id}`);
   // Poll: drafting runs in the worker, and statuses advance as sends/opens land.
   const { data: emails, loading, reload } = useApi<Email[]>(
     `/campaigns/${id}/emails`,
@@ -66,6 +67,10 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
           </button>
         )}
       </div>
+
+      {campaign?.market_is_eu && !campaign.lia_recorded && (
+        <EuLiaGate campaignId={id} onRecorded={reloadCampaign} />
+      )}
 
       {list.length > 0 && (
         <div

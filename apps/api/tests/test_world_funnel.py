@@ -74,6 +74,34 @@ def test_mirror_and_no_data_rows_are_tagged(db):
     assert NO_DATA_TAG in by_iso["XXX"].tags
 
 
+def test_growth_lifts_market_of_equal_volume(db):
+    # Decision #8 — the multi-year trend feeds the screening score. Two genuine
+    # markets of identical volume: the faster-growing one ranks first, and its
+    # score is strictly higher (the trend, not luck, broke the volume tie).
+    for iso3, cagr in [("KEN", 0.30), ("EGY", 0.0)]:
+        db.add(
+            WorldTrade(
+                hs6=HS6,
+                importer_iso3=iso3,
+                year=YEAR,
+                import_usd=500.0,
+                cagr_3y=cagr,
+                is_transit_hub=False,
+                is_mirror=False,
+                source="UN Comtrade",
+            )
+        )
+    db.commit()
+
+    result = screen_world(db, HS6)
+    order = [m.importer_iso3 for m in result.markets]
+    assert order.index("KEN") < order.index("EGY")
+
+    ken = next(m for m in result.markets if m.importer_iso3 == "KEN")
+    egy = next(m for m in result.markets if m.importer_iso3 == "EGY")
+    assert ken.screen_score > egy.screen_score
+
+
 def test_empty_when_no_world_trade_for_hs6(db):
     result = screen_world(db, "999999")
     assert result.year is None

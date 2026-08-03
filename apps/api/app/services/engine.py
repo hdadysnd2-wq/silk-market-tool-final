@@ -59,6 +59,27 @@ def resolve_hs_candidates(product_name: str, top_n: int = 3) -> list[DataContrac
     ]
 
 
+def stage1_screen_score(
+    import_usd: float | None,
+    cagr_3y: float | None = None,
+    yoy_growth: float | None = None,
+) -> float:
+    """Stage-1 world-funnel screening score via the engine (zero network).
+
+    Delegates to ``silk_market_ranker.stage1_screen_score`` — the engine owns the
+    scoring model, so the platform never keeps a parallel one. Import volume is
+    modulated by a bounded multi-year-trend factor (locked decision #8: the trend
+    feeds the score); a missing volume is a declared gap (``0.0``), never a
+    fabricated number (I1). The transit-port penalty (I9) is applied by the caller
+    so the guard and its visible tag stay co-located in the funnel.
+    """
+    import silk_market_ranker
+
+    return silk_market_ranker.stage1_screen_score(
+        import_usd, cagr_3y=cagr_3y, yoy_growth=yoy_growth
+    )
+
+
 @contextlib.contextmanager
 def deepen_scope(deepen: bool) -> Iterator[None]:
     """Re-establish the engine's ``/deepen`` context inside a worker (I5).

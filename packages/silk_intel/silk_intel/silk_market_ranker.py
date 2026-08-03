@@ -608,6 +608,45 @@ def _normalize(raw: dict[str, float], value: float) -> float:
     return (value - lo) / (hi - lo)
 
 
+# ── Stage-1 local screening score (zero-network) ─────────────────────────────
+# The merged product's world funnel screens EVERY importer locally over the
+# precomputed ``world_trade`` table (locked decision #3, Stage 1: zero live API
+# calls). Only two signals exist locally per market: import volume and the
+# multi-year trend. Trend must feed the score (locked decision #8), so a market
+# is scored as its import volume scaled by a bounded growth factor. The trend
+# effect is capped so volume — the primary demand signal — is never overwhelmed
+# by a wild growth rate. The full weighted, min-max multi-component model
+# (``rank_markets`` above) runs later on the curated Stage-2/3 shortlist, where
+# the extra components (Saudi position, demand capacity, competition) are fetched.
+STAGE1_GROWTH_CAP = 0.5  # trend can lift/lower a market's score by at most ±50%
+
+
+def stage1_screen_score(import_usd: object,
+                        cagr_3y: object = None,
+                        yoy_growth: object = None) -> float:
+    """درجة فرز المرحلة-١ — Stage-1 world-funnel screening score (zero network).
+
+    ``import_usd`` هو حجم الاستيراد؛ يُضرَب في عامل نمو محدود مشتقّ من الاتجاه
+    متعدّد السنوات — نفضّل الـ CAGR ثلاثي السنوات، ثم النمو السنوي كبديل. سوقٌ
+    نامٍ يتفوّق على سوقٍ راكدٍ بنفس الحجم؛ سوقٌ منكمشٌ يهبط دونه. أثر الاتجاه محدود
+    بـ ``±STAGE1_GROWTH_CAP`` كي يبقى الحجم الإشارة الأساسية.
+
+    Volume scaled by a bounded CAGR/YoY factor (decision #8). A missing volume is
+    a declared gap — returns ``0.0``, never a number fabricated from the trend
+    (I1); a missing trend simply leaves volume unmodulated (factor ``1.0``).
+    """
+    if import_usd is None:
+        return 0.0
+    if cagr_3y is not None:
+        growth = float(cagr_3y)
+    elif yoy_growth is not None:
+        growth = float(yoy_growth)
+    else:
+        growth = 0.0
+    growth = max(-STAGE1_GROWTH_CAP, min(STAGE1_GROWTH_CAP, growth))
+    return float(import_usd) * (1.0 + growth)
+
+
 def coverage_year_ladder() -> list[int]:
     """سُلَّم سنوات fallback لاستطلاع التغطية — the year-fallback ladder.
 

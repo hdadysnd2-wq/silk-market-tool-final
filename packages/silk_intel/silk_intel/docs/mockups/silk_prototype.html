@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>سِلك — النموذج المتكامل</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Markazi+Text:wght@600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FBFAF7;--panel:#FFFFFF;--ink:#1A2420;--ink-soft:#5C665F;
+    --line:#ECE8DF;--line-2:#DFDACF;--gold:#A9772F;--gold-soft:#F4ECDC;
+    --go:#3B7355;--go-soft:#E6F0EA;--warn:#A9791F;--warn-soft:#F7EEDA;
+    --muted:#9C978A;--side:#F6F3EC;--run:#2C4A43;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);height:100vh;overflow:hidden;
+    font-family:"IBM Plex Sans Arabic",sans-serif;line-height:1.65;-webkit-font-smoothing:antialiased}
+  .num{font-family:"IBM Plex Mono",monospace;font-feature-settings:"tnum"}
+  .app{display:grid;grid-template-columns:230px 1fr;height:100vh}
+
+  /* ===== rail ===== */
+  .rail{background:var(--side);border-inline-end:1px solid var(--line);display:flex;flex-direction:column;padding:16px 12px}
+  .rail .brand{display:flex;align-items:baseline;gap:8px;padding:6px 8px 16px}
+  .rail .brand b{font-family:"Markazi Text",serif;font-size:26px;font-weight:700;line-height:1}
+  .rail .brand span{font-size:11px;color:var(--muted)}
+  .navbtn{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--ink-soft);
+    padding:11px 12px;border-radius:10px;cursor:pointer;font-weight:500;margin-bottom:3px}
+  .navbtn:hover{background:#EEEAE0}
+  .navbtn.on{background:var(--ink);color:#fff}
+  .navbtn svg{width:16px;height:16px;flex-shrink:0}
+  .rail-lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;padding:14px 10px 8px;font-weight:600}
+  .hist{font-size:12.5px;color:var(--ink-soft);padding:8px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hist:hover{background:#EEEAE0}
+  .rail-foot{margin-top:auto}
+  .gear{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-soft);padding:11px 12px;border-radius:10px;cursor:pointer}
+  .gear:hover{background:#EEEAE0}
+
+  /* ===== stage ===== */
+  .stage{overflow-y:auto;position:relative}
+  .view{display:none;min-height:100vh}
+  .view.on{display:block}
+  .wrap{max-width:940px;margin:0 auto;padding:0 30px}
+  .topbar{height:56px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;background:var(--bg);z-index:5}
+  .topbar .ttl{font-family:"Markazi Text",serif;font-size:21px;font-weight:600}
+  .modes{display:flex;gap:4px;background:#EFEBE2;border-radius:9px;padding:3px}
+  .mode{font-size:13px;padding:6px 14px;border-radius:7px;cursor:pointer;color:var(--ink-soft)}
+  .mode.on{background:#fff;color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+
+  /* ---------- INPUT view ---------- */
+  .band{padding:34px 0 6px}
+  .eyebrow{color:var(--gold);font-size:12px;font-weight:700;letter-spacing:2px;margin-bottom:8px}
+  .band h1{font-family:"Markazi Text",serif;font-size:36px;font-weight:700;line-height:1.15}
+  .band .sub{color:var(--ink-soft);font-size:15px;margin-top:4px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px;margin-top:22px}
+  .card.dash{border-style:dashed;border-color:var(--line-2);background:#FDFBF6}
+  .flabel{font-size:14px;font-weight:600;margin-bottom:10px;display:block}
+  .search{position:relative}
+  .search input{width:100%;height:54px;border:1.5px solid var(--line-2);border-radius:12px;padding:0 50px 0 16px;font-family:inherit;font-size:16px;background:#fff;color:var(--ink)}
+  .search input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 4px var(--gold-soft)}
+  .search svg{position:absolute;top:17px;inset-inline-start:16px;width:20px;height:20px;color:var(--muted)}
+  .resolved{display:flex;align-items:center;gap:8px;margin-top:11px;font-size:13px;color:var(--go);background:var(--go-soft);border-radius:8px;padding:8px 12px;width:fit-content}
+  .chips{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}
+  .chip{font-size:13px;padding:6px 13px;border:1px solid var(--line-2);border-radius:20px;color:var(--ink-soft);cursor:pointer;background:#fff}
+  .chip:hover{border-color:var(--gold);color:var(--gold);background:var(--gold-soft)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  .marketbox{max-height:210px;overflow-y:auto;border:1px solid var(--line);border-radius:12px;padding:6px}
+  .allm{font-size:13px;color:var(--ink-soft);padding:10px;border-radius:8px;cursor:pointer;border:1px dashed var(--line-2);text-align:center;margin-bottom:6px}
+  .allm:hover{border-color:var(--gold);color:var(--gold)}
+  .mregion{font-size:11px;color:var(--muted);font-weight:600;padding:9px 10px 5px}
+  .mrow{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:14px}
+  .mrow:hover{background:var(--gold-soft)}.mrow.sel{background:var(--go-soft)}
+  .mrow .flag{width:20px;height:14px;border-radius:2px;background:var(--line-2)}
+  .mrow .chk{margin-inline-start:auto;color:var(--go);opacity:0}.mrow.sel .chk{opacity:1}
+  .yhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px}
+  .yval{font-family:"IBM Plex Mono",monospace;font-size:20px;font-weight:600;color:var(--gold)}
+  .slider{position:relative;height:40px}
+  .slider .track{position:absolute;top:18px;inset-inline:0;height:6px;background:var(--line);border-radius:3px}
+  .slider .fill{position:absolute;top:18px;inset-inline-start:15%;width:70%;height:6px;background:var(--gold);border-radius:3px}
+  .slider .knob{position:absolute;top:10px;width:22px;height:22px;background:#fff;border:3px solid var(--gold);border-radius:50%;transform:translateX(50%)}
+  .presets{display:flex;gap:8px;margin-top:12px}
+  .preset{font-size:13px;padding:7px 13px;border:1px solid var(--line-2);border-radius:8px;cursor:pointer;background:#fff;color:var(--ink-soft)}
+  .preset.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .fourcol{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
+  .mini label{font-size:12px;color:var(--ink-soft);display:block;margin-bottom:6px}
+  .mini input,.mini select{width:100%;height:42px;border:1px solid var(--line-2);border-radius:9px;padding:0 11px;font-family:inherit;font-size:14px;background:#fff;color:var(--ink)}
+  .opthead{display:flex;align-items:center;gap:10px;margin-bottom:5px}
+  .opthead b{font-family:"Markazi Text",serif;font-size:21px;font-weight:600}
+  .opttag{font-size:11px;color:var(--ink-soft);background:var(--line);padding:3px 9px;border-radius:6px}
+  .runbar{display:flex;align-items:center;justify-content:space-between;margin:26px 0 50px;gap:20px}
+  .rsum{font-size:14px;color:var(--ink-soft)}.rsum b{color:var(--ink)}
+  .runbtn{background:var(--ink);color:#fff;border:none;border-radius:12px;padding:15px 32px;font-family:inherit;font-size:16px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:9px}
+  .runbtn:hover{background:#0f1712}.runbtn svg{width:18px;height:18px}
+
+  /* ---------- BOARD view ---------- */
+  .verdict{margin:24px 0;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px 28px;display:grid;grid-template-columns:1fr auto;gap:26px;align-items:center}
+  .vtag{display:inline-flex;align-items:center;gap:7px;background:var(--warn-soft);color:var(--warn);font-size:13px;font-weight:700;padding:5px 12px;border-radius:20px;margin-bottom:12px}
+  .vtag .d{width:8px;height:8px;border-radius:50%;background:var(--warn)}
+  .verdict h2{font-family:"Markazi Text",serif;font-size:28px;font-weight:700;line-height:1.25;margin-bottom:10px}
+  .verdict p{color:var(--ink-soft);font-size:15px;max-width:60ch}.verdict p b{color:var(--ink)}
+  .conf{text-align:center;padding-inline-start:24px;border-inline-start:1px solid var(--line);min-width:140px}
+  .conf .lvl{font-family:"Markazi Text",serif;font-size:24px;font-weight:700;color:var(--warn)}
+  .conf .cap{font-size:12px;color:var(--muted);margin-top:3px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .kpi .lab{font-size:12.5px;color:var(--ink-soft);margin-bottom:8px}
+  .kpi .val{font-size:24px;font-weight:600;margin-bottom:7px}.kpi .val small{font-size:14px;color:var(--ink-soft);font-weight:500}
+  .state{font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:12px}
+  .s-good{background:var(--go-soft);color:var(--go)}.s-warn{background:var(--warn-soft);color:var(--warn)}
+  .kpi .src{font-size:11px;color:var(--muted);margin-top:9px}
+  .grid{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;margin:18px 0}
+  .bcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+  .bcard h3{font-family:"Markazi Text",serif;font-size:22px;font-weight:600;margin-bottom:3px}
+  .bcard .note{font-size:12px;color:var(--muted);margin-bottom:16px}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:start;font-size:12px;color:var(--muted);font-weight:600;padding-bottom:9px;border-bottom:1px solid var(--line)}
+  td{padding:12px 0;border-bottom:1px solid var(--line);font-size:14px}tr:last-child td{border-bottom:none}
+  .rowname{font-weight:600}.rowname .flag{display:inline-block;width:20px;height:13px;border-radius:2px;margin-inline-end:8px;vertical-align:-1px;background:var(--line-2)}
+  .bar{height:6px;border-radius:4px;background:var(--line);width:100px;display:inline-block;overflow:hidden;vertical-align:middle}
+  .bar i{display:block;height:100%;background:var(--gold)}
+  .you td{background:var(--gold-soft)}.you .rowname{color:var(--gold)}
+  .funnel{display:flex;flex-direction:column;gap:8px}
+  .fl{border-radius:8px;padding:12px 15px;color:#fff}.fl .k{font-size:12px;opacity:.9}.fl .v{font-size:18px;font-weight:600;font-family:"IBM Plex Mono",monospace}
+  .f1{background:#2C4A43}.f2{background:#3E6A5E;margin:0 8%}.f3{background:var(--gold);margin:0 18%}
+  .price{grid-column:1/-1;background:linear-gradient(180deg,#fff,#FDFBF6);border-color:var(--line-2)}
+  .phead{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .newbadge{background:var(--go);color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px}
+  .pbody{display:grid;grid-template-columns:auto 1fr;gap:30px;align-items:center}
+  .rec{text-align:center;padding:14px 18px;background:var(--go-soft);border:1px solid var(--go);border-radius:12px}
+  .rec .k{font-size:12px;color:var(--go);font-weight:600}.rec .v{font-family:"IBM Plex Mono",monospace;font-size:22px;font-weight:600;margin:3px 0}.rec .s{font-size:11px;color:var(--ink-soft)}
+  .scale{position:relative;height:56px;margin:14px 8px}
+  .scale .track{position:absolute;top:24px;inset-inline:0;height:6px;background:var(--line);border-radius:3px}
+  .scale .zone{position:absolute;top:20px;inset-inline-start:38%;width:24%;height:14px;border-radius:7px;background:var(--go-soft);border:1px solid var(--go)}
+  .scale .zlbl{position:absolute;top:40px;inset-inline-start:50%;font-size:11px;color:var(--go);font-weight:600;transform:translateX(50%)}
+  .next{background:var(--ink);color:#fff;border-radius:14px;padding:22px 26px;margin:18px 0;display:flex;align-items:center;justify-content:space-between;gap:22px}
+  .next h4{font-family:"Markazi Text",serif;font-size:21px;font-weight:600;margin-bottom:5px}
+  .next p{color:#B9C6C1;font-size:13.5px}.next ol{margin-top:10px;padding-inline-start:18px;color:#D4DEDA;font-size:13px}
+  .next .cta{background:var(--gold);color:#fff;border:none;border-radius:8px;padding:11px 20px;font-family:inherit;font-weight:600;font-size:14px;white-space:nowrap;cursor:pointer}
+  .toc{border-top:1px solid var(--line);padding:20px 0 50px}
+  .toc .h{font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:12px}
+  .tocg{display:grid;grid-template-columns:repeat(4,1fr);gap:7px 24px}
+  .ti{display:flex;gap:9px;font-size:12.5px;padding:5px 0;color:var(--ink-soft)}.ti b{color:var(--gold);font-family:"IBM Plex Mono",monospace;font-size:11px}
+  .expbtn{display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer}
+  .expbtn svg{width:15px;height:15px}
+
+  /* ---------- CHAT view ---------- */
+  .cstream{padding:30px 0}
+  .turn{max-width:700px;margin:0 auto 24px;padding:0 24px}
+  .turn.me{display:flex;justify-content:flex-start}
+  .me .txt{background:var(--gold-soft);border-radius:16px 16px 16px 5px;padding:12px 18px;font-size:15px;max-width:80%}
+  .ai{display:flex;gap:13px}
+  .ava{width:30px;height:30px;border-radius:8px;background:var(--ink);color:#fff;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:"Markazi Text",serif;font-weight:700;font-size:16px}
+  .aibody{flex:1}.aibody>p{font-size:15px;margin-bottom:12px}
+  .agents{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:14px;background:var(--panel)}
+  .ahead{display:flex;align-items:center;gap:9px;padding:11px 15px;font-size:13px;font-weight:600;background:#FCFBF8}
+  .ahead .p{margin-inline-start:auto;font-size:12px;color:var(--muted);font-weight:500}
+  .alist{padding:4px 8px 8px}
+  .arow{display:flex;align-items:center;gap:10px;padding:7px 8px;font-size:13px;border-radius:7px}
+  .abadge{width:6px;height:6px;border-radius:50%}.b-done{background:var(--go)}.b-off{border:1px solid var(--line-2)}
+  .aname{flex:1}.aout{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--go)}.aout.off{color:var(--line-2);font-family:inherit}
+  .rescard{border:1px solid var(--line-2);border-radius:14px;padding:20px;margin-bottom:12px;background:var(--panel)}
+  .rescard h4{font-family:"Markazi Text",serif;font-size:22px;font-weight:600;margin:8px 0}
+  .rescard p{font-size:14.5px;color:var(--ink-soft)}.rescard p b{color:var(--ink)}
+  .acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  .abtn{font-size:13px;padding:9px 15px;border-radius:9px;border:1px solid var(--line-2);background:#fff;cursor:pointer;color:var(--ink)}
+  .abtn.main{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .composer{border-top:1px solid var(--line);padding:14px 24px 20px}
+  .cbox{max-width:700px;margin:0 auto;background:#fff;border:1.5px solid var(--line-2);border-radius:15px;padding:8px 8px 8px 16px;display:flex;align-items:flex-end;gap:10px}
+  .cbox:focus-within{border-color:var(--gold)}
+  .cbox textarea{flex:1;border:none;resize:none;font-family:inherit;font-size:15px;background:transparent;padding:9px 0;height:24px;outline:none;color:var(--ink)}
+  .sendb{width:38px;height:38px;border-radius:11px;background:var(--ink);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .sendb svg{width:17px;height:17px}
+  .fnote{max-width:700px;margin:8px auto 0;font-size:11px;color:var(--muted);text-align:center}
+
+  /* ===== settings drawer ===== */
+  .overlay{position:fixed;inset:0;background:rgba(26,36,32,.28);opacity:0;visibility:hidden;transition:.2s;z-index:40}
+  .overlay.open{opacity:1;visibility:visible}
+  .drawer{position:fixed;inset-block:0;inset-inline-start:0;width:400px;max-width:92vw;background:var(--bg);box-shadow:6px 0 30px rgba(0,0,0,.12);transform:translateX(-100%);transition:.25s cubic-bezier(.4,0,.2,1);z-index:41;display:flex;flex-direction:column}
+  .drawer.open{transform:translateX(0)}
+  .dhead{padding:20px 22px 15px;border-bottom:1px solid var(--line)}
+  .dhead h3{font-family:"Markazi Text",serif;font-size:22px;font-weight:600}
+  .dhead .shared{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--go);background:var(--go-soft);padding:3px 9px;border-radius:6px;margin-top:6px}
+  .dbody{flex:1;overflow-y:auto;padding:15px 18px 30px}
+  .slbl{font-size:10.5px;color:var(--muted);font-weight:600;letter-spacing:1px;margin:12px 4px 9px}
+  .acard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin-bottom:10px}
+  .atop{display:flex;align-items:center;gap:11px}.aname2{flex:1}.aname2 b{font-size:13.5px;font-weight:600;display:block}.aname2 span{font-size:11px;color:var(--muted)}
+  .tg{width:40px;height:23px;border-radius:12px;background:var(--go);position:relative;cursor:pointer;flex-shrink:0}.tg.off{background:var(--line-2)}
+  .tg i{position:absolute;top:2.5px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;inset-inline-end:2.5px}.tg.off i{inset-inline-end:19.5px}
+  .cmd{margin-top:11px}.cmd label{font-size:11px;color:var(--ink-soft);display:block;margin-bottom:6px}
+  .cmd textarea{width:100%;font-family:inherit;font-size:12.5px;line-height:1.55;border:1px solid var(--line-2);border-radius:9px;padding:9px 11px;background:#FCFBF7;color:var(--ink);resize:none;min-height:48px}
+  .cmd textarea:focus{outline:none;border-color:var(--gold)}
+  .paidtag{font-size:10px;font-weight:700;color:var(--gold);background:var(--gold-soft);padding:2px 7px;border-radius:5px;margin-inline-start:6px}
+  .dfoot{padding:13px 20px;border-top:1px solid var(--line);display:flex;gap:10px}
+  .saveb{flex:1;background:var(--ink);color:#fff;border:none;border-radius:10px;padding:12px;font-family:inherit;font-weight:600;font-size:14px;cursor:pointer}
+  .resetb{background:#fff;border:1px solid var(--line-2);border-radius:10px;padding:12px 16px;font-family:inherit;font-size:13px;color:var(--ink-soft);cursor:pointer}
+  ::-webkit-scrollbar{width:9px}::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:5px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- rail -->
+  <div class="rail">
+    <div class="brand"><b>سِلك</b><span>ذكاء الأسواق</span></div>
+    <div class="navbtn on" data-go="input" onclick="nav('input',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> تحليل جديد</div>
+    <div class="navbtn" data-go="board" onclick="nav('board',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg> اللوحة الأخيرة</div>
+    <div class="navbtn" data-go="chat" onclick="nav('chat',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg> دردشة</div>
+    <div class="rail-lbl">التحليلات الأخيرة</div>
+    <div class="hist">تمور فاخر · الصين</div>
+    <div class="hist">عسل سدر · ألمانيا</div>
+    <div class="hist">زعفران · الإمارات</div>
+    <div class="rail-foot">
+      <div class="gear" onclick="openDrawer()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 00-1.7-1l-.3-2.5h-4l-.3 2.5a7 7 0 00-1.7 1l-2.3-1-2 3.4 2 1.5a7 7 0 000 2l-2 1.5 2 3.4 2.3-1a7 7 0 001.7 1l.3 2.5h4l.3-2.5a7 7 0 001.7-1l2.3 1 2-3.4-2-1.5a7 7 0 00.1-1z"/></svg> إعدادات الوكلاء</div>
+    </div>
+  </div>
+
+  <!-- stage -->
+  <div class="stage">
+
+    <!-- ===== INPUT ===== -->
+    <div class="view on" id="v-input">
+      <div class="topbar"><span class="ttl">تحليل جديد</span>
+        <div class="modes"><span class="mode on">إدخال</span><span class="mode" onclick="nav('chat')">دردشة</span></div>
+      </div>
+      <div class="wrap">
+        <div class="band"><div class="eyebrow">ابدأ بمنتجك</div><h1>حلّل سوق تصدير</h1>
+          <div class="sub">اكتب المنتج، اختر السوق، وحدّد سنوات الدراسة — والمنصة تسحب البيانات الحقيقية.</div></div>
+
+        <div class="card">
+          <label class="flabel">١ · ما المنتج؟</label>
+          <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+            <input value="تمور فاخر" placeholder="تمر، زعفران، عسل، رطب…"></div>
+          <div class="resolved"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> صُنّف تلقائياً — رمز HS <span class="num">٠٨٠٤١٠</span></div>
+          <div class="chips"><span class="chip">تمر</span><span class="chip">زعفران</span><span class="chip">عسل</span><span class="chip">قهوة عربية</span></div>
+        </div>
+
+        <div class="row2">
+          <div class="card">
+            <label class="flabel">٢ · السوق المستهدف</label>
+            <div class="allm">قارن كل الأسواق — دع المنصة ترتّبها</div>
+            <div class="marketbox">
+              <div class="mregion">آسيا</div>
+              <div class="mrow sel"><span class="flag"></span>الصين<svg class="chk" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg></div>
+              <div class="mrow"><span class="flag"></span>الهند</div>
+              <div class="mregion">الخليج</div>
+              <div class="mrow"><span class="flag"></span>الإمارات</div>
+              <div class="mregion">أوروبا</div>
+              <div class="mrow"><span class="flag"></span>ألمانيا</div>
+            </div>
+          </div>
+          <div class="card">
+            <label class="flabel">٣ · سنوات الدراسة</label>
+            <div class="yhead"><span class="yval num">٢٠٢٠ – ٢٠٢٤</span><span style="font-size:13px;color:var(--ink-soft)">٥ سنوات</span></div>
+            <div class="slider"><div class="track"></div><div class="fill"></div><div class="knob" style="inset-inline-start:15%"></div><div class="knob" style="inset-inline-start:85%"></div></div>
+            <div class="presets"><span class="preset on">آخر ٥ سنوات</span><span class="preset">٣ سنوات</span><span class="preset">سنة</span></div>
+          </div>
+        </div>
+
+        <div class="card dash">
+          <div class="opthead"><b>٤ · بطاقة منتجك</b><span class="opttag">اختياري</span></div>
+          <div style="font-size:13px;color:var(--ink-soft);margin-bottom:16px">أدخل تكلفتك لتفعيل «موقعك التنافسي» و«اقتراح السعر».</div>
+          <div class="fourcol">
+            <div class="mini"><label>تكلفتك</label><input class="num" placeholder="١٢٫٥"></div>
+            <div class="mini"><label>الوحدة</label><select><option>كيلو</option></select></div>
+            <div class="mini"><label>الفئة</label><select><option>فاخر</option></select></div>
+            <div class="mini"><label>الطاقة الشهرية</label><input class="num" placeholder="٥٠٠٠"></div>
+          </div>
+        </div>
+
+        <div class="runbar">
+          <div class="rsum">جاهز لتحليل <b>تمور فاخر</b> في <b>الصين</b> عبر <b>٢٠٢٠–٢٠٢٤</b></div>
+          <button class="runbtn" onclick="nav('board')">حلّل السوق <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== BOARD ===== -->
+    <div class="view" id="v-board">
+      <div class="topbar"><span class="ttl">التمور الفاخرة · الصين</span>
+        <button class="expbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg> تصدير التقرير PDF</button>
+      </div>
+      <div class="wrap">
+        <div class="verdict">
+          <div><span class="vtag"><span class="d"></span>دخول مشروط</span>
+            <h2>ادخل السوق الصيني — بشرطين قبل الالتزام</h2>
+            <p>الصين استوردت تموراً بـ<b>٩ ملايين دولار</b> في ٢٠٢٢، لكن السعودية تورّد <b>٨٪ فقط</b> — إيران والإمارات تسيطران. أغلق <b>التعريفة الجمركية</b> و<b>أسعار المنافسين</b> قبل الالتزام.</p></div>
+          <div class="conf"><div class="lvl">ثقة متوسطة</div><div class="cap">مصدران من ثلاثة مكتملان</div></div>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><div class="lab">حجم السوق</div><div class="val num">$٩٫٠<small> م</small></div><span class="state s-warn">متوسط</span><div class="src">الأمم المتحدة</div></div>
+          <div class="kpi"><div class="lab">النمو السنوي</div><div class="val num">+١٧٫٧٪</div><span class="state s-good">قوي</span><div class="src">الأمم المتحدة</div></div>
+          <div class="kpi"><div class="lab">حصة السعودية</div><div class="val num">٨٫١٪</div><span class="state s-warn">ضعيف</span><div class="src">الأمم المتحدة</div></div>
+          <div class="kpi"><div class="lab">ترتيب السوق</div><div class="val num">٣<small> من ٣٨</small></div><span class="state s-good">أولوية</span><div class="src">٣٨ سوقاً</div></div>
+        </div>
+        <div class="grid">
+          <div class="bcard"><h3>من يورّد التمور للصين؟</h3><div class="note">الدول المنافِسة وحصصها · ٢٠٢٢</div>
+            <table><thead><tr><th>الدولة</th><th>القيمة</th><th>الحصة</th><th></th></tr></thead><tbody>
+              <tr><td class="rowname"><span class="flag"></span>إيران</td><td class="num">$٤٫٥ م</td><td class="num">٥٠٫٤٪</td><td><span class="bar"><i style="width:100%"></i></span></td></tr>
+              <tr><td class="rowname"><span class="flag"></span>الإمارات</td><td class="num">$٣٫٥ م</td><td class="num">٣٩٫٣٪</td><td><span class="bar"><i style="width:78%"></i></span></td></tr>
+              <tr class="you"><td class="rowname"><span class="flag"></span>السعودية</td><td class="num">$٠٫٧ م</td><td class="num">٨٫١٪</td><td><span class="bar"><i style="width:16%"></i></span></td></tr>
+              <tr><td class="rowname"><span class="flag"></span>العراق</td><td class="num">$٠٫١ م</td><td class="num">١٫٥٪</td><td><span class="bar"><i style="width:3%"></i></span></td></tr>
+            </tbody></table></div>
+          <div class="bcard"><h3>حجم الفرصة</h3><div class="note">من السوق الكلي إلى ما يمكنك تحقيقه</div>
+            <div class="funnel"><div class="fl f1"><div class="k">السوق الكلي</div><div class="v">$٩٫٠ م</div></div>
+              <div class="fl f2"><div class="k">المتاح لك (فاخر)</div><div class="v">$١٫٨ م</div></div>
+              <div class="fl f3"><div class="k">المتوقع تحقيقه</div><div class="v">$٠٫٢ م</div></div></div></div>
+          <div class="bcard price"><div class="phead"><h3>السعر المقترح لمنتجك</h3><span class="newbadge">ميزة جديدة</span></div>
+            <div class="pbody"><div class="rec"><div class="k">النطاق المقترح</div><div class="v">٧٨ – ٨٩</div><div class="s">ريال / كيلو</div></div>
+              <div><div class="scale"><div class="track"></div><div class="zone"></div><div class="zlbl">منطقة تنافسية</div></div>
+                <p style="font-size:13.5px;color:var(--ink-soft)">بناءً على قوائم السوق (متوسط ٩٥، مدى ٦٠–١٢٠): سعّر بين <b style="color:var(--ink)">٧٨ و٨٩ ريال</b> لتبقى أرخص من المتوسط بهامش موجب.</p></div></div></div>
+        </div>
+        <div class="next"><div><h4>الخطوة التالية</h4><p>أغلق هاتين النقطتين قبل الالتزام:</p>
+          <ol><li>تأكّد من التعريفة الجمركية على التمور في الصين</li><li>فعّل رصد أسعار المنافسين لحساب هامشك</li></ol></div>
+          <button class="cta">دراسة معمّقة ←</button></div>
+        <div class="toc"><div class="h">أقسام التقرير الكامل (PDF) — ١٤ قسماً</div>
+          <div class="tocg">
+            <div class="ti"><b>٠١</b> الخلاصة</div><div class="ti"><b>٠٢</b> المنهجية</div><div class="ti"><b>٠٣</b> تعريف السوق</div><div class="ti"><b>٠٤</b> نظرة عامة</div>
+            <div class="ti"><b>٠٥</b> الديناميكيات</div><div class="ti"><b>٠٦</b> حجم السوق</div><div class="ti"><b>٠٧</b> التقسيم</div><div class="ti"><b>٠٨</b> التجارة</div>
+            <div class="ti"><b>٠٩</b> الإقليمي</div><div class="ti"><b>١٠</b> المنافسة</div><div class="ti" style="color:var(--muted)"><b style="color:var(--muted)">١١</b> استخبارات العميل</div><div class="ti"><b>١٢</b> التنظيم</div>
+            <div class="ti"><b>١٣</b> الاتجاهات</div><div class="ti"><b>١٤</b> التوصيات</div>
+          </div></div>
+      </div>
+    </div>
+
+    <!-- ===== CHAT ===== -->
+    <div class="view" id="v-chat" style="display:none;flex-direction:column;height:100vh">
+      <div class="topbar"><span class="ttl">دردشة</span>
+        <div class="modes"><span class="mode" onclick="nav('input')">إدخال</span><span class="mode on">دردشة</span></div>
+      </div>
+      <div class="cstream" style="flex:1;overflow-y:auto">
+        <div class="turn me"><div class="txt">حلّل سوق التمور الفاخرة في الصين لآخر ٥ سنوات</div></div>
+        <div class="turn"><div class="ai"><div class="ava">س</div><div class="aibody">
+          <p>حلّلت <b>التمور الفاخرة</b> في الصين عبر <b>٢٠٢٠–٢٠٢٤</b> بـ٦ وكلاء.</p>
+          <div class="agents"><div class="ahead">الوكلاء<span class="p">٦ / ٦ اكتملوا</span></div>
+            <div class="alist">
+              <div class="arow"><span class="abadge b-done"></span><span class="aname">التجارة</span><span class="aout">٩٫٠ مليون$</span></div>
+              <div class="arow"><span class="abadge b-done"></span><span class="aname">المنافسة</span><span class="aout">٤ موردين</span></div>
+              <div class="arow"><span class="abadge b-done"></span><span class="aname">ثقافة المستهلك</span><span class="aout">٣ رؤى</span></div>
+              <div class="arow"><span class="abadge b-off"></span><span class="aname" style="color:var(--muted)">أسعار المنافسين</span><span class="aout off">مطفأ</span></div>
+            </div></div>
+          <div class="rescard"><span class="vtag"><span class="d"></span>دخول مشروط · ثقة متوسطة</span>
+            <h4>ادخل السوق الصيني — بشرطين</h4>
+            <p>الصين استوردت بـ<b>٩ ملايين دولار</b> بنمو <b>+١٧٫٧٪</b>، والسعودية <b>٨٪ فقط</b>. أغلق التعريفة وأسعار المنافسين أولاً.</p>
+            <div class="acts"><button class="abtn main" onclick="nav('board')">افتح اللوحة الكاملة</button><button class="abtn">تصدير PDF</button><button class="abtn">قارن بسوق آخر</button></div></div>
+          <p style="font-size:14px;color:var(--ink-soft)">تحب أعمّق بأسعار المنافسين، أو أقارن بالإمارات؟</p>
+        </div></div></div>
+      </div>
+      <div class="composer"><div class="cbox"><textarea placeholder="اسأل عن أي منتج أو سوق…"></textarea>
+        <button class="sendb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M7 11l5-5 5 5M12 6v13"/></svg></button></div>
+        <div class="fnote">كل سؤال يُطلق الوكلاء المفعّلين · نفس إعدادات المسار الأساسي</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- shared settings drawer -->
+<div class="overlay" id="ov" onclick="closeDrawer()"></div>
+<div class="drawer" id="dr">
+  <div class="dhead"><h3>إعدادات الوكلاء</h3>
+    <div class="shared">✓ مشتركة بين الإدخال والدردشة</div></div>
+  <div class="dbody">
+    <div class="slbl">الوكلاء المجانيون</div>
+    <div class="acard"><div class="atop"><span class="aname2"><b>وكيل التجارة</b><span>حجم استيراد السوق · الأمم المتحدة</span></span><span class="tg"><i></i></span></div>
+      <div class="cmd"><label>توجيه الوكيل (نص حر)</label><textarea>ركّز على القيمة بالدولار وخط الاتجاه ٥ سنوات، وأبرز أي قفزة مفاجئة.</textarea></div></div>
+    <div class="acard"><div class="atop"><span class="aname2"><b>وكيل المنافسة</b><span>الدول المورّدة وحصصها · الأمم المتحدة</span></span><span class="tg"><i></i></span></div>
+      <div class="cmd"><label>توجيه الوكيل (نص حر)</label><textarea>أظهر أكبر ٥ موردين، وحدّد موقع السعودية بوضوح.</textarea></div></div>
+    <div class="acard"><div class="atop"><span class="aname2"><b>وكيل ثقافة المستهلك</b><span>هل المنتج مرغوب؟ · بحث + كلود</span></span><span class="tg"><i></i></span></div>
+      <div class="cmd"><label>توجيه الوكيل (نص حر)</label><textarea>ركّز على الطلب في رمضان والمناسبات وأهمية الحلال.</textarea></div></div>
+    <div class="slbl">الوكلاء المدفوعون</div>
+    <div class="acard"><div class="atop"><span class="aname2"><b>وكيل الأسعار <span class="paidtag">مدفوع</span></b><span>أسعار التجزئة الفعلية</span></span><span class="tg off"><i></i></span></div>
+      <div class="cmd"><label>توجيه الوكيل (نص حر)</label><textarea placeholder="مثال: أسعار نون وأمازون فقط"></textarea></div></div>
+  </div>
+  <div class="dfoot"><button class="saveb">حفظ التوجيهات</button><button class="resetb">استعادة الافتراضي</button></div>
+</div>
+
+<script>
+  function nav(v,el){
+    document.querySelectorAll('.view').forEach(x=>{x.classList.remove('on');x.style.display='none'});
+    const t=document.getElementById('v-'+v);t.classList.add('on');
+    t.style.display = v==='chat' ? 'flex':'block';
+    document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('on', b.dataset.go===v));
+  }
+  function openDrawer(){document.getElementById('ov').classList.add('open');document.getElementById('dr').classList.add('open')}
+  function closeDrawer(){document.getElementById('ov').classList.remove('open');document.getElementById('dr').classList.remove('open')}
+  document.querySelectorAll('.tg').forEach(t=>t.addEventListener('click',()=>t.classList.toggle('off')));
+  document.querySelectorAll('.preset,.mode,.chip').forEach(p=>p.addEventListener('click',function(){
+    if(this.classList.contains('preset')){document.querySelectorAll('.preset').forEach(x=>x.classList.remove('on'));this.classList.add('on')}
+  }));
+</script>
+</body>
+</html>

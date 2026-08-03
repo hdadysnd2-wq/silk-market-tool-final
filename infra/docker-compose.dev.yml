@@ -1,0 +1,98 @@
+# Local dev stack for the Silk United monorepo.
+#
+# Brings up Postgres (pgvector), Redis, MinIO, the FastAPI API, a Celery worker,
+# Celery beat, and the Next.js web app. Everything runs with deterministic mock
+# vendor adapters unless keys are supplied in .env — the whole product boots
+# offline with ZERO API keys (Phase 0 acceptance).
+#
+# Paths are relative to the repo root; the Makefile invokes compose with
+# `--project-directory .` so `./apps/...` and `.env` resolve from the root.
+# Run via:  make dev   (or: docker compose -f infra/docker-compose.dev.yml --project-directory . up)
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: silk
+      POSTGRES_PASSWORD: silk
+      POSTGRES_DB: silk
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "silk"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["miniodata:/data"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./apps/api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+psycopg://silk:silk@postgres:5432/silk
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+      API_BASE_URL: http://api:8000
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+
+  worker:
+    build: ./apps/api
+    command: celery -A app.workers.celery_app.celery_app worker --loglevel=info
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+psycopg://silk:silk@postgres:5432/silk
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+      API_BASE_URL: http://api:8000
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  beat:
+    build: ./apps/api
+    command: celery -A app.workers.celery_app.celery_app beat --loglevel=info
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+psycopg://silk:silk@postgres:5432/silk
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis: { condition: service_healthy }
+
+  web:
+    build: ./apps/web
+    command: pnpm start -p 3000
+    environment:
+      API_PROXY_TARGET: http://api:8000
+    ports: ["3000:3000"]
+    depends_on: [api]
+
+volumes:
+  pgdata:
+  miniodata:

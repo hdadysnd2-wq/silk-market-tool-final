@@ -1,0 +1,202 @@
+{#- Self-contained, printable export-intelligence report. All styling is inline
+    so the rendered document can be saved and opened offline with no assets. -#}
+<!doctype html>
+<html lang="{{ locale }}" dir="{{ 'rtl' if locale == 'ar' else 'ltr' }}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{{ t.report_title }} — {{ product_name }}</title>
+<style>
+  :root {
+    --ink: #14210f;
+    --muted: #5b6b52;
+    --line: #e4e9df;
+    --brand: #2f7d32;
+    --brand-soft: #eef5ec;
+    --bg: #f7f9f5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: {{ '"Segoe UI", Tahoma, sans-serif' if locale == 'ar' else 'ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }};
+    line-height: 1.5;
+    font-size: 15px;
+  }
+  .page { max-width: 940px; margin: 0 auto; padding: 32px 28px 64px; }
+  header.report {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 20px; border-bottom: 3px solid var(--brand); padding-bottom: 18px;
+  }
+  .brand { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--brand); font-weight: 700; }
+  h1 { font-size: 26px; margin: 6px 0 4px; }
+  .subtitle { color: var(--muted); margin: 0; }
+  .generated { color: var(--muted); font-size: 12px; text-align: {{ 'left' if locale == 'ar' else 'right' }}; }
+  section { margin-top: 28px; }
+  h2 { font-size: 18px; border-{{ 'right' if locale == 'ar' else 'left' }}: 4px solid var(--brand); padding-{{ 'right' if locale == 'ar' else 'left' }}: 10px; margin: 0 0 14px; }
+  h3 { font-size: 15px; margin: 0 0 4px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .grid { display: grid; gap: 14px; }
+  .summary { grid-template-columns: repeat(4, 1fr); }
+  .stat { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .stat .n { font-size: 24px; font-weight: 700; color: var(--brand); }
+  .stat .l { font-size: 12px; color: var(--muted); }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; }
+  .pill { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+  .pill.warn { background: #fff4e5; color: #9a5b00; }
+  .pill.muted { background: #eef0ec; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: {{ 'right' if locale == 'ar' else 'left' }}; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .num { font-variant-numeric: tabular-nums; }
+  .market-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .buyer { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+  .buyer:first-of-type { border-top: 0; margin-top: 6px; padding-top: 0; }
+  .muted { color: var(--muted); }
+  .score { font-weight: 700; color: var(--brand); }
+  footer.report { margin-top: 40px; border-top: 1px solid var(--line); padding-top: 14px; color: var(--muted); font-size: 12px; }
+  a { color: var(--brand); }
+  @media (max-width: 640px) { .summary { grid-template-columns: repeat(2, 1fr); } }
+  @media print {
+    body { background: #fff; }
+    .page { max-width: none; padding: 0; }
+    section, .card, .stat { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="report">
+    <div>
+      <div class="brand">{{ t.platform }}</div>
+      <h1>{{ product_name }}</h1>
+      <p class="subtitle">{{ t.report_title }} · {{ factory_name }}</p>
+    </div>
+    <div class="generated">{{ t.generated }}<br />{{ r.generated_at.strftime('%Y-%m-%d %H:%M UTC') }}</div>
+  </header>
+
+  <section>
+    <h2>{{ t.overview }}</h2>
+    <div class="grid summary">
+      <div class="stat"><div class="n num">{{ r.summary.markets_analyzed }}</div><div class="l">{{ t.markets }}</div></div>
+      <div class="stat"><div class="n num">{{ r.summary.total_buyers }}</div><div class="l">{{ t.buyers }}</div></div>
+      <div class="stat"><div class="n num">{{ r.summary.total_contacts }}</div><div class="l">{{ t.contacts }}</div></div>
+      <div class="stat"><div class="n num">{{ r.summary.total_import_usd | usd }}</div><div class="l">{{ t.import_value }}</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>{{ t.product_hs }}</h2>
+    <div class="card grid" style="grid-template-columns: {{ '160px 1fr' if product.image_url else '1fr' }};">
+      {% if product.image_url %}<img src="{{ product.image_url }}" alt="" style="width:160px;height:160px;object-fit:cover;border-radius:10px;border:1px solid var(--line);" />{% endif %}
+      <dl class="kv">
+        <dt>{{ t.hs_code }}</dt>
+        <dd>
+          {% if product.hs_code %}<strong class="num">{{ product.hs_code }}</strong>
+            {% if product.hs_confirmed_by_user %}<span class="pill">{{ t.confirmed }}</span>{% else %}<span class="pill muted">{{ t.suggested }}</span>{% endif %}
+            {% if product.hs_confidence is not none %}<span class="muted">· {{ (product.hs_confidence * 100) | round | int }}%</span>{% endif %}
+          {% else %}<span class="muted">{{ t.not_classified }}</span>{% endif %}
+        </dd>
+        {% if hs_description %}<dt>{{ t.hs_description }}</dt><dd>{{ hs_description }}</dd>{% endif %}
+        {% if product_description %}<dt>{{ t.description }}</dt><dd>{{ product_description }}</dd>{% endif %}
+        {% if product.price_min is not none or product.price_max is not none %}
+        <dt>{{ t.price }}</dt>
+        <dd class="num">{{ product.price_min | usd if product.price_min is not none else '—' }} – {{ product.price_max | usd if product.price_max is not none else '—' }} {{ product.currency }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  </section>
+
+  {% if r.markets %}
+  {% for market in r.markets %}
+  <section>
+    <div class="market-head">
+      <h2 style="margin:0;border:0;padding:0;">
+        {{ market.name_ar if locale == 'ar' else market.name_en }} ({{ market.iso2 }})
+        {% if market.is_gcc %}<span class="pill">GCC</span>{% endif %}
+        {% if market.is_eu %}<span class="pill warn">EU</span>{% endif %}
+      </h2>
+      <div class="muted num">{{ market.buyer_count }} {{ t.buyers }} · {{ market.contact_count }} {{ t.contacts }}</div>
+    </div>
+
+    {% if market.snapshot %}
+    <div class="card" style="margin-top:12px;">
+      <dl class="kv">
+        <dt>{{ t.import_value }}</dt>
+        <dd class="num">{{ market.snapshot.total_import_usd | usd }}
+          {% if market.snapshot.trend_pct is not none %}
+            <span class="{{ 'pill' if market.snapshot.trend_pct >= 0 else 'pill warn' }}">{{ '▲' if market.snapshot.trend_pct >= 0 else '▼' }} {{ market.snapshot.trend_pct }}%</span>
+          {% endif %}
+        </dd>
+      </dl>
+      {% if market.snapshot.top_exporters %}
+      <table style="margin-top:10px;">
+        <thead><tr><th>{{ t.competitor }}</th><th class="num">{{ t.value }}</th><th class="num">{{ t.share }}</th></tr></thead>
+        <tbody>
+          {% for e in market.snapshot.top_exporters[:5] %}
+          <tr>
+            <td>{{ e.exporter_name or e.exporter_iso2 or '—' }}</td>
+            <td class="num">{{ e.value_usd | usd }}</td>
+            <td class="num">{{ (e.share_pct | round(1)) ~ '%' if e.share_pct is not none else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="muted">{{ t.no_snapshot }}</p>
+    {% endif %}
+
+    {% if market.top_buyers %}
+    <div class="card" style="margin-top:12px;">
+      <h3>{{ t.top_buyers }}</h3>
+      {% for b in market.top_buyers %}
+      <div class="buyer">
+        <div class="market-head">
+          <div>
+            <strong>{{ b.name }}</strong>
+            {% if b.city %}<span class="muted">· {{ b.city }}</span>{% endif %}
+            {% if b.legal_review_required %}<span class="pill warn">{{ t.legal_review }}</span>{% endif %}
+          </div>
+          <div class="score num">{{ b.relevance_score }}<span class="muted" style="font-weight:400;">/100</span></div>
+        </div>
+        {% if b.evidence_summary %}<div class="muted">{{ b.evidence_summary }}</div>{% endif %}
+        <div class="muted" style="font-size:12px;margin-top:2px;">
+          {% if b.industry %}{{ b.industry }}{% endif %}
+          {% if b.employee_count %} · {{ b.employee_count }} {{ t.employees }}{% endif %}
+          {% if b.website %} · <a href="{{ b.website }}">{{ b.website }}</a>{% endif %}
+        </div>
+        {% if b.contacts %}
+        <table style="margin-top:8px;">
+          <tbody>
+          {% for c in b.contacts %}
+          <tr>
+            <td>{{ c.full_name or '—' }}{% if c.title %} <span class="muted">· {{ c.title }}</span>{% endif %}</td>
+            <td>{{ c.email }}</td>
+            <td><span class="{{ 'pill' if c.verification_status == 'valid' else 'pill muted' }}">{{ c.verification_status }}</span></td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+  {% endfor %}
+  {% else %}
+  <section><p class="muted">{{ t.no_markets }}</p></section>
+  {% endif %}
+
+  <footer class="report">
+    {{ factory_name }}{% if factory.city %} · {{ factory.city }}{% endif %}{% if factory.contact_email %} · {{ factory.contact_email }}{% endif %}<br />
+    {{ t.disclaimer }}
+  </footer>
+</div>
+</body>
+</html>

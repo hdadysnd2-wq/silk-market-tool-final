@@ -1,0 +1,13 @@
+[project]
+name = "silk-contracts"
+version = "0.1.0"
+description = "Silk platform-wide unified data contract (DataPoint/ProviderRecord → one provenance envelope). See architecture decision #4 and invariant I1."
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["contracts"]

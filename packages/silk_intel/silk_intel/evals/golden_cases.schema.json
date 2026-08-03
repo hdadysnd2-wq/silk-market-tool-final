@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Silk deep-research golden case",
+  "description": "مرجع حالة ذهبية. حالةٌ تحمل إمّا أرقاماً مرجعية محقَّقة يدوياً من مصدر رسمي حي (expected — لا اختلاق، كل صفّ بـ source_url حقيقي)، أو بوّابةً بنيوية هرمتية (structural — أقسام/نظافة متن/سلامة مراجع/سقف فجوات)، أو كليهما. البوّابة البنيوية تعمل في CI بلا مفتاح؛ الأرقام تُحقَّق في بيئةٍ حيّة.",
+  "type": "object",
+  "required": ["key", "product", "market", "hs_code", "verified_at", "verified_by"],
+  "properties": {
+    "key": {"type": "string", "description": "معرّف قصير فريد، مثال: qatar_peanut_butter"},
+    "product": {"type": "string", "description": "اسم المنتج بالعربية"},
+    "market": {"type": "string", "description": "اسم السوق المستهدف (يُحلّ عبر silk_market_resolver)"},
+    "hs_code": {"type": "string", "pattern": "^[0-9]{6}$"},
+    "origin": {"type": "string", "description": "بلد منشأ المصدّر (ISO3 أو اسم)، مثال: SAU"},
+    "expected": {
+      "type": "object",
+      "description": "أرقام مرجعية حقيقية موثّقة يدوياً — كل مفتاح يحمل source_url. اختياري: حالةٌ بنيوية بحتة قد لا تحمله. لا يُضاف صفّ بلا رابط مصدر حقيقي تم التحقق منه فعلياً.",
+      "properties": {
+        "trade_import_usd": {
+          "type": "object",
+          "properties": {
+            "value": {"type": "number"},
+            "year": {"type": "integer"},
+            "source_url": {"type": "string", "format": "uri"}
+          },
+          "required": ["value", "year", "source_url"]
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["value", "source_url"],
+        "properties": {
+          "value": {},
+          "source_url": {"type": "string", "format": "uri"}
+        }
+      }
+    },
+    "structural": {
+      "type": "object",
+      "description": "بوّابة بنيوية هرمتية (WS10) — تُفحَص على التقرير المُصيَّر بلا نموذج/مفتاح.",
+      "properties": {
+        "required_sections": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "عناوين أقسام يجب أن تظهر بمحتوى في متن تقرير العميل"
+        },
+        "clean_body": {
+          "type": "boolean",
+          "description": "المتن نظيف: لا شارات قوة دليل (✓◐○) ولا عمود «قوة الدليل»/«مستوى التوثيق» ولا عمود مصدر لكل صف — الإسناد في المراجع وحده"
+        },
+        "references_integrity": {
+          "type": "boolean",
+          "description": "قسم المراجع حاضر بمصادر مسمّاة **ذرّية** (اتحاد المصادر المُستعملة، بلا معرّفٍ مركّب)، بلا نائبٍ عام، ومُتحقَّقٌ في الاتجاهين: مُستعمَلٌ يظهر ومُدرَجٌ مُستعمَلٌ فعلاً (WS9 + HF1)"
+        },
+        "no_truncation_artifacts": {
+          "type": "boolean",
+          "description": "HF2: لا خليةَ جدولٍ تنتهي داخل رمزٍ رقميّ أو بقوسٍ غير متوازن، ولا مجموعةَ استشهادٍ فارغة «()»/«(/)»/«(///)» في المتن"
+        },
+        "plausibility_reconciled": {
+          "type": "boolean",
+          "description": "HF3: كلُّ مقدارٍ متعارضٍ مع مرتكزات التشغيلة (واردات/سكان) إمّا مُسقَطٌ بسببٍ مُسجَّل أو مُتحفَّظٌ عليه صراحةً — لا رقمٌ غيرُ مُصالَحٍ يصل العميلَ صامتاً"
+        },
+        "gap_rate_max": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "أقصى نسبة فجوات (نتائج بلا قيمة ÷ الإجمالي) مسموحة"
+        }
+      },
+      "additionalProperties": false
+    },
+    "verified_at": {"type": "string", "format": "date"},
+    "verified_by": {"type": "string", "description": "من راجع الأرقام/البوّابة يدوياً"},
+    "notes": {"type": "string"}
+  },
+  "anyOf": [
+    {"required": ["expected"]},
+    {"required": ["structural"]}
+  ]
+}

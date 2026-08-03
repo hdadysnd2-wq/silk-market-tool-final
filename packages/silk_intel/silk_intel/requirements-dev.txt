@@ -1,0 +1,11 @@
+# متطلّبات التطوير فقط — لا تُثبَّت في الإنتاج ولا في CI الهرمتي.
+# Dev-only requirements — NOT installed in production or the hermetic CI.
+#
+# هذا الملف منفصل عمداً عن requirements.txt المثبَّت بإصدارات محدّدة (M0).
+# لا تنقل شيئاً من هنا إلى requirements.txt دون قرار مالك صريح.
+# This file is deliberately separate from the pinned production requirements.txt.
+# Do not promote anything here into requirements.txt without an explicit owner decision.
+
+# Claude Agent SDK — يشغّل وكيل إصلاح الاختبارات (fix_agent.py / .claude/agents/test-fixer.md).
+# Runs the local repair agent; not a runtime dependency of the API or engine.
+claude-agent-sdk>=0.1.0

@@ -1,0 +1,101 @@
+# رُتبتا الاختبار ٢–٣ كوظيفة CI مطلوبة (e2e-live-shape).
+#
+# القاعدة الجديدة (تأكيد المالك آخِراً لا أوّلاً): قبل أن يُوسَم أيّ PR يمسّ
+# سلوكاً إنتاجياً «جاهزاً»، نستنفد كل رُتب الاختبار. هذه الوظيفة تُشغّل:
+#   • رُتبة ٢ — خادم uvicorn حقيقي على SQLite مبذور بالمدوّنة القانونية، يُضرَب
+#     بـHTTP حقيقي (tests/test_rung2_real_server.py).
+#   • رُتبة ٣ — chromium (headless) ينقر الواجهة الفعلية: لوحة ← شريط جانبي ←
+#     تقرير ← تصدير Word/Markdown ← صندوق التقدّم (tests/test_rung3_*).
+#
+# **حماية الفرع (يضبطها المالك في GitHub):** اجعل الفحص «e2e-live-shape»
+# مطلوباً على main. أيّ PR يمسّ web/index.html أو أيّ مسار تصدير/تقرير لا
+# يُدمَج حتى يخضرّ تدفّق Playwright — هذا التدفّق كان سيلتقط خطأَي التصدير
+# والشريط الجانبي الميت قبل المالك.
+
+name: e2e-live-shape
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  e2e-live-shape:
+    runs-on: ubuntu-latest
+    # نفس منطق ci.yml (الافتراضي ٦ ساعات) بهامش أوسع: هذه الوظيفة تُثبِّت
+    # LibreOffice وخطوطاً وchromium وتُقلِع خادماً حقيقياً، فتُكمل عادةً في
+    # ~٣–٥ دقائق؛ ٣٠ يقتل التعليق ولا يُسقِط تثبيتاً بطيئاً.
+    # Same rationale as ci.yml, wider margin (installs LibreOffice + chromium).
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # محرّك تحويل PDF (LibreOffice/soffice) + خطّ عربي الشكل — رُتبة ٣ تنقر
+      # زرّ «تصدير التقرير (PDF)» وتؤكّد توقيع %PDF؛ بلا هذين يقع الخادم في
+      # فرع 503 فيفشل الفحص. نفس التبعية المطلوبة على النشر (Dockerfile).
+      - name: Install LibreOffice + Arabic fonts (PDF converter)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libreoffice-writer fonts-hosny-amiri fontconfig poppler-utils
+          # §7: العائلة الرسمية IBM Plex Sans Arabic (OFL) من google/fonts —
+          # Regular+Bold+SemiBold. بلا Plex يبدّل LibreOffice صامتًا فيسقط قبول §7.
+          sudo mkdir -p /usr/share/fonts/truetype/ibmplex
+          for w in Regular Bold SemiBold; do
+            sudo curl -fsSL -o "/usr/share/fonts/truetype/ibmplex/IBMPlexSansArabic-$w.ttf" \
+              "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsansarabic/IBMPlexSansArabic-$w.ttf"
+          done
+          fc-cache -f
+
+      # pymupdf تبعيةٌ صلبةٌ لوظيفة e2e (أمر المُشرِف، الخيار ٣): مقياسُ الهندسة
+      # (§4) يُجمِّع الأسطر على y عبر fitz — لا احتياطيَّ `pdftotext` صامتًا بعد.
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt pytest httpx pymupdf
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # playwright مثبّتة عمومياً كي يحلّها require عبر NODE_PATH (مثل البيئة
+      # المُدارة). الإصدار مثبَّت مطابقاً لما جُرّب حياً (1.56.1).
+      - name: Install Playwright + chromium
+        run: |
+          npm install -g playwright@1.56.1
+          npx --yes playwright@1.56.1 install --with-deps chromium
+
+      - name: Run rungs 2-3 (real server + real browser)
+        env:
+          SILK_RUN_E2E: "1"
+        run: python -m pytest tests/test_rung2_real_server.py tests/test_rung3_playwright_e2e.py -q
+
+      # الشرط ٣ (مراجعة المُشرِف): خطٌّ عربيّ الشكل حاضرٌ — فشلٌ عالٍ إن غاب،
+      # وإلا يُصيَّر الـPDF tofu فيمرّ القفلُ البصريّ زائفًا.
+      - name: Assert IBM Plex Sans Arabic is present (loud — no silent substitution)
+        run: |
+          # §7 (قرار المالك): العائلة الرسمية يجب أن تكون حاضرةً — فشلٌ عالٍ إن
+          # غابت، وإلا يبدّلها LibreOffice صامتًا فيمرّ القبول زائفًا.
+          fc-list | grep -iE "plex sans arabic|ibmplexsansarabic" \
+            || { echo "::error::IBM Plex Sans Arabic not installed"; exit 1; }
+
+      # معايرةُ المقياس (أمر المُشرِف، الخيار ٣): قبل الوثوق بأيّ رقمٍ هندسيّ،
+      # اطبع مصفوفة 2×2 (A=jc=start صحيح، B=jc=right مقلوب) بطريقتَي قياس +
+      # نسخة LibreOffice. تشخيصيّ (لا يُفشِل الوظيفة) — القراءةُ من سجلّ CI.
+      - name: RTL measurer calibration (diagnostic 2x2 matrix)
+        run: python3 tools/rtl_calibration.py
+
+      # الطيّة E + الشروط ٢/٤ (Wave 2): القفلُ البصريّ عبر مسار الإنتاج
+      # (`render_client_pdf`) + كنسُ التسريب (§2) على النصّ العاري + اختبارُ
+      # الهندسة (§4، محاذاة RTL) على الـPDF **المجرّد** — يحتاج soffice+pdftotext
+      # (هنا لا في وظيفة `test`). SILK_PDF_ACCEPTANCE=1 يُلزِم اختبار الهندسة
+      # بالتنفيذ الفعليّ لا التخطّي.
+      - name: Run Wave 2 visual PDF lock (fold E) + geometry + leak sweep
+        env:
+          SILK_PDF_ACCEPTANCE: "1"
+        run: |
+          python -m pytest tests/test_wave2_first_pdf_cluster.py \
+            tests/test_report_output_overhaul.py \
+            tests/test_wave3_typography.py -q

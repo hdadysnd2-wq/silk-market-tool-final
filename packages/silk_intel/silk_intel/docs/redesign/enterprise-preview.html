@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Silk · Enterprise UI Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* =========================================================
+     Silk Enterprise Design System — Carbon × Redwood
+     ========================================================= */
+  :root{
+    --bg:#F4F4F4; --surface:#FFFFFF; --surface-2:#F7F7F7; --hover:#E8E8E8;
+    --border:#E0E0E0; --border-strong:#C6C6C6;
+    --text:#161616; --text-2:#525252; --text-3:#6F6F6F;
+    --primary:#0F62FE; --primary-hover:#0353E9; --primary-active:#002D9C;
+    --primary-soft:#EDF5FF; --brand:#C74634; --brand-soft:#FBECE9;
+    --success:#198038; --success-soft:#DEFBE6;
+    --warning:#B28600; --warning-soft:#FCF4D6;
+    --danger:#DA1E28; --danger-soft:#FFF1F1;
+    --info:#0043CE; --info-soft:#EDF5FF;
+    --focus:#0F62FE;
+    --shadow:0 1px 2px rgba(22,22,22,.06),0 8px 24px rgba(22,22,22,.08);
+    --shadow-lg:0 2px 6px rgba(22,22,22,.10),0 16px 40px rgba(22,22,22,.14);
+    --sans-ar:"IBM Plex Sans Arabic",system-ui,Tahoma,sans-serif;
+    --sans-en:"IBM Plex Sans",system-ui,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+    --ease:cubic-bezier(.2,.6,.3,1);
+    --r:6px; --r-lg:10px;
+    --sp1:4px; --sp2:8px; --sp3:12px; --sp4:16px; --sp5:24px; --sp6:32px; --sp7:48px;
+  }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+    --bg:#161616; --surface:#262626; --surface-2:#2C2C2C; --hover:#333333;
+    --border:#393939; --border-strong:#525252;
+    --text:#F4F4F4; --text-2:#C6C6C6; --text-3:#A8A8A8;
+    --primary:#4589FF; --primary-hover:#78A9FF; --primary-active:#A6C8FF;
+    --primary-soft:#1F2A44; --brand:#FF8A75; --brand-soft:#2E1F1B;
+    --success:#42BE65; --success-soft:#1A2E20;
+    --warning:#F1C21B; --warning-soft:#332C0E;
+    --danger:#FA4D56; --danger-soft:#341A1C;
+    --info:#4589FF; --info-soft:#1F2A44;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.5);
+    --shadow-lg:0 2px 8px rgba(0,0,0,.5),0 20px 48px rgba(0,0,0,.6);
+  }}
+  :root[data-theme="dark"]{
+    --bg:#161616; --surface:#262626; --surface-2:#2C2C2C; --hover:#333333;
+    --border:#393939; --border-strong:#525252;
+    --text:#F4F4F4; --text-2:#C6C6C6; --text-3:#A8A8A8;
+    --primary:#4589FF; --primary-hover:#78A9FF; --primary-active:#A6C8FF;
+    --primary-soft:#1F2A44; --brand:#FF8A75; --brand-soft:#2E1F1B;
+    --success:#42BE65; --success-soft:#1A2E20;
+    --warning:#F1C21B; --warning-soft:#332C0E;
+    --danger:#FA4D56; --danger-soft:#341A1C;
+    --info:#4589FF; --info-soft:#1F2A44;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.5);
+    --shadow-lg:0 2px 8px rgba(0,0,0,.5),0 20px 48px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans-ar);
+    font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;
+    transition:background .3s var(--ease),color .3s var(--ease)}
+  html[lang="en"] body{font-family:var(--sans-en)}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:plaintext}
+  button{font-family:inherit;cursor:pointer;color:inherit}
+  a{color:var(--primary);text-decoration:none}
+  :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  @keyframes slideup{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  .shell{max-width:1320px;margin:0 auto;padding-inline:var(--sp5)}
+  @media(max-width:640px){.shell{padding-inline:var(--sp4)}}
+
+  header.appbar{position:sticky;top:0;z-index:50;background:var(--surface);
+    border-bottom:1px solid var(--border);box-shadow:var(--shadow)}
+  .appbar-row{display:flex;align-items:center;gap:var(--sp4);height:64px}
+  .brand{display:flex;align-items:center;gap:var(--sp3);min-width:0}
+  .logo{width:40px;height:40px;border-radius:8px;background:var(--brand);display:grid;place-items:center;
+    color:#fff;font-weight:700;font-size:20px;flex:none}
+  .brand .t{font-size:18px;font-weight:600;line-height:1.2;white-space:nowrap}
+  .brand .s{font-size:13px;color:var(--text-3)}
+  .appbar-spacer{flex:1}
+  .appbar-actions{display:flex;align-items:center;gap:var(--sp3)}
+  @media(max-width:720px){.brand .s{display:none}}
+  .seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--r);overflow:hidden}
+  .seg button{padding:9px 16px;font-size:14px;font-weight:600;background:var(--surface);color:var(--text-2);border:0;transition:.15s var(--ease);min-width:52px}
+  .seg button+button{border-inline-start:1px solid var(--border)}
+  .seg button.on{background:var(--primary);color:#fff}
+  .seg button:not(.on):hover{background:var(--hover)}
+  .iconbtn{display:inline-grid;place-items:center;width:44px;height:44px;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--r);color:var(--text-2);transition:.15s var(--ease)}
+  .iconbtn:hover{background:var(--hover);color:var(--text)}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding-inline:20px;font-size:15px;font-weight:600;border-radius:var(--r);border:1px solid transparent;transition:.15s var(--ease);white-space:nowrap}
+  .btn svg{flex:none}
+  .btn-primary{background:var(--primary);color:#fff}
+  .btn-primary:hover{background:var(--primary-hover)} .btn-primary:active{background:var(--primary-active)}
+  .btn-secondary{background:transparent;color:var(--primary);border-color:var(--primary)}
+  .btn-secondary:hover{background:var(--primary-soft)}
+  .btn-ghost{background:transparent;color:var(--text-2);border-color:var(--border-strong)}
+  .btn-ghost:hover{background:var(--hover);color:var(--text)}
+  .btn-sm{height:40px;font-size:14px;padding-inline:16px}
+
+  .cmdbar{display:flex;align-items:flex-end;gap:var(--sp4);flex-wrap:wrap;padding:var(--sp5) 0 var(--sp4)}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-size:13px;font-weight:600;color:var(--text-2)}
+  .field .control{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--r);height:48px;padding-inline:14px;transition:.15s var(--ease)}
+  .field .control:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+  .field input,.field select{border:0;outline:0;background:transparent;font-family:inherit;font-size:15px;color:var(--text);height:100%;min-width:0}
+  .field.search{flex:1;min-width:240px}
+  .field.search input{width:100%}
+  .range{display:flex;align-items:center;gap:8px}
+  .range .dash{color:var(--text-3)}
+  .hs-chip{font-family:var(--mono);font-size:13px;font-weight:600;background:var(--primary-soft);color:var(--primary);padding:4px 9px;border-radius:5px;direction:ltr}
+
+  /* My Product card */
+  .myprod{background:var(--surface);border:1px solid var(--border);border-inline-start:4px solid var(--brand);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:var(--sp5);margin-bottom:var(--sp5);display:grid;grid-template-columns:1fr auto;gap:var(--sp4);align-items:center}
+  @media(max-width:760px){.myprod{grid-template-columns:1fr}}
+  .mp-l{display:flex;flex-direction:column;gap:10px;min-width:0}
+  .mp-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .mp-title .nm{font-size:19px;font-weight:700}
+  .mp-econ{display:flex;flex-wrap:wrap;gap:8px 20px}
+  .mp-econ .e{display:flex;flex-direction:column}
+  .mp-econ .e .k{font-size:12px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  .mp-econ .e .v{font-size:17px;font-weight:600}
+  .mp-r{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+  .tierbadge{font-size:12px;font-weight:700;padding:4px 11px;border-radius:40px;background:var(--brand-soft);color:var(--brand);letter-spacing:.02em}
+
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp4);margin-bottom:var(--sp5)}
+  @media(max-width:900px){.tiles{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:520px){.tiles{grid-template-columns:1fr}}
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--sp5);display:flex;flex-direction:column;gap:6px;box-shadow:var(--shadow);animation:slideup .3s var(--ease) both}
+  .tile .k{font-size:13px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em}
+  .tile .v{font-size:28px;font-weight:700;line-height:1.1}
+  .tile .m{font-size:13px;color:var(--text-2)}
+  .tile.accent{border-inline-start:4px solid var(--primary)}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow)}
+  .eyebrow{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--primary)}
+  .section-gap{display:flex;flex-direction:column;gap:var(--sp5);padding-bottom:var(--sp7)}
+
+  .decision{padding:var(--sp6);position:relative;overflow:hidden}
+  .decision::before{content:"";position:absolute;inset-block-start:0;inset-inline:0;height:4px;background:var(--success)}
+  .d-head{display:flex;align-items:center;gap:var(--sp3);flex-wrap:wrap;margin-bottom:var(--sp4)}
+  .badge{font-size:13px;font-weight:700;padding:6px 14px;border-radius:40px}
+  .b-go{background:var(--success-soft);color:var(--success)}
+  .b-info{background:var(--info-soft);color:var(--info)}
+  .tag{font-size:13px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);padding:5px 12px;border-radius:40px}
+  .d-grid{display:grid;grid-template-columns:1fr 200px;gap:var(--sp6);align-items:center}
+  @media(max-width:760px){.d-grid{grid-template-columns:1fr}}
+  .d-verdict{font-size:26px;font-weight:700;line-height:1.3;text-wrap:balance;margin:0 0 var(--sp3)}
+  .d-why{font-size:16px;color:var(--text-2);line-height:1.7;max-width:64ch}
+  .d-brief{margin:var(--sp4) 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+  .d-brief li{font-size:15px;color:var(--text-2);padding-inline-start:22px;position:relative;line-height:1.6}
+  .d-brief li::before{content:"";position:absolute;inset-inline-start:0;top:9px;width:8px;height:8px;border-radius:2px;background:var(--primary)}
+  .gauge{width:180px;height:180px;border-radius:50%;display:grid;place-items:center;margin-inline:auto;background:conic-gradient(var(--primary) calc(var(--p,70)*1%),var(--border) 0)}
+  .gauge .in{width:142px;height:142px;border-radius:50%;background:var(--surface);display:grid;place-items:center;text-align:center}
+  .gauge .n{font-family:var(--mono);font-size:38px;font-weight:600;line-height:1}
+  .gauge .l{font-size:13px;color:var(--text-3);margin-top:4px}
+  .d-actions{display:flex;gap:var(--sp3);flex-wrap:wrap;margin-top:var(--sp5)}
+
+  .pipe{padding:var(--sp5) var(--sp6)}
+  .pipe-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp3);flex-wrap:wrap;margin-bottom:var(--sp5)}
+  .status{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;padding:7px 14px;border-radius:40px;background:var(--success-soft);color:var(--success)}
+  .status .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+  .steps{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--sp3)}
+  @media(max-width:860px){.steps{grid-template-columns:repeat(2,1fr)}}
+  .step{padding:var(--sp4);border-radius:var(--r-lg);background:var(--surface-2);border:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+  .step.gap{background:var(--warning-soft);border-color:transparent}
+  .step .sn{display:flex;align-items:center;gap:8px}
+  .step .sn b{font-size:15px;font-weight:600}
+  .step .num-badge{width:24px;height:24px;border-radius:6px;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:13px;font-weight:700;flex:none}
+  .step .sd{font-size:13px;color:var(--text-3);line-height:1.45}
+  .step .sf{display:flex;align-items:center;gap:7px;font-size:13px;margin-top:2px}
+  .step .sf .dot{width:7px;height:7px;border-radius:50%;flex:none}
+  .step .sf b{font-family:var(--mono)}
+
+  .body-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:var(--sp4);align-items:start}
+  @media(max-width:960px){.body-grid{grid-template-columns:1fr}}
+
+  .dt-head{display:flex;align-items:center;justify-content:space-between;padding:var(--sp4) var(--sp5);border-bottom:1px solid var(--border)}
+  .dt-head h3{margin:0;font-size:18px;font-weight:600}
+  .dt-head .cnt{font-size:14px;color:var(--text-3)}
+  table.dt{width:100%;border-collapse:collapse}
+  table.dt th{font-size:13px;font-weight:600;color:var(--text-2);text-align:start;padding:12px var(--sp5);background:var(--surface-2);border-bottom:1px solid var(--border);white-space:nowrap}
+  table.dt td{padding:14px var(--sp5);border-bottom:1px solid var(--border);font-size:15px;vertical-align:middle}
+  table.dt tr{cursor:pointer;transition:background .12s var(--ease)}
+  table.dt tbody tr:hover{background:var(--hover)}
+  table.dt tr.sel{background:var(--primary-soft);box-shadow:inset 3px 0 0 var(--primary)}
+  .rk{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--primary)}
+  .cty{display:flex;align-items:center;gap:10px}
+  .flag{font-family:var(--mono);font-size:12px;background:var(--surface-2);border:1px solid var(--border);padding:3px 7px;border-radius:5px;color:var(--text-2);direction:ltr}
+  .cname{font-weight:600}
+  .gap-txt{color:var(--text-3);border-bottom:1px dotted var(--text-3);cursor:help;font-size:14px}
+  .bar{display:flex;align-items:center;gap:10px}
+  .bar .bv{font-family:var(--mono);font-weight:600;color:var(--primary);min-width:28px}
+  .bar .track{flex:1;min-width:50px;height:8px;background:var(--surface-2);border-radius:5px;overflow:hidden}
+  .bar .fill{height:100%;background:var(--primary);border-radius:5px;transition:width .5s var(--ease)}
+  .trend{display:flex;align-items:center;gap:8px}
+  .growth{font-family:var(--mono);font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:3px}
+  .growth.up{color:var(--success)} .growth.down{color:var(--danger)}
+  .cov{font-size:13px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);padding:4px 10px;border-radius:40px;white-space:nowrap}
+  .cov.mid{color:var(--warning);background:var(--warning-soft);border-color:transparent}
+  .dt-foot{padding:12px var(--sp5);font-size:13px;color:var(--text-3);font-family:var(--mono);border-top:1px solid var(--border);direction:ltr;text-align:start}
+
+  .detail{position:sticky;top:80px}
+  .dpad{padding:var(--sp5)}
+  .d-country{font-size:24px;font-weight:700;margin:0}
+  .d-score{display:flex;align-items:baseline;gap:8px;margin:var(--sp3) 0}
+  .d-score .n{font-family:var(--mono);font-size:48px;font-weight:600;color:var(--primary);line-height:.9}
+  .d-score .o{font-size:18px;color:var(--text-3)}
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin:var(--sp4) 0;overflow-x:auto}
+  .tab{padding:12px 14px;font-size:14px;font-weight:600;color:var(--text-2);background:transparent;border:0;border-bottom:3px solid transparent;white-space:nowrap;transition:.15s var(--ease)}
+  .tab:hover{color:var(--text)}
+  .tab.on{color:var(--primary);border-bottom-color:var(--primary)}
+  .panel-body{animation:slideup .25s var(--ease) both}
+
+  /* my position block */
+  .mypos{background:var(--brand-soft);border-radius:var(--r-lg);padding:var(--sp4);margin-bottom:var(--sp4)}
+  .mypos h4{margin:0 0 6px;font-size:15px;font-weight:700;color:var(--brand);display:flex;align-items:center;gap:8px}
+  .mypos .big{font-size:15px;line-height:1.7}
+  .mypos .big b{font-family:var(--mono)}
+
+  .comp{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:12px}
+  .comp-h{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .comp-nm{font-size:15px;font-weight:600}
+  .comp-w{font-size:13px;color:var(--text-3)}
+  .comp-v{font-size:20px;font-weight:700;margin-top:4px;font-family:var(--mono)}
+  .gapline{display:inline-flex;align-items:center;gap:7px;margin-top:5px;font-size:14px;font-weight:600;color:var(--warning)}
+  .gapline .dot{width:7px;height:7px;border-radius:50%;background:var(--warning)}
+  .prov{font-size:13px;color:var(--text-3);font-family:var(--mono);margin-top:6px;direction:ltr;text-align:start}
+
+  /* competing-products price ladder */
+  .ladder{width:100%;border-collapse:collapse;margin-top:6px}
+  .ladder th{font-size:12px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;text-align:start;padding:8px 10px;border-bottom:1px solid var(--border)}
+  .ladder td{padding:11px 10px;border-bottom:1px solid var(--border);font-size:14px}
+  .ladder tr.you{background:var(--brand-soft)}
+  .ladder tr.you td{font-weight:700}
+  .ladder .you-tag{font-size:11px;font-weight:700;color:#fff;background:var(--brand);padding:2px 7px;border-radius:40px;margin-inline-start:6px}
+  .ladder .pill{font-size:11px;padding:2px 8px;border-radius:40px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2)}
+  .ladder .mgn{font-family:var(--mono);font-weight:600;color:var(--success)}
+
+  .subhead{font-size:13px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px}
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);font-size:15px}
+  .kv:last-child{border-bottom:0}
+  .kv .kk{color:var(--text-2)} .kv .vv{font-weight:600}
+  .list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px}
+  .list li{font-size:15px;line-height:1.6;padding-inline-start:20px;position:relative}
+  .list li::before{content:"";position:absolute;inset-inline-start:0;top:9px;width:7px;height:7px;border-radius:50%;background:var(--primary)}
+  .supplier{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}
+  .supplier:last-child{border-bottom:0}
+  .supplier .sh{font-family:var(--mono);font-weight:600;color:var(--primary)}
+  .callout{font-size:14px;color:var(--text-2);background:var(--info-soft);border-inline-start:3px solid var(--info);border-radius:var(--r);padding:12px 14px;line-height:1.6;margin-top:var(--sp3)}
+
+  .duo{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp4)}
+  @media(max-width:960px){.duo{grid-template-columns:1fr}}
+  .panel{padding:var(--sp5)}
+  .panel h3{margin:0 0 6px;font-size:18px;font-weight:600}
+  .panel .sub{font-size:14px;color:var(--text-2);margin-bottom:var(--sp4);line-height:1.6}
+  .limits{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px}
+  .limits li{font-size:15px;color:var(--text);line-height:1.6;padding-inline-start:22px;position:relative}
+  .limits li::before{content:"—";position:absolute;inset-inline-start:0;color:var(--warning);font-weight:700}
+
+  .notice{font-size:14px;color:var(--text-2);background:var(--surface);border:1px solid var(--border);border-inline-start:3px solid var(--primary);border-radius:var(--r);padding:14px 16px;line-height:1.6;box-shadow:var(--shadow)}
+  .toast{position:fixed;inset-block-end:24px;inset-inline-end:24px;background:var(--text);color:var(--bg);padding:14px 20px;border-radius:var(--r);font-size:15px;font-weight:600;box-shadow:var(--shadow-lg);z-index:100;animation:slideup .25s var(--ease);max-width:90vw}
+  footer{border-top:1px solid var(--border);padding:var(--sp5) 0;color:var(--text-3);font-size:14px}
+</style>
+</head>
+<body>
+<header class="appbar">
+  <div class="shell appbar-row">
+    <div class="brand">
+      <div class="logo">S</div>
+      <div><div class="t" data-t="appName"></div><div class="s" data-t="appTag"></div></div>
+    </div>
+    <div class="appbar-spacer"></div>
+    <div class="appbar-actions">
+      <div class="seg" id="langSeg" role="group" aria-label="Language">
+        <button data-lang="ar" class="on">العربية</button><button data-lang="en">EN</button>
+      </div>
+      <button class="iconbtn" id="themeBtn" aria-label="Theme">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.4 1.4M17.6 17.6L19 19M19 5l-1.4 1.4M6.4 17.6L5 19"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="shell">
+  <!-- COMMAND BAR: product + STUDY YEAR RANGE -->
+  <div class="cmdbar">
+    <div class="field search">
+      <label data-t="searchLabel"></label>
+      <div class="control">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="search" autocomplete="off" />
+        <span class="hs-chip">HS 080410</span>
+      </div>
+    </div>
+    <div class="field">
+      <label data-t="studyYears"></label>
+      <div class="control range">
+        <select id="yFrom"><option>2019</option><option>2020</option><option>2021</option></select>
+        <span class="dash">—</span>
+        <select id="yTo"><option>2023</option><option>2022</option><option>2021</option></select>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="runBtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9z"/></svg><span data-t="analyze"></span></button>
+  </div>
+
+  <!-- MY PRODUCT (the missing input: your economics) -->
+  <div class="myprod" id="myprod"></div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="section-gap">
+    <section class="card decision" id="decision"></section>
+    <section class="card pipe" id="pipe"></section>
+    <div class="body-grid">
+      <section class="card" id="tableCard"></section>
+      <aside class="card detail" id="detailCard"></aside>
+    </div>
+    <div class="duo" id="duo"></div>
+    <div class="notice" data-t="previewNote"></div>
+  </div>
+</main>
+
+<footer><div class="shell"><span data-t="footer"></span></div></footer>
+
+<script>
+(function(){
+  "use strict";
+  var $=function(s,r){return (r||document).querySelector(s);};
+  var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));};
+  function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+
+  var I18N={
+    appName:{ar:"منصة سِلك · ذكاء الأسواق",en:"Silk · Market Intelligence"},
+    appTag:{ar:"من منتجك إلى خطة دخولك — كل رقم بمصدره",en:"From your product to your entry plan — every number sourced"},
+    searchLabel:{ar:"المنتج",en:"Product"},
+    searchPh:{ar:"ابحث عن منتج… (تمور، زعفران، عسل)",en:"Search a product… (dates, saffron, honey)"},
+    studyYears:{ar:"سنوات الدراسة (مدى)",en:"Study years (range)"},
+    analyze:{ar:"تحليل الأسواق",en:"Analyze markets"},
+    deepen:{ar:"دراسة عميقة · Volza/explee",en:"Deep dive · Volza/explee"},
+    wordReport:{ar:"تقرير Word",en:"Word report"},
+    brief:{ar:"المختصر",en:"Brief"},
+    exportCsv:{ar:"تصدير CSV",en:"Export CSV"},
+    edit:{ar:"تعديل بطاقة المنتج",en:"Edit product card"},
+    // my product
+    myProduct:{ar:"منتجك",en:"Your product"},
+    myProdName:{ar:"تمر سُكّري فاخر",en:"Premium Sukkari dates"},
+    premium:{ar:"فاخر",en:"Premium"},
+    cost:{ar:"تكلفتك/كجم",en:"Your cost/kg"},
+    myPrice:{ar:"سعرك المستهدف",en:"Your target price"},
+    capacity:{ar:"طاقتك الشهرية",en:"Monthly capacity"},
+    shipping:{ar:"شحن/كجم",en:"Shipping/kg"},
+    mpHint:{ar:"هذه الأرقام تشغّل «موقعك التنافسي» ومقارنة منتجك بالمنافسين — بدونها التحليل وصفي فقط.",
+            en:"These figures power \"your position\" and the comparison against competitors — without them the analysis is descriptive only."},
+    // tiles
+    tMarkets:{ar:"أسواق مرشّحة",en:"Candidate markets"},
+    tTop:{ar:"أفضل سوق لمنتجك",en:"Best market for you"},
+    tGrowth:{ar:"نمو الطلب (٥ سنوات)",en:"Demand growth (5y)"},
+    tMargin:{ar:"أفضل هامش متاح",en:"Best margin available"},
+    tMarketsM:{ar:"مرتّبة بنقاط شفّافة",en:"ranked by transparent score"},
+    tTopM:{ar:"حسب موقعك التنافسي",en:"by your competitive position"},
+    tGrowthM:{ar:"الإمارات · اتجاه صاعد",en:"UAE · rising trend"},
+    tMarginM:{ar:"عند مضاهاة أعلى منافس",en:"at matching the top competitor"},
+    // decision
+    decision:{ar:"القرار",en:"Decision"}, prelim:{ar:"قرار مبدئي",en:"Preliminary"},
+    verdict:{ar:"مبدئي إيجابي — الإمارات أفضل سوق لتمرك الفاخر: طلب صاعد وهامش مرتفع مقابل المنافسين.",
+             en:"Preliminary GO — the UAE is the best market for your premium dates: rising demand and a high margin vs competitors."},
+    whyLabel:{ar:"لماذا",en:"Why"},
+    why:{ar:"استيراد السوق نما +37% خلال ٢٠١٩–٢٠٢٣ وحصة السعودية ترتفع (28%→34%). سعرك 95 AED يقع تحت أعلى منافس (Bateel 120) بهامش 44%، وفوق المتوسط الاقتصادي — موقع فاخر مربح. الفجوة: أسعار رفّ إضافية تحتاج تعميقاً.",
+         en:"Market imports grew +37% over 2019–2023 and Saudi share is rising (28%→34%). Your 95 AED sits below the top competitor (Bateel 120) at a 44% margin, above the economy tier — a profitable premium slot. Gap: more shelf prices need a deep-dive."},
+    brief1:{ar:"موقعك: أرخص من Bateel بـ21% وأعلى فئةً من المتوسط — فاخر بسعر تنافسي.",
+            en:"Your slot: 21% cheaper than Bateel and above the mid tier — premium at a competitive price."},
+    brief2:{ar:"أفضل هامش: 56% عند مضاهاة أعلى منافس؛ 44% عند سعرك المستهدف.",
+            en:"Best margin: 56% at matching the top competitor; 44% at your target price."},
+    brief3:{ar:"باب الدخول الواقعي: سلاسل التجزئة الفاخرة (تتطلب توثيق منشأ).",
+            en:"Realistic entry door: premium retail chains (requires origin certification)."},
+    // pipeline
+    pipeline:{ar:"خط الوكلاء والمصادر",en:"Agent & source pipeline"},
+    complete:{ar:"اكتمل — تغطية 4/4 وكلاء · مدى ٢٠١٩–٢٠٢٣",en:"Complete — 4/4 agents · range 2019–2023"},
+    step1:{ar:"المصنّف (HS)",en:"HS classifier"}, step1d:{ar:"اسم المنتج → رمز HS6",en:"Product name → HS6"},
+    step2:{ar:"وكيل التجارة",en:"Trade agent"}, step2d:{ar:"Comtrade · الاستيراد عبر السنوات",en:"Comtrade · imports over years"},
+    step3:{ar:"وكيل الاقتصاد",en:"Economic agent"}, step3d:{ar:"World Bank · دخل الفرد",en:"World Bank · income"},
+    step4:{ar:"وكيل المنافسة",en:"Competition agent"}, step4d:{ar:"Comtrade · حصص المورّدين",en:"Comtrade · supplier shares"},
+    step5:{ar:"محرّك التقاطع",en:"Correlation engine"}, step5d:{ar:"منتجك ضد المنافسين → موقعك",en:"your product vs rivals → your slot"},
+    obsMarkets:{ar:"أسواق مرصودة",en:"markets observed"}, declaredGap:{ar:"فجوة معلنة",en:"declared gap"},
+    correlated:{ar:"مربوط بمنتجك",en:"correlated to you"},
+    // table
+    rankedMarkets:{ar:"الأسواق المرشّحة",en:"Candidate markets"},
+    colRank:{ar:"#",en:"#"}, colMarket:{ar:"السوق",en:"Market"}, colImports:{ar:"الاستيراد",en:"Imports"},
+    colTrend:{ar:"الاتجاه ٥ سنوات",en:"5-year trend"}, colShare:{ar:"حصة السعودية",en:"Saudi share"},
+    colScore:{ar:"النقاط",en:"Score"}, colMargin:{ar:"هامشك",en:"Your margin"},
+    notObserved:{ar:"غير مرصود",en:"Not observed"},
+    tableSrc:{ar:"المصادر: UN Comtrade (٢٠١٩–٢٠٢٣) · World Bank · محرّك التقاطع لموقعك — كل رقم موسوم",
+              en:"Sources: UN Comtrade (2019–2023) · World Bank · correlation engine for your slot — every value tagged"},
+    rank:{ar:"المرتبة",en:"Rank"},
+    // tabs
+    tabPosition:{ar:"موقعك",en:"Your position"}, tabRivals:{ar:"المنتجات المنافسة",en:"Competing products"},
+    tabTrend:{ar:"الاتجاه",en:"Trend"}, tabComponents:{ar:"المكوّنات",en:"Components"},
+    tabCompliance:{ar:"الاشتراطات",en:"Compliance"},
+    // your position tab
+    yourSlot:{ar:"موقعك في هذا السوق",en:"Your slot in this market"},
+    slotLine:{ar:"سعرك <b>95 AED</b> — أرخص من أعلى منافس بـ<b>21%</b>، وضمن الفئة الفاخرة. هامشك عند سعرك <b>44%</b>.",
+              en:"Your price <b>95 AED</b> — <b>21%</b> below the top competitor, within the premium tier. Margin at your price <b>44%</b>."},
+    matchMargins:{ar:"هامشك إذا ضاهيت كل منافس",en:"Your margin if you match each rival"},
+    // rivals tab
+    onShelf:{ar:"المنتجات على الرفّ (وموقع منتجك)",en:"Products on the shelf (and where you land)"},
+    rivalHint:{ar:"سعرك مُدرَج ومُبرَز. الهامش = (سعر المنافس − تكلفتك − الشحن) ÷ سعر المنافس.",
+               en:"Your price is inserted and highlighted. Margin = (rival price − your cost − shipping) ÷ rival price."},
+    colBrand:{ar:"المنتج / العلامة",en:"Product / brand"}, colTier:{ar:"الفئة",en:"Tier"},
+    colPrice:{ar:"السعر",en:"Price"}, colYourMgn:{ar:"هامشك عند المضاهاة",en:"Your margin at match"},
+    youLabel:{ar:"منتجك",en:"You"},
+    tierPrem:{ar:"فاخر",en:"Premium"}, tierStd:{ar:"قياسي",en:"Standard"}, tierEco:{ar:"اقتصادي",en:"Economy"},
+    supplierCountries:{ar:"الدول المورّدة لهذا السوق وحصصها",en:"Supplier countries to this market & shares"},
+    rivalSrc:{ar:"العلامات والأسعار عبر التعميق (localprice/explee)؛ الدول من Comtrade. الغائب يُعلن لا يُخترع.",
+              en:"Brands & prices via deep-dive (localprice/explee); countries from Comtrade. Missing is declared, not invented."},
+    // trend tab
+    trendTitle:{ar:"استيراد السوق وحصة السعودية عبر السنوات",en:"Market imports & Saudi share over the years"},
+    importsLine:{ar:"استيراد السوق",en:"Market imports"}, shareLine:{ar:"حصة السعودية",en:"Saudi share"},
+    cagr:{ar:"نمو سنوي مركّب",en:"CAGR"},
+    trendRead:{ar:"القراءة: طلب صاعد باطّراد وحصة سعودية ترتفع — نافذة دخول تتّسع لا تضيق.",
+               en:"Read: steadily rising demand and a rising Saudi share — an entry window that is widening, not closing."},
+    // components
+    compSize:{ar:"حجم الاستيراد",en:"Import size"}, wSize:{ar:"وزن 40%",en:"weight 40%"},
+    compShare:{ar:"حصة السعودية",en:"Saudi share"}, wShare:{ar:"وزن 20%",en:"weight 20%"},
+    compIncome:{ar:"دخل الفرد (PPP)",en:"Income (PPP)"}, wIncome:{ar:"وزن 25%",en:"weight 25%"},
+    compHHI:{ar:"تركّز المنافسة HHI",en:"Competition HHI"}, wHHI:{ar:"وزن 15% · أقل=أسهل",en:"weight 15% · lower=easier"},
+    hhiNote:{ar:"لا سجلّ منافسين لهذه السنة",en:"no competitor records this year"},
+    // compliance
+    entryReq:{ar:"اشتراطات دخول السوق",en:"Market-entry requirements"},
+    exitReq:{ar:"اشتراطات الخروج (السعودية)",en:"Exit requirements (Saudi)"},
+    req1:{ar:"شهادة منشأ خليجية موحّدة — هيئة الجمارك",en:"Unified GCC certificate of origin — Customs"},
+    req2:{ar:"بطاقة بيان غذائي مطابقة لمواصفة الإمارات",en:"Food label per UAE standard"},
+    req3:{ar:"شهادة صحية للمنتجات الغذائية — SFDA",en:"Health certificate — SFDA"},
+    officialSrc:{ar:"المصدر الرسمي",en:"Official source"},
+    complianceFoot:{ar:"مرجع محلي لا خدمة قانونية حيّة — تحقق من البوابة الرسمية قبل الشحن.",
+                    en:"Local reference, not a live legal service — verify the official portal before shipping."},
+    // credibility
+    reportLimits:{ar:"حدود هذا التقرير",en:"Limits of this report"},
+    limitsSub:{ar:"ما لا يعرفه النظام يُقال صراحةً — الفجوات تُعلن ولا تُقدَّر.",
+               en:"What the system doesn't know is stated plainly — gaps declared, not estimated."},
+    lim1:{ar:"أسعار الرفّ لعلامتين فقط مرصودة؛ الباقي يحتاج تعميقاً مدفوعاً (localprice).",
+          en:"Only two shelf prices observed; the rest needs a paid deep-dive (localprice)."},
+    lim2:{ar:"تركّز المنافسة (HHI) للإمارات غير مرصود ٢٠٢٣ — أُسقط من النقاط، لم يُخمّن.",
+          en:"UAE competition HHI not observed for 2023 — dropped from score, not guessed."},
+    lim3:{ar:"القرب اللوجستي فجوة معلنة لا محسوبة (خارج نطاق المصادر الحالية).",
+          en:"Logistical proximity is a declared, uncomputed gap (outside current sources)."},
+    lim4:{ar:"سعرك وتكلفتك مُدخلة منك — الهوامش دقيقة بقدر دقّة بطاقة منتجك.",
+          en:"Your price & cost are your inputs — margins are as accurate as your product card."},
+    whatsNext:{ar:"الخطوة التالية",en:"What's next"},
+    nextSub:{ar:"لإغلاق الفجوات أعلاه.",en:"to close the gaps above."},
+    next1:{ar:"فعّل التعميق (localprice/Volza/explee) لرصد بقية أسعار الرفّ والمستوردين بالاسم.",
+           en:"Enable deep-dive (localprice/Volza/explee) to observe remaining shelf prices and named importers."},
+    next2:{ar:"راجع بطاقة منتجك (التكلفة/السعر) لضبط دقّة الهوامش.",
+           en:"Review your product card (cost/price) to tune margin accuracy."},
+    previewNote:{ar:"صفحة عرض للنظام البصري — القيم أمثلة توضّح الشكل والتفاعل، لا نتيجة حيّة. كل رقم مصحوب بمصدره كما في المنصة الفعلية.",
+                 en:"A design-system preview — values illustrate look & interaction, not a live result. Every number carries its source, as in the real platform."},
+    footer:{ar:"سِلك · Enterprise (Carbon × Redwood) · ثنائي اللغة · مدى سنوات · مقارنة منتجك بالمنافسين",
+            en:"Silk · Enterprise (Carbon × Redwood) · Bilingual · Year range · Your product vs competitors"},
+    toastLang:{ar:"تم التبديل إلى العربية",en:"Switched to English"}
+  };
+
+  var S={lang:"ar",sel:0,tab:"position"};
+  function t(k){var e=I18N[k];return e?e[S.lang]:k;}
+
+  // YOUR product economics (the missing piece)
+  var MY={cost:45,price:95,ship:8,cur:"AED",capacity:"5,000"};
+  function marginAt(price){return Math.round((price-MY.cost-MY.ship)/price*100);}
+
+  var MARKETS=[
+    {flag:"AE",name:{ar:"الإمارات",en:"United Arab Emirates"},
+     importsSeries:[300,310,350,385,412],shareSeries:[28,30,31,33,34],score:78,
+     income:"$78,255",pop:"9.4M",tariff:"0%",hhiGap:true,
+     rivals:[{brand:"Bateel",tier:"prem",price:120},{brand:"Al Foah Premium",tier:"std",price:85},{brand:"Lulu Select",tier:"eco",price:60}],
+     suppliers:[{c:{ar:"إيران",en:"Iran"},sh:31},{c:{ar:"السعودية",en:"Saudi Arabia"},sh:34},{c:{ar:"تونس",en:"Tunisia"},sh:12}]},
+    {flag:"GB",name:{ar:"المملكة المتحدة",en:"United Kingdom"},
+     importsSeries:[150,158,170,180,188],shareSeries:[7,8,8,9,9],score:63,
+     income:"$46,125",pop:"67.0M",tariff:"8%",hhiGap:false,
+     rivals:[{brand:"Bateel UK",tier:"prem",price:34},{brand:"Whitworths",tier:"eco",price:12}],
+     suppliers:[{c:{ar:"تونس",en:"Tunisia"},sh:28},{c:{ar:"الجزائر",en:"Algeria"},sh:19},{c:{ar:"السعودية",en:"Saudi Arabia"},sh:9}]},
+    {flag:"DE",name:{ar:"ألمانيا",en:"Germany"},
+     importsSeries:[110,118,124,130,134],shareSeries:[null,null,null,null,null],score:58,
+     income:"$51,203",pop:"83.2M",tariff:"8%",hhiGap:false,shareGap:true,
+     rivals:[{brand:"Seeberger",tier:"std",price:6}],
+     suppliers:[{c:{ar:"تركيا",en:"Türkiye"},sh:33},{c:{ar:"تونس",en:"Tunisia"},sh:21}]},
+    {flag:"US",name:{ar:"الولايات المتحدة",en:"United States"},
+     importsSeries:[80,84,88,92,96],shareSeries:[3,3,4,4,4],score:51,
+     income:"$70,248",pop:"331M",tariff:"0%",hhiGap:false,
+     rivals:[{brand:"Bard Valley",tier:"prem",price:22},{brand:"Sunny Fruit",tier:"eco",price:9}],
+     suppliers:[{c:{ar:"تونس",en:"Tunisia"},sh:26},{c:{ar:"المكسيك",en:"Mexico"},sh:18}]}
+  ];
+  var YEARS=[2019,2020,2021,2022,2023];
+  function growth(series){var a=series[0],b=series[series.length-1];if(a==null||b==null)return null;return Math.round((b-a)/a*100);}
+  function cagr(series){var a=series[0],b=series[series.length-1],n=series.length-1;if(!a||!b)return null;return Math.round((Math.pow(b/a,1/n)-1)*100);}
+  function bestMargin(m){var ps=m.rivals.map(function(r){return r.price;});return marginAt(Math.max.apply(null,ps));}
+
+  // sparkline
+  function spark(series,w,h,color){
+    var vals=series.filter(function(v){return v!=null;});
+    if(vals.length<2)return '<span class="gap-txt">'+esc(t("notObserved"))+'</span>';
+    var min=Math.min.apply(null,vals),max=Math.max.apply(null,vals),rng=(max-min)||1;
+    var step=w/(series.length-1);
+    var pts=series.map(function(v,i){var x=i*step;var y=h-((v-min)/rng)*(h-4)-2;return x.toFixed(1)+","+y.toFixed(1);}).join(" ");
+    var last=series[series.length-1],lx=w,ly=h-((last-min)/rng)*(h-4)-2;
+    return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="display:block;overflow:visible">'+
+      '<polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'+
+      '<circle cx="'+lx.toFixed(1)+'" cy="'+ly.toFixed(1)+'" r="3" fill="'+color+'"/></svg>';
+  }
+  function growthTag(g){if(g==null)return '<span class="gap-txt">'+esc(t("notObserved"))+'</span>';
+    var up=g>=0;return '<span class="growth '+(up?"up":"down")+'">'+(up?"▲":"▼")+' '+Math.abs(g)+'%</span>';}
+
+  function applyChrome(){
+    document.documentElement.lang=S.lang;
+    document.documentElement.dir=S.lang==="ar"?"rtl":"ltr";
+    $$("[data-t]").forEach(function(el){el.textContent=t(el.getAttribute("data-t"));});
+    $("#search").placeholder=t("searchPh");
+    $$("#langSeg button").forEach(function(b){b.classList.toggle("on",b.getAttribute("data-lang")===S.lang);});
+  }
+  function renderMyProduct(){
+    $("#myprod").innerHTML=
+      '<div class="mp-l">'+
+        '<div class="mp-title"><span class="eyebrow">'+esc(t("myProduct"))+'</span>'+
+          '<span class="nm">'+esc(t("myProdName"))+'</span>'+
+          '<span class="hs-chip">HS 080410</span>'+
+          '<span class="tierbadge">'+esc(t("premium"))+'</span></div>'+
+        '<div class="mp-econ">'+
+          '<div class="e"><span class="k">'+esc(t("cost"))+'</span><span class="v num">'+MY.cost+' '+MY.cur+'</span></div>'+
+          '<div class="e"><span class="k">'+esc(t("myPrice"))+'</span><span class="v num">'+MY.price+' '+MY.cur+'</span></div>'+
+          '<div class="e"><span class="k">'+esc(t("shipping"))+'</span><span class="v num">'+MY.ship+' '+MY.cur+'</span></div>'+
+          '<div class="e"><span class="k">'+esc(t("capacity"))+'</span><span class="v num">'+MY.capacity+' kg</span></div>'+
+        '</div>'+
+        '<div style="font-size:13px;color:var(--text-3);line-height:1.5">'+esc(t("mpHint"))+'</div>'+
+      '</div>'+
+      '<div class="mp-r"><button class="btn btn-ghost btn-sm" data-toast="edit">'+
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>'+
+        esc(t("edit"))+'</button></div>';
+  }
+  function renderTiles(){
+    var top=MARKETS[0];
+    var data=[
+      {k:t("tMarkets"),v:"4",m:t("tMarketsM"),accent:true},
+      {k:t("tTop"),v:top.name[S.lang],m:t("tTopM")},
+      {k:t("tGrowth"),v:'<span class="growth up">▲ '+growth(top.importsSeries)+'%</span>',m:t("tGrowthM")},
+      {k:t("tMargin"),v:'<span class="num" style="color:var(--success)">'+bestMargin(top)+'%</span>',m:t("tMarginM")}
+    ];
+    $("#tiles").innerHTML=data.map(function(d,i){
+      return '<div class="tile'+(d.accent?" accent":"")+'" style="animation-delay:'+(i*40)+'ms">'+
+        '<div class="k">'+esc(d.k)+'</div><div class="v">'+d.v+'</div><div class="m">'+esc(d.m)+'</div></div>';
+    }).join("");
+  }
+  function renderDecision(){
+    $("#decision").innerHTML=
+      '<div class="d-head"><span class="badge b-go">'+esc(t("prelim"))+'</span>'+
+        '<span class="tag num">HS 080410 · 0.92</span><span class="tag num">2019–2023</span>'+
+        '<span class="tag">'+esc(t("correlated"))+'</span></div>'+
+      '<div class="d-grid"><div>'+
+        '<div class="eyebrow">'+esc(t("decision"))+'</div>'+
+        '<h1 class="d-verdict" style="margin-top:8px">'+esc(t("verdict"))+'</h1>'+
+        '<p class="d-why"><b>'+esc(t("whyLabel"))+':</b> '+esc(t("why"))+'</p>'+
+        '<ul class="d-brief"><li>'+esc(t("brief1"))+'</li><li>'+esc(t("brief2"))+'</li><li>'+esc(t("brief3"))+'</li></ul>'+
+        '<div class="d-actions">'+
+          '<button class="btn btn-primary" data-toast="deepen">'+esc(t("deepen"))+'</button>'+
+          '<button class="btn btn-secondary" data-toast="wordReport">'+esc(t("wordReport"))+'</button>'+
+          '<button class="btn btn-ghost" data-toast="brief">'+esc(t("brief"))+'</button>'+
+          '<button class="btn btn-ghost" data-toast="exportCsv">'+esc(t("exportCsv"))+'</button></div></div>'+
+        '<div class="gauge" style="--p:78" role="img" aria-label="0.78"><div class="in"><div><div class="n">0.78</div><div class="l">'+esc(t("decision"))+'</div></div></div></div>'+
+      '</div>';
+  }
+  function renderPipe(){
+    var steps=[
+      {n:"1",nm:t("step1"),d:t("step1d"),c:"var(--success)",f:"<b class='num'>080410</b> · 0.92"},
+      {n:"2",nm:t("step2"),d:t("step2d"),c:"var(--success)",f:"<b class='num'>4/4</b> "+t("obsMarkets")},
+      {n:"3",nm:t("step3"),d:t("step3d"),c:"var(--success)",f:"<b class='num'>4/4</b> "+t("obsMarkets")},
+      {n:"4",nm:t("step4"),d:t("step4d"),c:"var(--warning)",f:t("declaredGap")+" · <b class='num'>3/4</b>",gap:true},
+      {n:"5",nm:t("step5"),d:t("step5d"),c:"var(--brand)",f:t("correlated")}
+    ];
+    $("#pipe").innerHTML=
+      '<div class="pipe-head"><div class="eyebrow">'+esc(t("pipeline"))+'</div>'+
+        '<span class="status"><span class="dot"></span>'+esc(t("complete"))+'</span></div>'+
+      '<div class="steps">'+steps.map(function(s){
+        return '<div class="step'+(s.gap?" gap":"")+'"><div class="sn"><span class="num-badge"'+(s.n==="5"?' style="background:var(--brand)"':'')+'>'+s.n+'</span><b>'+esc(s.nm)+'</b></div>'+
+          '<div class="sd">'+esc(s.d)+'</div><div class="sf"><span class="dot" style="background:'+s.c+'"></span><span>'+s.f+'</span></div></div>';
+      }).join("")+'</div>';
+  }
+  function renderTable(){
+    var rows=MARKETS.map(function(m,i){
+      var g=growth(m.importsSeries);
+      var share=m.shareGap?'<span class="gap-txt" title="Comtrade · 0.0">'+esc(t("notObserved"))+'</span>':
+        '<span class="num" style="font-weight:600'+(m.shareSeries[4]>=30?';color:var(--primary)':'')+'">'+m.shareSeries[4]+'%</span>';
+      return '<tr class="'+(i===S.sel?"sel":"")+'" data-i="'+i+'">'+
+        '<td><span class="rk">'+(i+1)+'</span></td>'+
+        '<td><div class="cty"><span class="flag">'+m.flag+'</span><span class="cname">'+esc(m.name[S.lang])+'</span></div></td>'+
+        '<td><span class="num" style="font-weight:600" title="UN Comtrade · 0.9">$'+m.importsSeries[4]+'M</span></td>'+
+        '<td><div class="trend">'+spark(m.importsSeries,64,26,"var(--primary)")+growthTag(g)+'</div></td>'+
+        '<td>'+share+'</td>'+
+        '<td><div class="bar"><span class="bv">'+m.score+'</span><span class="track"><span class="fill" style="width:'+m.score+'%"></span></span></div></td>'+
+        '<td><span class="num" style="font-weight:600;color:var(--success)">'+bestMargin(m)+'%</span></td></tr>';
+    }).join("");
+    $("#tableCard").innerHTML=
+      '<div class="dt-head"><h3>'+esc(t("rankedMarkets"))+'</h3><span class="cnt"><span class="num">4</span> · 2019–2023</span></div>'+
+      '<div style="overflow-x:auto"><table class="dt"><thead><tr>'+
+        '<th>'+esc(t("colRank"))+'</th><th>'+esc(t("colMarket"))+'</th><th>'+esc(t("colImports"))+'</th>'+
+        '<th>'+esc(t("colTrend"))+'</th><th>'+esc(t("colShare"))+'</th><th>'+esc(t("colScore"))+'</th><th>'+esc(t("colMargin"))+'</th>'+
+        '</tr></thead><tbody>'+rows+'</tbody></table></div>'+
+      '<div class="dt-foot">'+esc(t("tableSrc"))+'</div>';
+    $$("#tableCard tbody tr").forEach(function(tr){tr.addEventListener("click",function(){S.sel=+this.getAttribute("data-i");renderTable();renderDetail();});});
+  }
+  var TIERK={prem:"tierPrem",std:"tierStd",eco:"tierEco"};
+  function renderDetail(){
+    var m=MARKETS[S.sel];
+    var tabs=[["position",t("tabPosition")],["rivals",t("tabRivals")],["trend",t("tabTrend")],["components",t("tabComponents")],["compliance",t("tabCompliance")]];
+    var body="";
+    if(S.tab==="position"){
+      var mm=m.rivals.map(function(r){return {brand:r.brand,mgn:marginAt(r.price)};});
+      body='<div class="mypos"><h4><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>'+esc(t("yourSlot"))+'</h4>'+
+        '<div class="big">'+t("slotLine")+'</div></div>'+
+        '<div class="subhead">'+esc(t("matchMargins"))+'</div>'+
+        m.rivals.map(function(r){return '<div class="kv"><span class="kk">'+esc(r.brand)+' <span class="ladder"><span class="pill">'+esc(t(TIERK[r.tier]))+'</span></span> · <span class="num">'+r.price+' '+MY.cur+'</span></span>'+
+          '<span class="vv num" style="color:var(--success)">'+marginAt(r.price)+'%</span></div>';}).join("")+
+        '<div class="callout">'+esc(t("rivalHint"))+'</div>';
+    }else if(S.tab==="rivals"){
+      // price ladder with YOUR product inserted, sorted desc
+      var ladder=m.rivals.map(function(r){return {brand:r.brand,tier:r.tier,price:r.price,you:false};});
+      ladder.push({brand:t("myProdName"),tier:"prem",price:MY.price,you:true});
+      ladder.sort(function(a,b){return b.price-a.price;});
+      var rows=ladder.map(function(r){
+        return '<tr class="'+(r.you?"you":"")+'"><td>'+esc(r.brand)+(r.you?'<span class="you-tag">'+esc(t("youLabel"))+'</span>':'')+'</td>'+
+          '<td><span class="pill">'+esc(t(TIERK[r.tier]))+'</span></td>'+
+          '<td class="num">'+r.price+' '+MY.cur+'</td>'+
+          '<td>'+(r.you?'<span class="num" style="color:var(--brand);font-weight:700">'+marginAt(r.price)+'%</span>':'<span class="mgn">'+marginAt(r.price)+'%</span>')+'</td></tr>';
+      }).join("");
+      body='<div class="subhead">'+esc(t("onShelf"))+'</div>'+
+        '<div style="overflow-x:auto"><table class="ladder"><thead><tr><th>'+esc(t("colBrand"))+'</th><th>'+esc(t("colTier"))+'</th><th>'+esc(t("colPrice"))+'</th><th>'+esc(t("colYourMgn"))+'</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+        '<div class="subhead">'+esc(t("supplierCountries"))+'</div>'+
+        m.suppliers.map(function(s){return '<div class="supplier"><span>'+esc(s.c[S.lang])+(s.c.en==="Saudi Arabia"?' <span class="you-tag" style="background:var(--brand)">'+esc(t("youLabel"))+'</span>':'')+'</span><span class="sh">'+s.sh+'%</span></div>';}).join("")+
+        '<div class="callout" style="border-color:var(--warning);background:var(--warning-soft)">'+esc(t("rivalSrc"))+'</div>';
+    }else if(S.tab==="trend"){
+      body='<div class="subhead">'+esc(t("trendTitle"))+'</div>'+
+        '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px">'+
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-size:13px;color:var(--text-2)">'+esc(t("importsLine"))+'</span><span class="growth up">▲ '+growth(m.importsSeries)+'% · '+esc(t("cagr"))+' '+cagr(m.importsSeries)+'%</span></div>'+
+          spark(m.importsSeries,320,60,"var(--primary)")+
+          '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-top:4px" class="num">'+YEARS.map(function(y){return '<span>'+y+'</span>';}).join("")+'</div>'+
+        '</div>'+
+        '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-top:12px">'+
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-size:13px;color:var(--text-2)">'+esc(t("shareLine"))+'</span>'+(m.shareGap?'<span class="gap-txt">'+esc(t("notObserved"))+'</span>':'<span class="growth up">'+m.shareSeries[0]+'% → '+m.shareSeries[4]+'%</span>')+'</div>'+
+          (m.shareGap?'<div class="gapline"><span class="dot"></span>'+esc(t("notObserved"))+'</div>':spark(m.shareSeries,320,50,"var(--brand)"))+
+        '</div>'+
+        '<div class="callout">'+esc(t("trendRead"))+'</div>';
+    }else if(S.tab==="components"){
+      function comp(nm,w,val,prov,gap,note){
+        if(gap)return '<div class="comp"><div class="comp-h"><span class="comp-nm">'+esc(nm)+'</span><span class="comp-w">'+esc(w)+'</span></div><div class="gapline"><span class="dot"></span>'+esc(t("declaredGap"))+'</div><div class="prov">Comtrade · 0.0 — '+esc(note)+'</div></div>';
+        return '<div class="comp"><div class="comp-h"><span class="comp-nm">'+esc(nm)+'</span><span class="comp-w">'+esc(w)+'</span></div><div class="comp-v">'+val+'</div><div class="prov">'+esc(prov)+'</div></div>';
+      }
+      body=comp(t("compSize"),t("wSize"),'<span class="num">$'+m.importsSeries[4]+'M</span>',"UN Comtrade · 0.9 · 2023")+
+        (m.shareGap?comp(t("compShare"),t("wShare"),"",null,true,t("hhiNote")):comp(t("compShare"),t("wShare"),'<span class="num">'+m.shareSeries[4]+'%</span>',"UN Comtrade · 0.9 · 2023"))+
+        comp(t("compIncome"),t("wIncome"),'<span class="num">'+m.income+'</span>',"World Bank · 0.95 · 2023")+
+        (m.hhiGap?comp(t("compHHI"),t("wHHI"),"",null,true,t("hhiNote")):comp(t("compHHI"),t("wHHI"),'<span class="num">0.21</span>',"UN Comtrade · 0.8"));
+    }else{
+      body='<div class="subhead">'+esc(t("entryReq"))+'</div>'+
+        '<ul class="list"><li>'+esc(t("req1"))+' <a href="#">'+esc(t("officialSrc"))+'</a></li><li>'+esc(t("req2"))+' <a href="#">'+esc(t("officialSrc"))+'</a></li></ul>'+
+        '<div class="subhead">'+esc(t("exitReq"))+'</div>'+
+        '<ul class="list"><li>'+esc(t("req3"))+' <a href="#">'+esc(t("officialSrc"))+'</a></li></ul>'+
+        '<div class="callout" style="border-color:var(--warning);background:var(--warning-soft)">'+esc(t("complianceFoot"))+'</div>';
+    }
+    $("#detailCard").innerHTML='<div class="dpad">'+
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span class="flag">'+m.flag+'</span><span class="tag">'+esc(t("rank"))+' '+(S.sel+1)+'</span></div>'+
+      '<h2 class="d-country">'+esc(m.name[S.lang])+'</h2>'+
+      '<div class="d-score"><span class="n">'+m.score+'</span><span class="o">/100</span></div>'+
+      '<div class="tabs">'+tabs.map(function(tb){return '<button class="tab'+(tb[0]===S.tab?" on":"")+'" data-tab="'+tb[0]+'">'+esc(tb[1])+'</button>';}).join("")+'</div>'+
+      '<div class="panel-body">'+body+'</div></div>';
+    $$("#detailCard .tab").forEach(function(b){b.addEventListener("click",function(){S.tab=this.getAttribute("data-tab");renderDetail();});});
+  }
+  function renderDuo(){
+    $("#duo").innerHTML=
+      '<section class="card panel"><h3>'+esc(t("reportLimits"))+'</h3><div class="sub">'+esc(t("limitsSub"))+'</div>'+
+        '<ul class="limits"><li>'+esc(t("lim1"))+'</li><li>'+esc(t("lim2"))+'</li><li>'+esc(t("lim3"))+'</li><li>'+esc(t("lim4"))+'</li></ul></section>'+
+      '<section class="card panel"><h3>'+esc(t("whatsNext"))+'</h3><div class="sub">'+esc(t("nextSub"))+'</div>'+
+        '<ul class="list"><li>'+esc(t("next1"))+'</li><li>'+esc(t("next2"))+'</li></ul>'+
+        '<button class="btn btn-primary" style="margin-top:16px" data-toast="deepen">'+esc(t("deepen"))+'</button></section>';
+  }
+  function renderAll(){applyChrome();renderMyProduct();renderTiles();renderDecision();renderPipe();renderTable();renderDetail();renderDuo();bindToasts();}
+
+  function toast(msg){var el=document.createElement("div");el.className="toast";el.textContent=msg;document.body.appendChild(el);
+    setTimeout(function(){el.style.transition="opacity .3s";el.style.opacity="0";setTimeout(function(){el.remove();},300);},1800);}
+  function bindToasts(){$$("[data-toast]").forEach(function(b){b.addEventListener("click",function(){toast(t(this.getAttribute("data-toast"))+" ✓");});});}
+  $$("#langSeg button").forEach(function(b){b.addEventListener("click",function(){S.lang=this.getAttribute("data-lang");renderAll();toast(t("toastLang"));});});
+  $("#themeBtn").addEventListener("click",function(){var cur=document.documentElement.getAttribute("data-theme")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light");document.documentElement.setAttribute("data-theme",cur==="dark"?"light":"dark");});
+  $("#runBtn").addEventListener("click",function(){toast(t("analyze")+" ✓");});
+
+  renderAll();
+})();
+</script>
+</body>
+</html>

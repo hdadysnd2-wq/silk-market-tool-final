@@ -1,0 +1,6 @@
+# نشر الواجهة الثابتة على Netlify — publish the static frontend (web/) only.
+# الباك-إند (Python/FastAPI) لا يعمل على Netlify؛ انشره على Render/Railway،
+# ثم الصق رابطه في حقل «رابط الباك-إند» داخل الصفحة.
+[build]
+  publish = "web"
+  command = ""

@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # سقف زمني صريح: الافتراضي بلا ضبط ٣٦٠ دقيقة (٦ ساعات)، فأيّ تعليق حقيقي
+    # (قفل قاعدة، انتظار شبكة) كان سيحرق رصيد Actions صامتاً حتى ينتبه أحدٌ
+    # يدوياً. الحزمة الهرمتية تكتمل في ~٦–٨ دقائق، فـ٢٠ هامشٌ واسع يقتل التعليق
+    # سريعاً دون إسقاط تشغيلة سليمة بطيئة.
+    # Explicit cap: the 360-minute default would burn CI budget on a real hang.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest httpx
+      - name: Run tests
+        run: python -m pytest tests/ -q
+      # بوّابة §58: متن الـPR يجب أن يصرّح بنتيجة المراجعة الذاتية والملاحظات
+      # العالية. كانت القاعدة تعتمد على تذكّر شخص؛ صارت فحصاً. تعمل على أحداث
+      # pull_request فقط (تتخطّى push بنجاح). §58 self-review declaration gate.
+      - name: Self-review gate (CLAUDE.md §58)
+        run: python tools/check_self_review_gate.py

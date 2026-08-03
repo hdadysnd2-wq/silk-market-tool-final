@@ -1,0 +1,122 @@
+[
+  {
+    "code": "391710",
+    "description": "Artificial guts (sausage casings) of hardened protein or cellulosic plastics",
+    "sector": "plastics",
+    "keywords": ["casing", "sausage", "artificial gut", "cellulose casing"]
+  },
+  {
+    "code": "391721",
+    "description": "Tubes, pipes and hoses of polymers of ethylene, rigid",
+    "sector": "plastics",
+    "keywords": ["pipe", "polyethylene pipe", "hdpe", "rigid tube", "water pipe", "conduit"]
+  },
+  {
+    "code": "391723",
+    "description": "Tubes, pipes and hoses of polymers of vinyl chloride, rigid",
+    "sector": "plastics",
+    "keywords": ["pvc pipe", "vinyl pipe", "rigid pipe", "drainage pipe", "pvc conduit"]
+  },
+  {
+    "code": "391740",
+    "description": "Fittings for plastic tubes, pipes and hoses",
+    "sector": "plastics",
+    "keywords": ["fitting", "elbow", "coupling", "pipe fitting", "connector", "joint"]
+  },
+  {
+    "code": "392010",
+    "description": "Plates, sheets, film and foil of polymers of ethylene, non-cellular",
+    "sector": "plastics",
+    "keywords": ["film", "polyethylene film", "plastic film", "pe film", "sheet", "wrap", "stretch film", "shrink film"]
+  },
+  {
+    "code": "392020",
+    "description": "Plates, sheets, film and foil of polymers of propylene, non-cellular",
+    "sector": "plastics",
+    "keywords": ["polypropylene film", "bopp", "pp film", "propylene sheet", "packaging film"]
+  },
+  {
+    "code": "392321",
+    "description": "Sacks and bags of polymers of ethylene",
+    "sector": "plastics",
+    "keywords": ["bag", "sack", "plastic bag", "polyethylene bag", "packaging bag", "shopping bag", "garbage bag"]
+  },
+  {
+    "code": "392329",
+    "description": "Sacks and bags of other plastics",
+    "sector": "plastics",
+    "keywords": ["woven bag", "pp bag", "plastic sack", "packaging sack"]
+  },
+  {
+    "code": "392330",
+    "description": "Carboys, bottles, flasks and similar articles of plastics",
+    "sector": "plastics",
+    "keywords": ["bottle", "plastic bottle", "carboy", "flask", "pet bottle", "container", "jar"]
+  },
+  {
+    "code": "392390",
+    "description": "Articles for the conveyance or packing of goods, of plastics, other",
+    "sector": "plastics",
+    "keywords": ["packaging", "plastic packaging", "packing", "crate", "tray", "lid", "closure"]
+  },
+  {
+    "code": "080410",
+    "description": "Dates, fresh or dried",
+    "sector": "food",
+    "keywords": ["date", "dates", "khalas", "sukkary", "ajwa", "medjool", "dried dates", "fresh dates"]
+  },
+  {
+    "code": "080420",
+    "description": "Figs, fresh or dried",
+    "sector": "food",
+    "keywords": ["fig", "figs", "dried fig", "fresh fig"]
+  },
+  {
+    "code": "170410",
+    "description": "Chewing gum, whether or not sugar-coated",
+    "sector": "food",
+    "keywords": ["chewing gum", "gum", "bubble gum"]
+  },
+  {
+    "code": "170490",
+    "description": "Sugar confectionery not containing cocoa (incl. white chocolate), other",
+    "sector": "food",
+    "keywords": ["confectionery", "candy", "sweets", "toffee", "caramel", "halva", "nougat", "sugar sweets"]
+  },
+  {
+    "code": "190531",
+    "description": "Sweet biscuits",
+    "sector": "food",
+    "keywords": ["biscuit", "sweet biscuit", "cookie", "cookies", "digestive"]
+  },
+  {
+    "code": "190590",
+    "description": "Bread, pastry, cakes, biscuits and other bakers' wares, other",
+    "sector": "food",
+    "keywords": ["bakery", "pastry", "cake", "bread", "rusk", "cracker", "wafer"]
+  },
+  {
+    "code": "200899",
+    "description": "Fruit, nuts and other edible parts of plants, otherwise prepared, other",
+    "sector": "food",
+    "keywords": ["preserved fruit", "prepared fruit", "canned fruit", "fruit preserve", "stuffed dates", "date paste"]
+  },
+  {
+    "code": "200980",
+    "description": "Juice of any other single fruit or vegetable",
+    "sector": "food",
+    "keywords": ["juice", "fruit juice", "vegetable juice", "concentrate", "nectar"]
+  },
+  {
+    "code": "040110",
+    "description": "Milk and cream, not concentrated, of a fat content not exceeding 1%",
+    "sector": "food",
+    "keywords": ["milk", "fresh milk", "low fat milk", "skimmed milk"]
+  },
+  {
+    "code": "040690",
+    "description": "Cheese, other",
+    "sector": "food",
+    "keywords": ["cheese", "halloumi", "feta", "white cheese", "dairy cheese"]
+  }
+]

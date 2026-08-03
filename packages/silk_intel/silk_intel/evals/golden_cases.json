@@ -1,0 +1,102 @@
+[
+  {
+    "key": "qatar_peanut_butter",
+    "product": "زبدة الفول السوداني المقرمشة",
+    "market": "قطر",
+    "hs_code": "200811",
+    "origin": "SAU",
+    "structural": {
+      "required_sections": [
+        "القرار وأساسه",
+        "السوق بالأرقام",
+        "المنافسة والتسعير",
+        "مسار الدخول",
+        "المخاطر",
+        "المراجع"
+      ],
+      "clean_body": true,
+      "references_integrity": true,
+      "no_truncation_artifacts": true,
+      "plausibility_reconciled": true,
+      "gap_rate_max": 0.3
+    },
+    "verified_at": "2026-07-23",
+    "verified_by": "Claude Code — بوّابة بنيوية (أقسام/نظافة متن/سلامة مراجع/سقف فجوات). أرقام مرجعية حيّة (expected) مؤجّلة لبيئةٍ بمفتاح: تُملأ يدوياً من UN Comtrade بعد أوّل تشغيلة حيّة.",
+    "notes": "الحالة القياسية الأولى (GCC، سوق سهلة التغطية). سقف الفجوات 0.30 أوّليّ محافظ يُضيَّق نحو ≤0.05 بعد الأساس الحيّ."
+  },
+  {
+    "key": "netherlands_peanut_butter",
+    "product": "زبدة الفول السوداني المقرمشة",
+    "market": "هولندا",
+    "hs_code": "200811",
+    "origin": "SAU",
+    "structural": {
+      "required_sections": [
+        "القرار وأساسه",
+        "السوق بالأرقام",
+        "المنافسة والتسعير",
+        "مسار الدخول",
+        "المخاطر",
+        "المراجع"
+      ],
+      "clean_body": true,
+      "references_integrity": true,
+      "no_truncation_artifacts": true,
+      "plausibility_reconciled": true,
+      "gap_rate_max": 0.3
+    },
+    "verified_at": "2026-07-23",
+    "verified_by": "Claude Code — بوّابة بنيوية. سوق متقدّمة خارج الخليج تُمرِّن سلسلة التعريفة WITS → WTO.",
+    "notes": "سوق متقدّمة غير خليجية (تبليغ تجاري قويّ، تعريفة عبر WITS→WTO لا مصفوفة GCC). سقف 0.30 كقطر — التغطية متوقّعة قوية. أوّليّ محافظ يُضيَّق بعد الأساس الحيّ."
+  },
+  {
+    "key": "nigeria_peanut_butter",
+    "product": "زبدة الفول السوداني المقرمشة",
+    "market": "نيجيريا",
+    "hs_code": "200811",
+    "origin": "SAU",
+    "structural": {
+      "required_sections": [
+        "القرار وأساسه",
+        "السوق بالأرقام",
+        "المنافسة والتسعير",
+        "مسار الدخول",
+        "المخاطر",
+        "المراجع"
+      ],
+      "clean_body": true,
+      "references_integrity": true,
+      "no_truncation_artifacts": true,
+      "plausibility_reconciled": true,
+      "gap_rate_max": 0.45
+    },
+    "verified_at": "2026-07-23",
+    "verified_by": "Claude Code — بوّابة بنيوية. سوق نامية ضعيفة التبليغ التجاري تُمرِّن بيانات المرآة والمسارات المشتقّة.",
+    "notes": "سوق نامية، تبليغ كومتريد أضعف (المستورِد قد لا يبلّغ فتُستعمل مرآة الشركاء + المشتقّات). سقفٌ أعلى (0.45) عمداً: سوقٌ صعبةٌ تحتمل أرضيةَ فجواتٍ أعلى من السهلة (سقف per-case لا عالميّ). يُضيَّق بعد الأساس الحيّ لكن يبقى أعلى من قطر/هولندا."
+  },
+  {
+    "key": "india_dates",
+    "product": "تمور",
+    "market": "الهند",
+    "hs_code": "080410",
+    "origin": "SAU",
+    "structural": {
+      "required_sections": [
+        "القرار وأساسه",
+        "السوق بالأرقام",
+        "المنافسة والتسعير",
+        "مسار الدخول",
+        "المخاطر",
+        "المراجع"
+      ],
+      "clean_body": true,
+      "references_integrity": true,
+      "no_truncation_artifacts": true,
+      "plausibility_reconciled": true,
+      "gap_rate_max": 0.35
+    },
+    "verified_at": "2026-07-23",
+    "verified_by": "Claude Code — بوّابة بنيوية. فئة منتج مختلفة (تمور، فاكهة مجفّفة) خارج الأغذية المصنّعة تُمرِّن محرّك اشتراطات الدخول على فصل HS مختلف.",
+    "notes": "فئة منتج مختلفة (تمور HS 080410 لا زبدة مصنّعة 200811) وسوقٌ كبيرةٌ نامية — يُمرِّن اشتراطات الدخول ومسارات مختلفة. سقف 0.35 (بين السهلة والصعبة). أوّليّ يُضيَّق بعد الأساس الحيّ."
+  }
+]

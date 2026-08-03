@@ -24,6 +24,26 @@ class CountryRankingOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class BriefFigureOut(BaseModel):
+    """One decisive number with its provenance — the source line is never omitted."""
+
+    label: str
+    value: str | None  # None = a declared gap (I1), never a fabricated number
+    source: str
+    year: int | None
+
+
+class FunnelBriefOut(BaseModel):
+    """The brief-first funnel output (decision #7): decision + 3 numbers + limits."""
+
+    analysis_id: str
+    hs_code: str | None
+    decision: str
+    decisive_numbers: list[BriefFigureOut]
+    competitive_position: list[str]
+    limits: list[str]
+
+
 class AnalysisOut(BaseModel):
     id: uuid.UUID
     product_id: uuid.UUID | None

@@ -13,7 +13,16 @@ from sqlalchemy import func, select
 
 from app.db import session_scope
 from app.logging import get_logger
-from app.models import Factory, HSCode, Market, Product, User, UserRole, utcnow
+from app.models import (
+    Factory,
+    HSCode,
+    Market,
+    Product,
+    User,
+    UserRole,
+    WorldTrade,
+    utcnow,
+)
 from app.providers.registry import get_embedding_provider, get_llm_provider
 from app.security import hash_password
 from app.seeds.reference import HS_CODES, MARKETS
@@ -212,16 +221,73 @@ def _domain(name_en: str) -> str:
     return "-".join(slug.split()[:3]) + "-export.com"
 
 
+# --- world-trade demo data (funnel Stage 1) ------------------------------
+# Transit hubs carry inflated import volumes (re-exports) so the demo shows the
+# guard (I9) demoting them below genuine markets. HS6 codes match the demo
+# products so `make demo` renders a populated "world screened → top 5".
+_TRANSIT_HUBS = {"ARE", "NLD", "SGP", "HKG", "BEL"}
+_DEMO_HS6 = ["392010", "391723", "392321", "080410", "170490", "200980"]
+#: (importer_iso3, base import in USD millions). Hubs are deliberately high raw.
+_WORLD_IMPORTERS = [
+    ("USA", 78.0),
+    ("DEU", 52.0),
+    ("GBR", 41.0),
+    ("IND", 60.0),
+    ("FRA", 33.0),
+    ("ESP", 22.0),
+    ("BRA", 18.0),
+    ("EGY", 9.0),
+    ("SAU", 7.0),
+    ("ARE", 95.0),  # transit hub — inflated
+    ("NLD", 88.0),  # transit hub
+    ("SGP", 70.0),  # transit hub
+    ("HKG", 64.0),  # transit hub
+    ("BEL", 40.0),  # transit hub
+]
+
+
+def seed_world_trade(db, base_year: int = 2023) -> None:
+    """Populate the ``world_trade`` Stage-1 table for the demo HS6 codes.
+
+    Idempotent: skipped if any rows already exist. Values are deterministic (no
+    randomness) so the funnel ranking is reproducible in the demo and tests.
+    """
+    if db.scalar(select(func.count()).select_from(WorldTrade)):
+        return
+    for hs6 in _DEMO_HS6:
+        salt = int(hs6[-2:])  # vary volumes per code, deterministically
+        for iso3, base_m in _WORLD_IMPORTERS:
+            latest = (base_m + salt) * 1_000_000.0
+            prev = latest * 0.9  # ~+11% YoY
+            db.add(
+                WorldTrade(
+                    hs6=hs6,
+                    importer_iso3=iso3,
+                    year=base_year,
+                    import_usd=latest,
+                    yoy_growth=round((latest - prev) / prev, 4),
+                    cagr_3y=round(((latest / prev) ** (1 / 3)) - 1, 4),
+                    is_transit_hub=iso3 in _TRANSIT_HUBS,
+                    is_mirror=False,
+                    source="UN Comtrade (demo seed)",
+                )
+            )
+    db.flush()
+    log.info("seed_world_trade", codes=len(_DEMO_HS6), importers=len(_WORLD_IMPORTERS))
+
+
 def run() -> dict:
     with session_scope() as db:
         seed_reference(db)
         seed_users_and_factories(db)
+        seed_world_trade(db)
         counts = {
             "hs_codes": db.scalar(select(func.count()).select_from(HSCode)),
             "markets": db.scalar(select(func.count()).select_from(Market)),
             "users": db.scalar(select(func.count()).select_from(User)),
             "factories": db.scalar(select(func.count()).select_from(Factory)),
             "products": db.scalar(select(func.count()).select_from(Product)),
+            "world_trade": db.scalar(select(func.count()).select_from(WorldTrade)),
         }
     log.info("seed_complete", **counts)
     return counts

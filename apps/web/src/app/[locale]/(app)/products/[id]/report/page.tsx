@@ -70,6 +70,39 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
         <Stat n={usd(s.total_import_usd)} label={t("importValue")} />
       </div>
 
+      {report.funnel && report.funnel.top_markets.length > 0 && (
+        <section className="mt-6 rounded-xl bg-white p-5 ring-1 ring-black/5">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-lg font-semibold text-gray-900">{t("worldFunnel")}</h2>
+            <span className="text-sm text-gray-500">
+              {t("shortlisted")}: {report.funnel.shortlisted_count}
+            </span>
+          </div>
+          <ul className="mt-3 divide-y divide-gray-100">
+            {report.funnel.top_markets.map((m) => (
+              <li key={m.importer_iso3} className="flex items-center justify-between gap-3 py-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-gray-400">#{m.rank}</span>
+                  <span className="text-sm font-medium text-gray-900">{m.importer_iso3}</span>
+                  {m.is_transit_hub && <Pill warn>{t("transitHub")}</Pill>}
+                  {m.is_mirror && (
+                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
+                      {t("mirror")}
+                    </span>
+                  )}
+                </div>
+                <div className="text-end">
+                  <div className="text-sm text-gray-900 tabular-nums">{usd(m.import_usd)}</div>
+                  <div className="text-xs text-gray-400">
+                    {m.year != null ? `${t("dataYear")} ${m.year}` : "—"}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {report.markets.length === 0 ? (
         <p className="mt-6 rounded-xl bg-white p-8 text-center text-gray-500 ring-1 ring-black/5">
           {t("empty")}

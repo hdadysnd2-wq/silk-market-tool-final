@@ -124,6 +124,11 @@
     "importValue": "Import value",
     "competitors": "Top competitors",
     "legalReview": "Legal review",
+    "worldFunnel": "World market funnel",
+    "shortlisted": "Shortlisted markets",
+    "transitHub": "transit hub",
+    "mirror": "mirror data",
+    "dataYear": "Data year",
     "empty": "No markets analyzed yet. Find buyers to build your report."
   },
   "campaign": {

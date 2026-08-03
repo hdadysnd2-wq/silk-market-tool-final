@@ -1,6 +1,6 @@
 """SQLAlchemy models. Importing this package registers every table on Base."""
 
-from app.models.analysis import Analysis, HSClassification
+from app.models.analysis import Analysis, CountryRanking, HSClassification
 from app.models.base import (
     ALL_ENUMS,
     SENT_FAMILY_STATUSES,
@@ -40,6 +40,7 @@ __all__ = [
     "Campaign",
     "CampaignStatus",
     "Contact",
+    "CountryRanking",
     "Email",
     "EmailStatus",
     "Factory",

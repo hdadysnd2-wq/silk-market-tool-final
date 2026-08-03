@@ -43,7 +43,11 @@ tracking.**
 2. Repo A's engine becomes internal package `packages/silk_intel`, consumed by
    Celery workers via direct Python imports.
 3. Storage unified on **PostgreSQL** (+ Redis). Repo A's SQLite + disk cache
-   replaced behind a thin adapter on the `silk_storage` interface.
+   replaced behind a thin adapter on the `silk_storage` interface. This
+   deliberately supersedes the standalone-engine decisions in
+   `EXECUTION_PLAN.md` (#1 "SQLite stays", #5 "no Redis/RQ queues"), which
+   govern the engine as a standalone tool — not the merged product
+   (owner-confirmed 2026-08-03).
 4. `DataPoint` / `ProviderRecord` merge into ONE contract
    (`{value, source, provider, confidence, fetched_at, data_year, note}`). Every
    number carries this envelope. On failure: `value=None, confidence=0.0` + note.

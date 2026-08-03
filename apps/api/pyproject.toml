@@ -80,3 +80,8 @@ ignore = ["B008", "SIM108", "UP042"]
 testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = ["ignore::DeprecationWarning"]
+# Put this app's root at the front of sys.path so its own `tests` package wins.
+# The editable install of the engine (silk-intel) adds the engine's source root
+# to sys.path, and that root contains a sibling `tests/` dir; without this,
+# `from tests.conftest import ...` would resolve to the engine's tests, not ours.
+pythonpath = ["."]

@@ -7,26 +7,17 @@ confirms. The gate mirrors the world-analysis run (both are I2-gated the same wa
 
 from __future__ import annotations
 
-from app.models import Product
 
-
-def test_discover_blocked_until_hs_confirmed(client, db, factory, auth_headers):
-    # A post-classification, pre-confirmation product: hs_code is pre-filled with
-    # the top candidate, but the human has not confirmed it (hs_confirmed_by_user
-    # is False). Checking hs_code alone would wrongly let discovery through.
-    proposed = Product(
-        factory_id=factory.id,
-        name_ar="مقترح",
-        name_en="Proposed Widget",
-        currency="USD",
-        hs_code="392010",
-        hs_confirmed_by_user=False,
-    )
-    db.add(proposed)
+def test_discover_blocked_until_hs_confirmed(client, db, product, auth_headers):
+    # Reproduce the classifier's post-classification, pre-confirmation state on a
+    # product whose hs_code already satisfies the hs_codes FK: the code stays set
+    # (pre-filled from the top candidate) while the confirmation flag is off.
+    # Checking hs_code alone would wrongly let discovery through.
+    product.hs_confirmed_by_user = False
     db.commit()
 
     resp = client.post(
-        f"/api/v1/products/{proposed.id}/discover",
+        f"/api/v1/products/{product.id}/discover",
         json={"markets": ["IN"]},
         headers=auth_headers,
     )

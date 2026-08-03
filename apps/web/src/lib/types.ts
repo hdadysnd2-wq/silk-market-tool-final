@@ -71,6 +71,30 @@ export interface Market {
   is_us: boolean;
 }
 
+export interface CountryRanking {
+  rank: number;
+  importer_iso3: string;
+  year: number | null;
+  import_usd: number | null;
+  yoy_growth: number | null;
+  cagr_3y: number | null;
+  screen_score: number;
+  is_transit_hub: boolean;
+  is_mirror: boolean;
+  tags: string[] | null;
+  stage: number;
+}
+
+export interface Analysis {
+  id: string;
+  product_id: string | null;
+  product_name: string;
+  status: string;
+  deepen: boolean;
+  created_at: string;
+  rankings: CountryRanking[];
+}
+
 export interface ScoreFactor {
   points: number;
   max: number;

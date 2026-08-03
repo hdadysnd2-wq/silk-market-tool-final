@@ -6,6 +6,7 @@ import { useRouter } from "@/i18n/routing";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import { CompetitorSnapshot } from "@/components/CompetitorSnapshot";
+import { WorldFunnel } from "@/components/WorldFunnel";
 import type { CompetitorSnapshot as Snapshot, Market, Product } from "@/lib/types";
 
 export default function MarketsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -44,6 +45,8 @@ export default function MarketsPage({ params }: { params: Promise<{ id: string }
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900">{t("title")}</h1>
+
+      {product && <WorldFunnel product={product} />}
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">
         <div className="flex flex-wrap gap-2">

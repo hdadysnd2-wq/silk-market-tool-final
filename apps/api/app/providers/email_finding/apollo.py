@@ -34,7 +34,9 @@ class ApolloEmailFinderProvider:
                 response = client.post(APOLLO_SEARCH_URL, json=payload)
                 response.raise_for_status()
                 people = response.json().get("people", [])
-        except httpx.HTTPError as exc:
+        # Degrade on any failure (network, non-JSON body, unexpected shape) to an
+        # empty result rather than crashing the discovery run (I1).
+        except Exception as exc:
             log.warning("apollo_failed", company=company_name, error=str(exc))
             return []
 

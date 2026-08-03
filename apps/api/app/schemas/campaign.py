@@ -31,6 +31,14 @@ class CampaignOut(BaseModel):
     reported_rfqs: int
     created_at: datetime
 
+    # Computed for the approval UI (not stored on the row): whether this
+    # campaign's market is in the EU — so a Legitimate Interest Assessment is
+    # required before any send (I8) — and whether one has been recorded. The
+    # router populates them; they default False when the object is validated
+    # directly.
+    market_is_eu: bool = False
+    lia_recorded: bool = False
+
     model_config = {"from_attributes": True}
 
 

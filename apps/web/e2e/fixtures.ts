@@ -88,6 +88,8 @@ export const CAMPAIGN: Campaign = {
   reported_meetings: 0,
   reported_rfqs: 0,
   created_at: "2026-01-01T00:00:00Z",
+  market_is_eu: false,
+  lia_recorded: false,
 };
 
 function email(id: string, status: EmailStatus): Email {

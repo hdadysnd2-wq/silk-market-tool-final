@@ -12,6 +12,7 @@ from app.models import (
     Email,
     EmailStatus,
     LIARecord,
+    Market,
     Product,
     utcnow,
 )
@@ -30,6 +31,19 @@ from app.services import approval, sender_accounts
 from app.workers.tasks import draft_campaign_emails, send_approved_email
 
 router = APIRouter(tags=["campaigns"])
+
+
+def _campaign_out(db: DbDep, campaign: Campaign) -> CampaignOut:
+    """Serialize a campaign with the two approval-UI flags the row doesn't carry:
+    whether its market is in the EU (a Legitimate Interest Assessment is then
+    required before any send — I8) and whether a LIA has been recorded."""
+    out = CampaignOut.model_validate(campaign)
+    market = db.get(Market, campaign.market_iso2)
+    out.market_is_eu = bool(market and market.is_eu)
+    out.lia_recorded = (
+        db.scalar(select(LIARecord.id).where(LIARecord.campaign_id == campaign.id)) is not None
+    )
+    return out
 
 
 @router.post("/campaigns", response_model=CampaignOut, status_code=status.HTTP_201_CREATED)
@@ -60,7 +74,7 @@ def create_campaign(payload: CampaignCreate, db: DbDep, user: CurrentUser) -> Ca
     )
     db.add(campaign)
     db.commit()
-    return CampaignOut.model_validate(campaign)
+    return _campaign_out(db, campaign)
 
 
 @router.get("/campaigns", response_model=list[CampaignOut])
@@ -71,12 +85,12 @@ def list_campaigns(db: DbDep, user: CurrentUser) -> list[CampaignOut]:
         .where(Campaign.factory_id == factory.id)
         .order_by(Campaign.created_at.desc())
     ).all()
-    return [CampaignOut.model_validate(c) for c in rows]
+    return [_campaign_out(db, c) for c in rows]
 
 
 @router.get("/campaigns/{campaign_id}", response_model=CampaignOut)
-def get_campaign(campaign: Campaign = Depends(get_owned_campaign)) -> CampaignOut:
-    return CampaignOut.model_validate(campaign)
+def get_campaign(db: DbDep, campaign: Campaign = Depends(get_owned_campaign)) -> CampaignOut:
+    return _campaign_out(db, campaign)
 
 
 @router.post("/campaigns/{campaign_id}/draft", status_code=status.HTTP_202_ACCEPTED)
@@ -135,7 +149,7 @@ def report_outcome(
     if payload.reported_rfqs is not None:
         campaign.reported_rfqs = payload.reported_rfqs
     db.commit()
-    return CampaignOut.model_validate(campaign)
+    return _campaign_out(db, campaign)
 
 
 # --- The approval workflow -------------------------------------------------
@@ -213,7 +227,7 @@ def activate_campaign(db: DbDep, campaign: Campaign = Depends(get_owned_campaign
     if campaign.status == CampaignStatus.draft:
         campaign.status = CampaignStatus.active
         db.commit()
-    return CampaignOut.model_validate(campaign)
+    return _campaign_out(db, campaign)
 
 
 @router.get("/dashboard", response_model=DashboardStats)

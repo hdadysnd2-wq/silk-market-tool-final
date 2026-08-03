@@ -36,6 +36,28 @@ def run_discovery(product_id: str, market_iso2: str) -> dict:
         return summary
 
 
+@celery_app.task(name="app.workers.tasks.classify_product_hs")
+def classify_product_hs(product_name: str, deepen: bool = False) -> dict:
+    """Propose HS6 candidates for a product name via the engine (pipeline step 2).
+
+    Wires the Celery worker directly to ``silk_intel`` (locked decision #2) and
+    re-establishes the ``/deepen`` scope from the explicit payload flag (invariant
+    I5 — ``contextvars`` do not cross the process boundary). Output is a *proposal*
+    with confidence + ranked alternatives, each carrying its provenance envelope;
+    the human-confirmation gate (I2) is enforced before any code is committed —
+    this task never auto-commits an HS classification.
+    """
+    from app.services import engine
+
+    with engine.deepen_scope(deepen):
+        candidates = engine.resolve_hs_candidates(product_name)
+    return {
+        "product_name": product_name,
+        "deepen": deepen,
+        "proposals": [c.as_dict() for c in candidates],
+    }
+
+
 @celery_app.task(name="app.workers.tasks.draft_campaign_emails")
 def draft_campaign_emails(campaign_id: str) -> dict:
     from app.models import Campaign

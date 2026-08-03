@@ -3,26 +3,40 @@ name = "silk-intel"
 version = "0.1.0"
 description = "Silk market-intelligence engine (vendored from Silk-market-intelligence) — HS resolution, world-market ranking, competitor/correlation agents, provenance-first DataPoint model, unified render/reports. Consumed in-process by the Celery workers in apps/api."
 requires-python = ">=3.11"
-# Runtime deps mirror the vendored engine's pinned production requirements
-# (silk_intel/requirements.txt). Kept in sync deliberately; bump together.
+# CORE runtime deps — the minimum the engine needs to be imported as a LIBRARY
+# for HS resolution + market ranking (silk_data_layer uses requests). Kept tiny
+# and conflict-free so apps/api can depend on silk-intel without pulling the
+# engine's standalone-server stack (which pins fastapi==0.139.0, incompatible
+# with apps/api's fastapi<0.116). Feature-specific and server deps live in the
+# extras below; the full pinned set stays in silk_intel/requirements.txt, which
+# the engine's own hermetic CI installs unchanged.
 dependencies = [
     "requests==2.34.2",
-    "fastapi==0.139.0",
-    "uvicorn==0.50.0",
-    "python-docx==1.2.0",
-    "pytrends==4.9.2",
-    "bcrypt==4.2.1",
-    "python-multipart==0.0.20",
 ]
 
 [project.optional-dependencies]
+# The engine's standalone FastAPI server (silk_intel/api.py) — NOT needed when
+# the engine is consumed as a library by apps/api, which supersedes it. Opt-in
+# so the library co-installs with apps/api without a FastAPI version conflict.
+standalone = [
+    "fastapi==0.139.0",
+    "uvicorn==0.50.0",
+    "python-multipart==0.0.20",
+]
+# Word-report generation (silk_reports.render_docx). Phase 2 wiring; lazy-imported.
+reports = ["python-docx==1.2.0"]
+# Google-Trends enrichment (silk_trends_agent). Pulls pandas transitively — used
+# only by that agent (and two test fixtures), never the hot path (I7).
+trends = ["pytrends==4.9.2"]
+# silk_platform auth (bcrypt password hashing). Not used by the Celery wiring.
+platform = ["bcrypt==4.2.1"]
 # Test deps kept out of the pinned production set (matches Repo A's split).
-# pandas is pulled transitively by pytrends and is used ONLY by two test
-# fixtures that construct mock Google-Trends DataFrames — never by engine code
-# (enforced by tools/check_no_pandas.py at repo root).
 test = [
     "pytest>=8.0",
     "httpx>=0.27",
+    "python-docx==1.2.0",
+    "pytrends==4.9.2",
+    "bcrypt==4.2.1",
 ]
 
 # ---------------------------------------------------------------------------

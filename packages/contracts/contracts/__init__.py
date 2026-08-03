@@ -69,6 +69,26 @@ class DataContract(Generic[T]):
     def is_missing(self) -> bool:
         return self.value is None or self.confidence <= 0.0
 
+    def as_dict(self) -> dict[str, Any]:
+        """JSON-serializable view (assumes ``value`` is itself JSON-safe).
+
+        Used at process/queue boundaries (Celery task returns, API responses)
+        where the frozen dataclass must cross as plain JSON while keeping every
+        provenance field — the envelope never gets stripped to a bare number.
+        """
+        return {
+            "value": self.value,
+            "source": self.source,
+            "provider": self.provider,
+            "confidence": self.confidence,
+            "fetched_at": self.fetched_at,
+            "data_year": self.data_year,
+            "note": self.note,
+            "status": self.status,
+            "sources": list(self.sources),
+            "is_missing": self.is_missing,
+        }
+
 
 def missing(source: str, provider: str, note: str, *, status: str = "") -> DataContract[Any]:
     """Construct the canonical 'no data' envelope (I1).

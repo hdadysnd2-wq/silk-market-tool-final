@@ -25,6 +25,14 @@ dependencies = [
     "jinja2>=3.1.4",
     "boto3>=1.35.0",
     "email-validator>=2.2.0",
+    # The market-intelligence engine, consumed in-process by the Celery workers
+    # (Phase 1 wiring). Path source below; only its lean core (requests) installs
+    # — the engine's fastapi==0.139.0 server stack is an opt-in extra, so there is
+    # no conflict with this app's fastapi<0.116.
+    "silk-intel",
+    # The platform-wide unified data contract (DataPoint/ProviderRecord → one
+    # provenance envelope). Zero-dependency; path source below.
+    "silk-contracts",
 ]
 
 [project.optional-dependencies]
@@ -34,6 +42,13 @@ dev = [
     "ruff>=0.8.0",
     "sentry-sdk>=2.19.0",
 ]
+
+# The engine is a sibling package in this monorepo, installed editable from its
+# source tree (not PyPI). In CI the whole repo is checked out, so this relative
+# path resolves from apps/api's working directory.
+[tool.uv.sources]
+silk-intel = { path = "../../packages/silk_intel", editable = true }
+silk-contracts = { path = "../../packages/contracts", editable = true }
 
 [build-system]
 requires = ["hatchling"]
@@ -65,3 +80,8 @@ ignore = ["B008", "SIM108", "UP042"]
 testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = ["ignore::DeprecationWarning"]
+# Put this app's root at the front of sys.path so its own `tests` package wins.
+# The editable install of the engine (silk-intel) adds the engine's source root
+# to sys.path, and that root contains a sibling `tests/` dir; without this,
+# `from tests.conftest import ...` would resolve to the engine's tests, not ours.
+pythonpath = ["."]

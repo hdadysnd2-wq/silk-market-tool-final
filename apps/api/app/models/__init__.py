@@ -1,5 +1,6 @@
 """SQLAlchemy models. Importing this package registers every table on Base."""
 
+from app.models.analysis import Analysis, HSClassification
 from app.models.base import (
     ALL_ENUMS,
     SENT_FAMILY_STATUSES,
@@ -30,6 +31,7 @@ __all__ = [
     "APPROVAL_CHECK_SQL",
     "EMBEDDING_DIM",
     "SENT_FAMILY_STATUSES",
+    "Analysis",
     "AuditLog",
     "Base",
     "Buyer",
@@ -40,6 +42,7 @@ __all__ = [
     "Email",
     "EmailStatus",
     "Factory",
+    "HSClassification",
     "HSCode",
     "HSCorrection",
     "LIARecord",

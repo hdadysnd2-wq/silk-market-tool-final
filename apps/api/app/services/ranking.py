@@ -12,10 +12,27 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.logging import get_logger
-from app.models import Analysis, CountryRanking
+from app.models import Analysis, CountryRanking, Product
 from app.services.world_funnel import screen_world
 
 log = get_logger(__name__)
+
+
+def run_product_world_analysis(db: Session, product: Product, top_n: int = 20) -> Analysis:
+    """Create an analysis for a product and persist its world-funnel ranking.
+
+    The caller MUST ensure the product's HS code is human-confirmed (I2) — this
+    runs the world screen on ``product.hs_code`` and never re-classifies. Returns
+    the persisted ``Analysis`` (status ``ranked``) with its ``country_rankings``.
+    """
+    name = product.name_en or product.name_ar
+    analysis = Analysis(product_id=product.id, product_name=name, status="classified")
+    db.add(analysis)
+    db.flush()
+    rank_and_persist(db, analysis, product.hs_code, top_n=top_n)
+    analysis.status = "ranked"
+    db.flush()
+    return analysis
 
 
 def rank_and_persist(

@@ -293,6 +293,23 @@ export interface ReportMarket {
   top_buyers: ReportBuyer[];
 }
 
+export interface ReportFunnelMarket {
+  rank: number;
+  importer_iso3: string;
+  market_iso2: string | null;
+  year: number | null;
+  import_usd: number | null;
+  is_transit_hub: boolean;
+  is_mirror: boolean;
+  tags: string[] | null;
+}
+
+export interface ReportFunnel {
+  hs_code: string | null;
+  shortlisted_count: number;
+  top_markets: ReportFunnelMarket[];
+}
+
 export interface ProductReport {
   generated_at: string;
   locale: string;
@@ -331,6 +348,7 @@ export interface ProductReport {
     total_import_usd: number | null;
     top_market_iso2: string | null;
   };
+  funnel: ReportFunnel | null;
   markets: ReportMarket[];
 }
 

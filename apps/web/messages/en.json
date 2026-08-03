@@ -88,7 +88,9 @@
     "decisiveNumbers": "Decisive numbers",
     "competitivePosition": "Competitive position",
     "limits": "Limits of this report",
-    "viewCompetitors": "View competitors in this market"
+    "viewCompetitors": "View competitors in this market",
+    "discoverTopMarkets": "Discover buyers across the top markets",
+    "discoveringBuyers": "Starting discovery…"
   },
   "buyers": {
     "title": "Potential buyers",

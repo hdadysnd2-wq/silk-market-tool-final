@@ -74,6 +74,8 @@ export interface Market {
 export interface CountryRanking {
   rank: number;
   importer_iso3: string;
+  //: alpha-2 for the competitor/buyer deep-dive; null for an unmapped market.
+  market_iso2: string | null;
   year: number | null;
   import_usd: number | null;
   yoy_growth: number | null;

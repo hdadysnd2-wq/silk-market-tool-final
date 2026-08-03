@@ -11,6 +11,9 @@ from pydantic import BaseModel
 class CountryRankingOut(BaseModel):
     rank: int
     importer_iso3: str
+    #: The alpha-2 code the market/competitor machinery uses; None for a market
+    #: we hold no alpha-2 reference for (a declared gap, never fabricated — I1).
+    market_iso2: str | None = None
     year: int | None
     import_usd: float | None
     yoy_growth: float | None

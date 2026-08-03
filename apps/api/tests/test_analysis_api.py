@@ -51,6 +51,12 @@ def test_start_analysis_returns_transit_flagged_top5(client, db, product, auth_h
     assert nld["rank"] > rankings[0]["rank"]
     # Decision #8 — the data year travels with every figure.
     assert rankings[0]["year"] == YEAR
+    # The alpha-3→alpha-2 bridge lets the top-5 reach the competitor deep-dive;
+    # an unmapped market (XXX) is a declared gap, not a fabricated code (I1).
+    assert rankings[0]["market_iso2"] == "DE"  # DEU
+    assert nld["market_iso2"] == "NL"
+    xxx = next(r for r in rankings if r["importer_iso3"] == "XXX")
+    assert xxx["market_iso2"] is None
 
 
 def test_analysis_blocked_until_hs_confirmed(client, db, factory, auth_headers):

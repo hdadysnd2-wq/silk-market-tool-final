@@ -1,4 +1,12 @@
-import type { BuyerMatch, Campaign, Email, EmailStatus, SenderAccount } from "@/lib/types";
+import type {
+  BuyerMatch,
+  Campaign,
+  Email,
+  EmailStatus,
+  Factory,
+  ProductReport,
+  SenderAccount,
+} from "@/lib/types";
 
 /**
  * A JWT-shaped token whose payload base64-decodes to a factory_user role. The
@@ -121,3 +129,74 @@ export const EMAILS: Email[] = [
   email("e3", "approved"),
   email("e4", "sent"),
 ];
+
+// A factory whose DNS is unverified and whose warm-up hasn't started, so the
+// deliverability screen shows every action button (verify SPF/DKIM/DMARC,
+// "Start warm-up") in its actionable state.
+export const FACTORY: Factory = {
+  id: "fac-1",
+  name_ar: "مصنع التمور",
+  name_en: "Dates Factory",
+  description_ar: null,
+  description_en: null,
+  sector: "Food & Agriculture",
+  city: "Riyadh",
+  website: null,
+  contact_person: null,
+  contact_email: null,
+  contact_phone: null,
+  postal_address: null,
+  sending_domain: "mail.factory.example",
+  spf_ok: false,
+  dkim_ok: false,
+  dmarc_ok: false,
+  warmup_day: 0,
+  daily_send_count: 0,
+  sends_paused: false,
+  onboarding_completed: true,
+};
+
+// A minimal product report — enough for the report screen to render its header
+// and summary tiles and offer the "Download HTML" action. No markets so the
+// long market list stays out of the render.
+export const PRODUCT_REPORT: ProductReport = {
+  generated_at: "2026-01-01T00:00:00Z",
+  locale: "en",
+  factory: {
+    name_en: "Dates Factory",
+    name_ar: "مصنع التمور",
+    sector: "Food & Agriculture",
+    city: "Riyadh",
+    website: null,
+    contact_person: null,
+    contact_email: null,
+    contact_phone: null,
+  },
+  product: {
+    id: "prod-1",
+    name_en: "Premium Dates",
+    name_ar: "تمور فاخرة",
+    description_en: "Saudi Medjool dates",
+    description_ar: null,
+    image_url: null,
+    price_min: 10,
+    price_max: 20,
+    currency: "USD",
+    hs_code: "080410",
+    hs_description_en: "Dates, fresh or dried",
+    hs_description_ar: "تمور",
+    hs_confirmed_by_user: true,
+    classification_status: "classified",
+    hs_confidence: 0.92,
+  },
+  summary: {
+    markets_analyzed: 1,
+    total_buyers: 1,
+    total_contacts: 0,
+    verified_contacts: 0,
+    total_import_usd: 5_000_000,
+    top_market_iso2: "IN",
+  },
+  funnel: null,
+  markets: [],
+};

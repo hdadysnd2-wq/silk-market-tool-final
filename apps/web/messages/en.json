@@ -73,6 +73,19 @@
     "trend": "Trend",
     "share": "Share"
   },
+  "funnel": {
+    "title": "World market funnel",
+    "screenButton": "Screen world markets",
+    "screening": "Screening…",
+    "confirmFirst": "Confirm the product's HS code first to screen world markets.",
+    "screened": "Screened {count} markets → top 5",
+    "transitHub": "transit hub",
+    "transitHubHint": "Imports include re-exports — volume overstates real demand",
+    "mirror": "mirror data",
+    "noData": "no data",
+    "yearLabel": "{year}",
+    "cagr": "3-yr CAGR"
+  },
   "buyers": {
     "title": "Potential buyers",
     "relevanceScore": "Relevance score",

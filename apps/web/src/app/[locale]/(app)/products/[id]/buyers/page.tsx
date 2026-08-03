@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
@@ -14,10 +14,12 @@ export default function BuyersPage({ params }: { params: Promise<{ id: string }>
   const t = useTranslations("buyers");
   const router = useRouter();
   const search = useSearchParams();
-  const market = search.get("market");
+  const paramMarket = search.get("market");
 
   // Poll while discovery runs in the background worker.
-  const query = market ? `/products/${id}/buyers?market=${market}` : `/products/${id}/buyers`;
+  const query = paramMarket
+    ? `/products/${id}/buyers?market=${paramMarket}`
+    : `/products/${id}/buyers`;
   const { data, loading } = useApi<BuyerMatch[]>(query, 4000);
   // A verified connected mailbox is a hard prerequisite for creating a campaign
   // (also enforced server-side on POST /campaigns).
@@ -25,16 +27,33 @@ export default function BuyersPage({ params }: { params: Promise<{ id: string }>
   const hasVerifiedSender = (senders ?? []).some(
     (s) => s.verification_status === "verified",
   );
+
+  const buyers = data ?? [];
+
+  // A campaign targets a single market, and its drafts are built only from the
+  // buyers in that market. When the view is filtered (?market=…) that market is
+  // implied. On the unfiltered "discover across the top markets" view the buyer
+  // list can span several markets, so the user must choose which one to launch
+  // outreach into — otherwise the create action has no market to act on.
+  const marketsInList = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of data ?? []) if (m.market_iso2) set.add(m.market_iso2);
+    return [...set].sort();
+  }, [data]);
+  const [picked, setPicked] = useState<string | null>(null);
+  const effectiveMarket = paramMarket ?? picked ?? marketsInList[0] ?? null;
+  const showMarketPicker = !paramMarket && marketsInList.length > 1;
+
   const [creating, setCreating] = useState(false);
 
   async function createCampaign() {
-    if (!market || !hasVerifiedSender) return;
+    if (!effectiveMarket || !hasVerifiedSender) return;
     setCreating(true);
     try {
       const campaign = await api.post<Campaign>("/campaigns", {
         product_id: id,
-        market_iso2: market,
-        name: `Outreach → ${market}`,
+        market_iso2: effectiveMarket,
+        name: `Outreach → ${effectiveMarket}`,
       });
       await api.post(`/campaigns/${campaign.id}/draft`);
       router.push(`/campaigns/${campaign.id}/review`);
@@ -43,14 +62,12 @@ export default function BuyersPage({ params }: { params: Promise<{ id: string }>
     }
   }
 
-  const buyers = data ?? [];
-
   return (
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">{t("title")}</h1>
         {buyers.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Link
               href={`/products/${id}/report`}
               className="rounded-lg border border-brand-600 px-4 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"
@@ -58,13 +75,29 @@ export default function BuyersPage({ params }: { params: Promise<{ id: string }>
               {t("viewReport")}
             </Link>
             {hasVerifiedSender ? (
-              <button
-                onClick={createCampaign}
-                disabled={creating}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-              >
-                {t("createCampaign")}
-              </button>
+              <>
+                {showMarketPicker && (
+                  <select
+                    aria-label={t("campaignMarket")}
+                    value={effectiveMarket ?? ""}
+                    onChange={(e) => setPicked(e.target.value)}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
+                  >
+                    {marketsInList.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  onClick={createCampaign}
+                  disabled={creating || !effectiveMarket}
+                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+                >
+                  {t("createCampaign")}
+                </button>
+              </>
             ) : (
               <Link
                 href="/onboarding/email"

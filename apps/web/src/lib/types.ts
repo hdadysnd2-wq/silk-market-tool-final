@@ -95,6 +95,25 @@ export interface Analysis {
   rankings: CountryRanking[];
 }
 
+export interface BriefFigure {
+  label: string;
+  //: null = a declared gap (I1), never a fabricated number.
+  value: string | null;
+  //: The provenance line shown under the figure — never omitted (decision #7).
+  source: string;
+  year: number | null;
+}
+
+export interface FunnelBrief {
+  analysis_id: string;
+  hs_code: string | null;
+  decision: string;
+  decisive_numbers: BriefFigure[];
+  competitive_position: string[];
+  //: "Limits of this report" — the declared gaps, never compressed away.
+  limits: string[];
+}
+
 export interface ScoreFactor {
   points: number;
   max: number;

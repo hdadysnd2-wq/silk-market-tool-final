@@ -46,3 +46,26 @@ export const BUYER_MATCH: BuyerMatch = {
   evidence: { summary: "Imported 42 shipments in the last 12 months" },
   contacts: [],
 };
+
+// A second buyer in a different market, so the unfiltered buyers view (the
+// "discover across the top markets" landing) spans more than one market.
+export const BUYER_MATCH_NL: BuyerMatch = {
+  buyer: {
+    id: "buyer-2",
+    name: "Rotterdam Trading BV",
+    country_iso2: "NL",
+    city: "Rotterdam",
+    domain: "rtx.example.nl",
+    website: null,
+    industry: "Wholesale",
+    employee_count: 60,
+    source: "comtrade",
+    source_confidence: 0.8,
+    legal_review_required: false,
+  },
+  market_iso2: "NL",
+  relevance_score: 74,
+  score_breakdown: null,
+  evidence: { summary: "Imported 18 shipments in the last 12 months" },
+  contacts: [],
+};

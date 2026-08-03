@@ -102,6 +102,7 @@
     "contacts": "Contacts",
     "source": "Source",
     "createCampaign": "Create campaign",
+    "campaignMarket": "Outreach market",
     "empty": "No buyers found yet. Discovery in progress…",
     "factors": {
       "hs_match": "HS-code match",

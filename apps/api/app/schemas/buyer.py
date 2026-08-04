@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from pydantic import BaseModel
 
@@ -28,6 +29,12 @@ class BuyerOut(BaseModel):
     source: str
     source_confidence: float
     legal_review_required: bool
+    #: Lead validity (rule 6 / I8): when the record was last refreshed, the instant
+    #: it stops being current (freshness + 90d), and whether it is now stale. A
+    #: stale lead must be shown with an explicit warning, never as current data.
+    freshness_at: datetime | None = None
+    valid_until: datetime | None = None
+    is_stale: bool = False
 
     model_config = {"from_attributes": True}
 

@@ -74,13 +74,15 @@ def test_enrich_reranks_shortlist_and_persists_stage2(client, db, product, auth_
     assert res.json()["task_id"]
 
     out = client.get(f"/api/v1/analyses/{aid}", headers=auth_headers).json()
-    assert out["status"] == "enriched"
+    # Stage 2 auto-chains the free Stage-3 deep-dive, so the terminal is `deepened`.
+    assert out["status"] in ("enriched", "deepened")
 
     rankings = out["rankings"]
     assert rankings, "shortlist present"
-    # Every enriched row carries a Stage-2 score, stage=2 and the signals.
+    # Every enriched row carries a Stage-2 score + signals; the top-5 finalists are
+    # then promoted to stage 3 by the auto-chained deep-dive (stage 2 for the rest).
     for r in rankings:
-        assert r["stage"] == 2
+        assert r["stage"] in (2, 3)
         assert r["stage2_score"] is not None
         assert r["enrichment"] is not None
         assert "applied_tariff_pct" in r["enrichment"]

@@ -112,3 +112,7 @@ class CountryRanking(UUIDMixin, TimestampMixin, Base):
     #: ppp_gni_per_capita, source, note}). None until Stage 2 runs; a failed
     #: signal is a declared gap inside it (I1), never a fabricated number.
     enrichment: Mapped[dict | None] = mapped_column(JSONB)
+    #: Stage-3 per-market deep-dive built from the engine's FREE offline layers
+    #: ({competitors, requirements, threads}). None until Stage 3 runs; a finalist
+    #: with no alpha-2 mapping is a declared gap inside it (I1), never fabricated.
+    deepdive: Mapped[dict | None] = mapped_column(JSONB)

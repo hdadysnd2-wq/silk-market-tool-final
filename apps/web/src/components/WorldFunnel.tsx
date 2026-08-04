@@ -80,13 +80,17 @@ export function WorldFunnel({
     setEnriching(true);
     setError(null);
     try {
-      // 202 Accepted: Stage-2 enrichment runs on a worker. Poll the analysis
-      // until it's `enriched` before reading the re-ranked result.
+      // 202 Accepted: Stage-2 enrichment runs on a worker and auto-chains the
+      // free Stage-3 deep-dive, so the terminal status becomes `deepened`. Poll
+      // until either terminal (or a finalist reaches stage 3) before reading.
       const accepted = await api.post<AnalysisAccepted>(`/analyses/${analysis.id}/enrich`);
       const analysisId = accepted.analysis.id;
       const run = await pollUntil(
         () => api.get<Analysis>(`/analyses/${analysisId}`),
-        (a) => a.status === "enriched",
+        (a) =>
+          a.status === "enriched" ||
+          a.status === "deepened" ||
+          a.rankings.some((r) => r.stage === 3),
       );
       setAnalysis(run);
       setBrief(await api.get<FunnelBrief>(`/analyses/${analysisId}/brief`));

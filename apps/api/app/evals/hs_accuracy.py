@@ -202,9 +202,7 @@ def run_harness(
             classify_product(db, product)
 
             candidates = product.hs_candidates or []
-            products_report.append(
-                _score_entry(entry, candidates, product.classification_status)
-            )
+            products_report.append(_score_entry(entry, candidates, product.classification_status))
 
         return {
             "generated_offline": generated_offline,
@@ -235,8 +233,7 @@ def _render_report(report: dict[str, Any]) -> str:
     if offline:
         lines.append("HS ACCURACY HARNESS — MOCK RUN (offline)")
         lines.append(
-            "Measures the engine's NAME-BASED resolver, NOT real vision "
-            "(no ANTHROPIC_API_KEY)."
+            "Measures the engine's NAME-BASED resolver, NOT real vision (no ANTHROPIC_API_KEY)."
         )
     else:
         lines.append("HS ACCURACY HARNESS — LIVE RUN")
@@ -270,12 +267,9 @@ def _render_report(report: dict[str, Any]) -> str:
         f"  top1_hs6={pct('top1_hs6')}  top3_hs6={pct('top3_hs6')}  "
         f"top1_hs4={pct('top1_hs4')}  top1_hs2={pct('top1_hs2')}"
     )
+    lines.append(f"  gap_rate={pct('gap_rate')}  mean_top1_confidence={mean_conf_s}")
     lines.append(
-        f"  gap_rate={pct('gap_rate')}  mean_top1_confidence={mean_conf_s}"
-    )
-    lines.append(
-        f"  scored={agg['scored_count']}  unscored={agg['unscored_count']}  "
-        f"total={agg['total']}"
+        f"  scored={agg['scored_count']}  unscored={agg['unscored_count']}  total={agg['total']}"
     )
     lines.append("=" * 78)
     return "\n".join(lines)

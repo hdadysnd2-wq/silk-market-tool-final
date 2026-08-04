@@ -1,9 +1,13 @@
 """UN Comtrade adapter — free aggregate trade statistics.
 
-Comtrade needs no API key, so this is the one integration that talks to a real
-external service by default. Responses are cached on disk and the adapter falls
-back to committed fixtures when the network is unavailable or ``COMTRADE_OFFLINE``
-is set, which keeps CI and demos deterministic.
+Offline (``COMTRADE_OFFLINE``, the CI/demo default) the adapter reads committed
+fixtures, which keeps CI and demos deterministic on zero keys. *Live*, it does
+not talk to Comtrade directly: every live call routes through the engine's
+hardened data layer (``silk_data_layer.comtrade_trade``, locked decision #5),
+which carries provenance, per-host throttling, a circuit breaker, per-source
+cache TTL, and mirror-data fallback — none of which this thin adapter has. When
+every year's live fetch fails, it degrades to the committed fixtures rather than
+fabricate a figure (I1).
 
 Comtrade publishes country-level aggregates, not company-level shipments, so
 ``importer_shipments`` returns nothing here; transaction-level data comes from
@@ -17,8 +21,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import httpx
-
 from app.logging import get_logger
 from app.providers.base import (
     ExporterShare,
@@ -31,7 +33,6 @@ from app.providers.countries import country_name, iso2_to_m49, m49_to_iso2
 
 log = get_logger(__name__)
 
-COMTRADE_URL = "https://comtradeapi.un.org/data/v1/get/C/A/HS"
 FIXTURES = Path(__file__).resolve().parents[2] / "seeds" / "fixtures" / "comtrade"
 
 
@@ -160,31 +161,65 @@ class ComtradeProvider:
         if self.offline:
             return self._read_cache(cache_path, hs_code, importer_iso2)
 
-        try:
-            params = {
-                "reporterCode": iso2_to_m49(importer_iso2),
-                "flowCode": "M",  # imports into the target market
-                "cmdCode": hs_code,
-                "period": ",".join(str(datetime.now(UTC).year - offset) for offset in range(1, 4)),
-                "partnerCode": "",
-                "includeDesc": "true",
-            }
-            headers = {"Ocp-Apim-Subscription-Key": self._api_key} if self._api_key else {}
-            with httpx.Client(timeout=self._timeout) as client:
-                response = client.get(COMTRADE_URL, params=params, headers=headers)
-                response.raise_for_status()
-                payload = response.json()
-            payload["_fetched_at"] = datetime.now(UTC).isoformat()
-            self._write_cache(cache_path, payload)
-            return payload
-        except Exception as exc:  # network, rate limit, schema drift
+        payload = self._fetch_live(hs_code, importer_iso2)
+        if payload is None:
+            # Every year's fetch failed (rate limit / network / circuit open).
+            # Degrade to committed fixtures — never fabricate a figure (I1).
             log.warning(
                 "comtrade_fetch_failed_using_cache",
                 hs_code=hs_code,
                 importer=importer_iso2,
-                error=str(exc),
             )
             return self._read_cache(cache_path, hs_code, importer_iso2)
+        self._write_cache(cache_path, payload)
+        return payload
+
+    def _fetch_live(self, hs_code: str, importer_iso2: str) -> dict[str, Any] | None:
+        """Live Comtrade via the engine's hardened data layer (locked decision #5).
+
+        All *live* Comtrade calls go through ``silk_data_layer.comtrade_trade`` —
+        it carries provenance, per-host throttling, a circuit breaker, per-source
+        cache TTL, and mirror-data fallback; this adapter has none of those. One
+        call per year (imports into the target market, every partner). Returns a
+        ``{"data": [...]}`` payload in the shape the parsers expect, or ``None`` if
+        *every* year's fetch failed (the caller then degrades to committed
+        fixtures — a failed source is a declared gap, never a fabricated one, I1).
+        """
+        import silk_data_layer
+
+        # Per-analysis call budget (locked decision #5): each year is one live
+        # call. When the analysis budget is exhausted we stop and let the caller
+        # degrade to cache/fixtures — a spent budget is a declared gap, never a
+        # fabricated figure (I1). Unmetered (returns True) outside a budget scope.
+        from app.services.api_budget import charge
+
+        reporter_m49 = iso2_to_m49(importer_iso2)
+        current_year = datetime.now(UTC).year
+        records: list[dict[str, Any]] = []
+        any_ok = False
+        for offset in range(1, 4):
+            year = current_year - offset
+            if not charge(1, source="comtrade"):
+                log.warning(
+                    "comtrade_budget_exhausted",
+                    hs_code=hs_code,
+                    importer=importer_iso2,
+                    year=year,
+                )
+                break
+            # partner="all" omits partnerCode so Comtrade returns every partner;
+            # None means the year's fetch failed (429/network) — distinct from an
+            # empty-but-successful [] (the engine layer already logged the cause).
+            rows = silk_data_layer.comtrade_trade(
+                hs_code, reporter_m49, year, flow="M", partner="all"
+            )
+            if rows is None:
+                continue
+            any_ok = True
+            records.extend(rows)
+        if not any_ok:
+            return None
+        return {"data": records, "_fetched_at": datetime.now(UTC).isoformat()}
 
     def _read_cache(self, path: Path, hs_code: str, importer_iso2: str) -> dict[str, Any]:
         if path.exists():

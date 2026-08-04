@@ -39,6 +39,16 @@ from app.services.scoring import ScoringInput, score_buyer
 
 log = get_logger(__name__)
 
+
+class HsNotConfirmedError(ValueError):
+    """Discovery attempted on an HS code the human has not confirmed (I2).
+
+    Subclasses ``ValueError`` so existing broad ``except ValueError`` handlers
+    keep working, while callers that care can distinguish the confirmation gate
+    from an unclassified product.
+    """
+
+
 _SEARCH_TERMS = {
     "39": "plastics packaging distributor importer",
     "08": "dates dried fruit importer distributor",
@@ -53,6 +63,15 @@ def discover_buyers(db: Session, product: Product, market_iso2: str) -> dict:
     """Run the full pipeline; return a small summary for logging/telemetry."""
     if not product.hs_code:
         raise ValueError("Product must be classified before discovery")
+    # I2 (defense-in-depth). Discovery fetches buyer PII and must run only on a
+    # *human-confirmed* HS code. The API route (``api/buyers.discover``) already
+    # checks this, but the classifier pre-fills ``hs_code`` with its top candidate
+    # before the user confirms — so ``hs_code`` alone is not proof of confirmation,
+    # and a direct service/worker invocation would otherwise bypass the gate.
+    # Re-checking here makes the gate hold on every code path, mirroring the
+    # three-layer discipline the send path uses for I3.
+    if not product.hs_confirmed_by_user:
+        raise HsNotConfirmedError("HS code must be confirmed before discovering buyers")
 
     market = db.get(Market, market_iso2)
     if market is None:
@@ -273,7 +292,33 @@ def _score(db: Session, product: Product, buyer: Buyer, market_iso2: str) -> Non
     match.relevance_score = breakdown.total
     match.score_breakdown = breakdown.as_dict()
     match.evidence = evidence
+    # I8 — record the lawful basis for direct marketing to this lead, derived from
+    # the evidence that established it (PDPL Art. 25 prior-interaction / GDPR).
+    match.lawful_basis, match.basis_note = _lawful_basis(shipments, evidence)
     db.flush()
+
+
+def _lawful_basis(shipments: list, evidence: dict) -> tuple[str, str]:
+    """Lawful basis + note for contacting this lead (I8 / PDPL Art. 25 / GDPR).
+
+    Import history on file is a prior commercial interaction with the product
+    category — the basis for B2B direct marketing under Saudi PDPL Art. 25 and a
+    GDPR legitimate-interest basis. A directory-only lead has no such history and
+    is flagged for review before any outreach. Never asserts consent that was not
+    established — a weaker basis is labelled as such, not inflated.
+    """
+    if shipments:
+        note = (
+            f"{evidence.get('summary', 'Import history on file')} — prior commercial "
+            "activity supports B2B direct marketing (PDPL Art. 25 prior-interaction "
+            "basis; GDPR legitimate interest)."
+        )
+        return "prior_import_activity", note
+    return (
+        "directory_listing",
+        "Public business-directory listing; no import history on file — review the "
+        "lawful basis before direct marketing.",
+    )
 
 
 def _evidence(recent_shipments: list, source: str, hs_code: str) -> dict:

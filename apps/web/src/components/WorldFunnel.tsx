@@ -39,6 +39,7 @@ export function WorldFunnel({
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [brief, setBrief] = useState<FunnelBrief | null>(null);
   const [loading, setLoading] = useState(false);
+  const [enriching, setEnriching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const confirmed = Boolean(product.hs_code && product.hs_confirmed_by_user);
@@ -64,11 +65,29 @@ export function WorldFunnel({
     }
   }
 
+  // Stage 2: budgeted enrichment (applied tariff + PPP) re-ranks the shortlist to
+  // the top 5. It's a paid/budgeted step, so it's an explicit action.
+  async function refine() {
+    if (!analysis) return;
+    setEnriching(true);
+    setError(null);
+    try {
+      const run = await api.post<Analysis>(`/analyses/${analysis.id}/enrich`);
+      setAnalysis(run);
+      setBrief(await api.get<FunnelBrief>(`/analyses/${run.id}/brief`));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setEnriching(false);
+    }
+  }
+
   const usd = (v: number | null) =>
     v === null ? t("noData") : `$${Math.round(v).toLocaleString("en-US")}`;
   const pct = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(1)}%`);
 
   const top5 = analysis?.rankings.slice(0, 5) ?? [];
+  const enriched = top5.some((r) => r.stage === 2);
 
   return (
     <section className="mt-8 rounded-xl border border-gray-200 bg-white p-5">
@@ -141,9 +160,22 @@ export function WorldFunnel({
 
       {analysis && (
         <div className="mt-4">
-          <p className="text-sm text-gray-500">
-            {t("screened", { count: analysis.rankings.length })}
-          </p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-gray-500">
+              {/* The real world count screened (funnel transparency), not the
+                  shortlist length; older runs without it fall back gracefully. */}
+              {t("screened", { count: analysis.total_screened ?? analysis.rankings.length })}
+            </p>
+            {/* Stage 2 — budgeted enrichment re-ranks the shortlist to the top 5. */}
+            <button
+              type="button"
+              onClick={refine}
+              disabled={enriching}
+              className="shrink-0 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-60"
+            >
+              {enriching ? t("refining") : enriched ? t("refined") : t("refine")}
+            </button>
+          </div>
           <ul className="mt-3 divide-y divide-gray-100">
             {top5.map((r) => {
               const iso2 = r.market_iso2;
@@ -174,6 +206,12 @@ export function WorldFunnel({
                       {r.year ? t("yearLabel", { year: r.year }) : t("noData")} · {t("cagr")}{" "}
                       {pct(r.cagr_3y)}
                     </div>
+                    {/* Stage-2 signal, when enrichment has run. */}
+                    {r.enrichment?.applied_tariff_pct != null && (
+                      <div className="text-xs text-gray-400">
+                        {t("tariffLabel")} {pct(r.enrichment.applied_tariff_pct)}
+                      </div>
+                    )}
                   </div>
                 </>
               );

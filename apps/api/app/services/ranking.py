@@ -46,6 +46,9 @@ def rank_and_persist(
     declared gap (I1).
     """
     result = screen_world(db, hs6, top_n=top_n)
+    # Funnel transparency: record the full world count screened, not the shortlist
+    # length, so the report can show "screened N → shortlisted M → top 5".
+    analysis.total_screened = result.total_screened
     rankings: list[CountryRanking] = []
     for rank, m in enumerate(result.markets, start=1):
         cr = CountryRanking(

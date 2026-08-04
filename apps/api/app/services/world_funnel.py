@@ -1,8 +1,11 @@
 """The 3-stage world funnel — Stage 1: screen every market locally (zero API calls).
 
 Stage 1 is a single SQL query over the precomputed ``world_trade`` table: for one
-HS6, rank every importer in the world by import volume for the latest available
-year. The **transit-port guard (I9)** is applied here — re-export hubs (AE, NL,
+HS6, rank every importer in the world by import volume **modulated by its
+multi-year trend** (locked decision #8) for the latest available year — the
+scoring itself is delegated to the engine (``silk_market_ranker``), so the
+platform keeps no parallel scorer. The **transit-port guard (I9)** is applied
+here — re-export hubs (AE, NL,
 SG, HK, BE, …), whose import volumes are inflated by transshipment, carry a
 visible tag *and* a score penalty so they do not silently top the ranking.
 Mirror-derived rows carry a "mirror data" tag; a missing figure is surfaced as a
@@ -20,6 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import WorldTrade
+from app.services import engine
 
 #: I9 — transit hubs must not silently top the ranking. Their screening score is
 #: multiplied by this factor (imports include re-exports, so raw volume overstates
@@ -106,13 +110,15 @@ def screen_world(db: Session, hs6: str, top_n: int = 20) -> Stage1Result:
 
 def _screen_row(row: WorldTrade) -> ScreenedMarket:
     tags: list[str] = []
-    volume = float(row.import_usd) if row.import_usd is not None else 0.0
     if row.import_usd is None:
         tags.append(NO_DATA_TAG)  # I1 — declared gap, scored as 0 not fabricated
     if row.is_mirror:
         tags.append(MIRROR_TAG)
 
-    score = volume
+    # The engine owns the screening score (decision #8: the multi-year trend
+    # feeds it — a growing market outranks a flat one of equal volume). A missing
+    # volume returns 0.0 there (declared gap, I1), never a fabricated number.
+    score = engine.stage1_screen_score(row.import_usd, row.cagr_3y, row.yoy_growth)
     if row.is_transit_hub:
         # I9 — penalize AND flag; never let a re-export hub silently top the list.
         score *= TRANSIT_PENALTY

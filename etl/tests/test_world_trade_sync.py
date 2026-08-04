@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import etl.world_trade_sync as wt
 
 
@@ -65,3 +67,55 @@ def test_build_rows_emits_latest_year_with_flags_and_provenance():
 def test_build_rows_skips_importers_with_no_usable_data():
     rows = wt.build_rows("080410", {"XXX": {2022: None}})
     assert rows == []
+
+
+# --- run() orchestration (fetch → transform → upsert), with injected seams -----
+# The heavy fetch (pandas + comtradeapicall) and DB upsert (SQLAlchemy) are lazy
+# and unavailable in the etl CI job, so run() is verified with fakes: it must wire
+# the fetched series through build_rows into the writer and return the row count.
+
+
+def test_run_orchestrates_fetch_transform_and_upsert():
+    captured: dict = {}
+
+    def fake_fetcher(hs6, years):
+        assert hs6 == "080410"
+        assert list(years) == [2021, 2022]
+        return (
+            {
+                "NLD": {2021: 900.0, 2022: 1000.0},
+                "IND": {2022: 500.0},
+            },  # NLD transit hub
+            {"NLD": {2022: 5.0}, "IND": {}},
+            {"IND"},  # mirror-derived
+        )
+
+    def fake_writer(rows):
+        captured["rows"] = rows
+        return len(rows)
+
+    written = wt.run("080410", [2021, 2022], fetcher=fake_fetcher, writer=fake_writer)
+
+    assert written == 2
+    by_iso = {r["importer_iso3"]: r for r in captured["rows"]}
+    assert by_iso["NLD"]["is_transit_hub"] is True  # I9 flag survives the pipeline
+    assert by_iso["NLD"]["yoy_growth"] is not None  # 900 → 1000
+    assert by_iso["NLD"]["import_qty"] == 5.0
+    assert by_iso["IND"]["is_mirror"] is True  # I1/I9 provenance from the fetcher
+    assert by_iso["NLD"]["source"] == "UN Comtrade"
+    assert by_iso["NLD"]["fetched_at"] is not None  # stamped for the year display
+    # Every row is upsert-ready (keys match the table columns).
+    for row in captured["rows"]:
+        assert set(row) == set(wt.WORLD_TRADE_COLUMNS)
+
+
+def test_run_requires_an_hs6_code():
+    with pytest.raises(ValueError):
+        wt.run(None, fetcher=lambda *a: ({}, {}, set()), writer=lambda rows: 0)
+
+
+def test_default_years_are_three_recent_ascending():
+    years = wt._default_years()
+    assert len(years) == 3
+    assert years == sorted(years)
+    assert years[-1] - years[0] == 2

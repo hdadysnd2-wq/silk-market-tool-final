@@ -1,11 +1,19 @@
-"""Buyer discovery honours the I2 human-confirm gate at the API edge.
+"""Buyer discovery honours the I2 human-confirm gate on every code path.
 
 Discovery fetches buyer PII, so it must run only on a *human-confirmed* HS code —
 never on the code the classifier pre-fills with its top candidate before the user
 confirms. The gate mirrors the world-analysis run (both are I2-gated the same way).
+
+Defense-in-depth: the gate is enforced at three layers — the API route, the
+``discover_buyers`` service, and the ``run_discovery`` worker task — so no code
+path (a direct service call, or a job enqueued past the API) can bypass it.
 """
 
 from __future__ import annotations
+
+import pytest
+
+from app.services.buyer_discovery import HsNotConfirmedError, buyers_for_product, discover_buyers
 
 
 def test_discover_blocked_until_hs_confirmed(client, db, product, auth_headers):
@@ -41,3 +49,27 @@ def test_discover_allowed_once_confirmed(client, product, auth_headers, monkeypa
     assert resp.status_code == 202, resp.text
     assert resp.json()["markets"] == ["IN", "DE"]
     assert [market for _, market in calls] == ["IN", "DE"]  # one job per market
+
+
+def test_service_layer_blocks_unconfirmed_hs(db, product):
+    # Layer 2: a *direct* service call must refuse an unconfirmed HS code, even
+    # though the API route never reached — this is the real backstop.
+    product.hs_confirmed_by_user = False
+    db.commit()
+
+    with pytest.raises(HsNotConfirmedError):
+        discover_buyers(db, product, "IN")
+
+
+def test_worker_layer_blocks_unconfirmed_hs(db, product):
+    # Layer 3: a job enqueued directly (bypassing the API gate) degrades to an
+    # error and creates no buyers, rather than running discovery or crashing.
+    from app.workers.tasks import run_discovery
+
+    product.hs_confirmed_by_user = False
+    db.commit()
+
+    result = run_discovery(str(product.id), "IN")
+    assert result == {"error": "hs code not confirmed"}
+    # Nothing was discovered for this product/market.
+    assert buyers_for_product(db, product.id, "IN") == []

@@ -15,7 +15,11 @@ from jinja2 import Template
 
 from app.providers.base import LLMMessage, LLMResponse
 from app.providers.determinism import rng_for
-from app.providers.llm.prompts import EMAIL_SCHEMA_TITLE, HS_SCHEMA_TITLE
+from app.providers.llm.prompts import (
+    EMAIL_SCHEMA_TITLE,
+    HS_SCHEMA_TITLE,
+    PRODUCT_VISION_SCHEMA_TITLE,
+)
 
 FIXTURES = Path(__file__).resolve().parents[2] / "seeds" / "fixtures"
 
@@ -166,6 +170,8 @@ class MockLLMProvider:
             parsed = self._classify(prompt)
         elif title == EMAIL_SCHEMA_TITLE:
             parsed = self._draft_email(prompt)
+        elif title == PRODUCT_VISION_SCHEMA_TITLE:
+            parsed = self._describe(prompt)
         else:
             parsed = None
         text = json.dumps(parsed, ensure_ascii=False) if parsed else "(mock response)"
@@ -211,6 +217,26 @@ class MockLLMProvider:
             )
         return {"candidates": candidates}
 
+    def _describe(self, prompt: str) -> dict[str, Any]:
+        """Deterministic product understanding (AR/EN description + attributes).
+
+        The mock cannot see the image, so it derives an honest stand-in from the
+        prompt text (the real vision adapter does the real work once keyed). Values
+        are deterministic so the pipeline is reproducible offline.
+        """
+        name = _prompt_field(prompt, "Product name:") or "the product"
+        seller = _prompt_field(prompt, "Seller description:")
+        attributes: list[dict[str, str]] = [{"name": "origin", "value": "Saudi Arabia"}]
+        if seller:
+            attributes.append({"name": "seller_note", "value": seller})
+        for token in [t for t in name.replace(",", " ").split() if len(t) > 3][:4]:
+            attributes.append({"name": "keyword", "value": token})
+        return {
+            "description_en": f"{name} — a Saudi-made product prepared for export.",
+            "description_ar": f"{name} — منتج سعودي الصنع مُجهَّز للتصدير.",
+            "attributes": attributes,
+        }
+
     def _draft_email(self, prompt: str) -> dict[str, Any]:
         ctx = _parse_email_prompt(prompt)
         lang = ctx.get("language", "en")
@@ -222,6 +248,14 @@ class MockLLMProvider:
             "subject": Template(tpl["subject"]).render(**render_ctx),
             "body": Template(tpl["body"]).render(**render_ctx),
         }
+
+
+def _prompt_field(prompt: str, label: str) -> str | None:
+    """Read the value of a ``label: value`` line out of a built prompt, or None."""
+    for line in prompt.splitlines():
+        if line.startswith(label):
+            return line[len(label) :].strip() or None
+    return None
 
 
 def _parse_email_prompt(prompt: str) -> dict[str, Any]:

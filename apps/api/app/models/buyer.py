@@ -93,6 +93,12 @@ class ProductBuyerMatch(UUIDMixin, TimestampMixin, Base):
     score_breakdown: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     #: Human-readable evidence, e.g. "imported 42 shipments of HS 3920 in 12 months".
     evidence: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    #: Lawful basis for direct marketing to this lead (I8 / PDPL Art.25 / GDPR),
+    #: recorded per lead at discovery from the evidence that established it —
+    #: "prior_import_activity" (the buyer already imports this HS category) or
+    #: "directory_listing" (public listing, no import history → needs review).
+    lawful_basis: Mapped[str | None] = mapped_column(String(40))
+    basis_note: Mapped[str | None] = mapped_column(String(512))
 
 
 class Contact(UUIDMixin, TimestampMixin, Base):

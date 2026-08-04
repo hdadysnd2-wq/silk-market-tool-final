@@ -40,6 +40,21 @@ docs/            architecture, vision, execution plan, master prompt
 tools/           check_no_pandas.py (CI guard)
 ```
 
+## Deploy (Railway)
+
+One repo, four services (`api`, `worker`, `beat`, `web`) sharing one Postgres and
+one Redis. A single script provisions the whole project:
+
+```bash
+./deploy-to-railway.sh            # infers the repo from your git remote
+```
+
+It installs the Railway CLI, creates the project, provisions the databases, and
+creates the four GitHub-linked services with their shared variables wired as
+Railway reference variables — then prints the two dashboard settings the CLI
+can't set (each service's root directory + config path). Full runbook:
+[`docs/DEPLOY_RAILWAY.md`](docs/DEPLOY_RAILWAY.md).
+
 ## Tests & CI
 
 ```bash

@@ -38,7 +38,10 @@ def _source_line(r: CountryRanking) -> str:
     year = f" · {r.year}" if r.year is not None else ""
     tags = [t for t in (r.tags or []) if t]
     tag_note = f" · {', '.join(tags)}" if tags else ""
-    return f"{src}{year}{tag_note}"
+    # Stage-2 enrichment surfaces the applied tariff under the figure when present.
+    tariff = (r.enrichment or {}).get("applied_tariff_pct") if r.enrichment else None
+    tariff_note = f" · tariff {tariff * 100:.1f}%" if tariff is not None else ""
+    return f"{src}{year}{tag_note}{tariff_note}"
 
 
 def build_funnel_brief(db: Session, analysis: Analysis) -> dict:
@@ -77,9 +80,23 @@ def build_funnel_brief(db: Session, analysis: Analysis) -> dict:
     # --- competitive position -------------------------------------------
     position: list[str] = []
     if rankings:
-        # total_screened is not persisted per row; the shortlist length is a
-        # faithful lower bound and is honestly labelled as such.
-        position.append(f"Shortlisted {len(rankings)} markets → top {min(5, len(top5))}.")
+        top_k = min(5, len(top5))
+        screened = analysis.total_screened
+        # Show the funnel transparently when we know the true world count;
+        # otherwise fall back to the shortlist length (older runs) — honestly.
+        if screened and screened >= len(rankings):
+            position.append(
+                f"Screened {screened} markets worldwide → shortlisted "
+                f"{len(rankings)} → top {top_k}."
+            )
+        else:
+            position.append(f"Shortlisted {len(rankings)} markets → top {top_k}.")
+    stage2_ran = any(r.stage == 2 for r in rankings)
+    if stage2_ran:
+        position.append(
+            "Top 5 re-ranked by Stage-2 enrichment (applied tariff + purchasing power) "
+            "on the shortlist."
+        )
     hubs = [r for r in top5 if r.is_transit_hub]
     if hubs:
         names = ", ".join(r.importer_iso3 for r in hubs)
@@ -106,7 +123,13 @@ def build_funnel_brief(db: Session, analysis: Analysis) -> dict:
             "Transit-hub volumes overstate genuine domestic demand; treat their "
             "raw import figures with care."
         )
-    limits.append(_STAGE1_LIMIT)
+    if not stage2_ran:
+        limits.append(_STAGE1_LIMIT)
+    else:
+        limits.append(
+            "Stage-2 applied tariff + PPP to re-rank the shortlist; deeper Stage-3 "
+            "per-market agent enrichment (competitors, requirements) not yet applied."
+        )
 
     return {
         "analysis_id": str(analysis.id),

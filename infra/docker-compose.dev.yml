@@ -48,7 +48,9 @@ services:
       retries: 10
 
   api:
-    build: ./apps/api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     env_file: [.env]
     environment:
@@ -63,7 +65,9 @@ services:
       minio: { condition: service_healthy }
 
   worker:
-    build: ./apps/api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
     command: celery -A app.workers.celery_app.celery_app worker --loglevel=info
     env_file: [.env]
     environment:
@@ -76,7 +80,9 @@ services:
       redis: { condition: service_healthy }
 
   beat:
-    build: ./apps/api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
     command: celery -A app.workers.celery_app.celery_app beat --loglevel=info
     env_file: [.env]
     environment:
@@ -86,7 +92,9 @@ services:
       redis: { condition: service_healthy }
 
   web:
-    build: ./apps/web
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
     command: pnpm start -p 3000
     environment:
       API_PROXY_TARGET: http://api:8000

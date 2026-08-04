@@ -21,6 +21,8 @@ from app.providers.base import (
     LLMProvider,
     MailboxProvider,
     MapsProvider,
+    MarketEnrichmentProvider,
+    PriceProvider,
     SendingProvider,
     ShipmentsProvider,
 )
@@ -63,6 +65,33 @@ def get_comtrade_provider(settings: Settings | None = None):
     from app.providers.shipments.comtrade import ComtradeProvider
 
     return ComtradeProvider(api_key=settings.comtrade_api_key, offline=settings.comtrade_offline)
+
+
+def get_price_provider(settings: Settings | None = None) -> PriceProvider:
+    """The observed-price layer (paid in production, deepen-gated per I5).
+
+    A real vendor key would select the live adapter here; offline the deterministic
+    mock stands in so the deepen path runs end to end without keys.
+    """
+    settings = settings or get_settings()
+    from app.providers.pricing.mock import MockPriceProvider
+
+    return MockPriceProvider(seed=settings.mock_seed)
+
+
+def get_market_enrichment_provider(
+    settings: Settings | None = None,
+) -> MarketEnrichmentProvider:
+    """The Stage-2 market-enrichment layer (applied tariff + PPP).
+
+    Live, a Comtrade/World Bank key routes this through the engine's budgeted data
+    layer; offline the deterministic mock stands in so the funnel's Stage 2 runs
+    end to end without keys.
+    """
+    settings = settings or get_settings()
+    from app.providers.market_enrichment.mock import MockMarketEnrichmentProvider
+
+    return MockMarketEnrichmentProvider(seed=settings.mock_seed)
 
 
 def get_enrichment_provider(settings: Settings | None = None) -> EnrichmentProvider:

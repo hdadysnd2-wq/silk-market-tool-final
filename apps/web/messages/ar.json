@@ -74,6 +74,15 @@
     "trend": "الاتجاه",
     "share": "الحصة"
   },
+  "margin": {
+    "title": "هوامش المنافسين",
+    "fetchPrices": "جلب أسعار المنافسين",
+    "fetching": "جارٍ الجلب…",
+    "factoryOffer": "عرضك",
+    "medianObserved": "وسيط سعر السوق",
+    "medianMargin": "وسيط الهامش",
+    "marginLabel": "هامش"
+  },
   "funnel": {
     "title": "قمع الأسواق العالمية",
     "screenButton": "افحص الأسواق العالمية",
@@ -91,7 +100,11 @@
     "limits": "حدود هذا التقرير",
     "viewCompetitors": "اعرض المنافسين في هذا السوق",
     "discoverTopMarkets": "اكتشف المشترين في أفضل الأسواق",
-    "discoveringBuyers": "جارٍ بدء الاكتشاف…"
+    "discoveringBuyers": "جارٍ بدء الاكتشاف…",
+    "refine": "تحسين (المرحلة ٢)",
+    "refining": "جارٍ التحسين…",
+    "refined": "مُحسَّن (المرحلة ٢)",
+    "tariffLabel": "الرسوم"
   },
   "buyers": {
     "title": "المشترون المحتملون",
@@ -100,6 +113,7 @@
     "evidence": "الدليل",
     "verified": "موثّق",
     "unverified": "غير موثّق",
+    "stale": "بيانات قديمة — أعد التحقّق",
     "contacts": "جهات الاتصال",
     "source": "المصدر",
     "createCampaign": "إنشاء حملة",

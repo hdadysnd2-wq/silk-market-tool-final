@@ -25,6 +25,10 @@ dependencies = [
     "jinja2>=3.1.4",
     "boto3>=1.35.0",
     "email-validator>=2.2.0",
+    # Word export of the full report (decision #7). The engine's render_docx uses
+    # python-docx; make it a first-class dep so /products/{id}/report.docx works
+    # in prod and CI (matches the pin in silk-intel's `reports` extra).
+    "python-docx==1.2.0",
     # The market-intelligence engine, consumed in-process by the Celery workers
     # (Phase 1 wiring). Path source below; only its lean core (requests) installs
     # — the engine's fastapi==0.139.0 server stack is an opt-in extra, so there is

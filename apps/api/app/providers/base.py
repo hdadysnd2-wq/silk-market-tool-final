@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Generic, Protocol, TypeVar
 
+from contracts import DataContract, from_provider_record
+
 from app.models.base import utcnow
 
 T = TypeVar("T")
@@ -53,6 +55,17 @@ class ProviderRecord(Generic[T]):
     confidence: float
     fetched_at: datetime = field(default_factory=utcnow)
 
+    def to_contract(self) -> DataContract:
+        """This record as the ONE platform-wide provenance envelope (I1 / decision #4).
+
+        ``DataContract`` and ``ProviderRecord`` are the two provenance models the
+        merge unified; this is the bridge, so provider data can travel as the same
+        ``{value, source, provider, confidence, fetched_at, …}`` envelope the
+        engine side already uses — never a fabricated value, a missing payload
+        becoming a zero-confidence gap.
+        """
+        return from_provider_record(self)
+
 
 # --------------------------------------------------------------------------
 # Payload types
@@ -80,6 +93,21 @@ class ExporterShare:
     value_usd: float
     share_pct: float
     year: int
+
+
+@dataclass(frozen=True)
+class ObservedPrice:
+    """One competitor's observed selling price for a product category in a market.
+
+    Sourced from the paid local-price layer (retail/wholesale listings). A price is
+    only ever an *observed* figure with its source link — never an estimate.
+    """
+
+    competitor: str
+    price: float
+    currency: str
+    url: str | None = None
+    store: str | None = None
 
 
 @dataclass(frozen=True)
@@ -111,6 +139,20 @@ class CompanyFirmographics:
     revenue_band: str | None = None
     #: Procurement / import decision-makers, when the vendor exposes them.
     key_people: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class MarketEnrichment:
+    """Budgeted macro/tariff signals for one market + HS6 (funnel Stage 2).
+
+    Every field is optional: a signal that could not be fetched stays ``None`` (a
+    declared gap, I1) rather than a fabricated number. ``applied_tariff_pct`` is
+    the market's applied import tariff for the HS6 (a fraction, 0.05 = 5%);
+    ``ppp_gni_per_capita`` is a purchasing-power proxy for demand quality.
+    """
+
+    applied_tariff_pct: float | None = None
+    ppp_gni_per_capita: float | None = None
 
 
 @dataclass(frozen=True)
@@ -279,6 +321,21 @@ class ShipmentsProvider(Protocol):
     ) -> list[ProviderRecord[ShipmentRecord]]: ...
 
 
+class PriceProvider(Protocol):
+    """Paid local-price layer — observed competitor prices per market.
+
+    A paid layer: it runs ONLY inside the deepen context (I5). Callers must gate it
+    accordingly; the provider itself just answers with observed listings (never an
+    estimate, never a fabricated price).
+    """
+
+    name: str
+
+    def observed_prices(
+        self, hs_code: str, market_iso2: str, limit: int = 10
+    ) -> list[ProviderRecord[ObservedPrice]]: ...
+
+
 class EnrichmentProvider(Protocol):
     """Firmographic and decision-maker enrichment (Coresignal-shaped)."""
 
@@ -287,6 +344,21 @@ class EnrichmentProvider(Protocol):
     def enrich_company(
         self, name: str, country_iso2: str, domain: str | None = None
     ) -> ProviderRecord[CompanyFirmographics] | None: ...
+
+
+class MarketEnrichmentProvider(Protocol):
+    """Budgeted macro/tariff enrichment for funnel Stage 2 (World Bank / WITS-shaped).
+
+    Live, this is a paid/budgeted call (applied tariff + PPP per market); offline
+    a deterministic mock stands in. A failed fetch returns ``None`` so the caller
+    records a declared gap (I1) rather than a fabricated signal.
+    """
+
+    name: str
+
+    def enrich_market(
+        self, importer_iso3: str, hs6: str
+    ) -> ProviderRecord[MarketEnrichment] | None: ...
 
 
 class MapsProvider(Protocol):

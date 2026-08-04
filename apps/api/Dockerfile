@@ -43,7 +43,10 @@ RUN sed -i 's/\r$//' scripts/*.sh && chmod +x scripts/*.sh
 
 EXPOSE 8000
 
-# Default command runs the API: migrate, seed, then bind uvicorn to $PORT.
-# The worker and beat services reuse this same image with an overridden start
-# command (scripts/start-worker.sh / scripts/start-beat.sh).
-CMD ["sh", "scripts/start-api.sh"]
+# One image serves all three backend roles; SILK_ROLE selects the entrypoint
+# script (api = migrate+seed+uvicorn, worker = celery worker, beat = celery
+# scheduler). Defaults to "api". The absolute `cd` makes the command independent
+# of the working directory a platform starts it in (Railway runs a service's
+# command from the repo-root workdir, not this image's WORKDIR), so no per-service
+# start-command override is needed — set SILK_ROLE as a service variable instead.
+CMD ["sh", "-c", "cd /app/apps/api && exec sh scripts/start-${SILK_ROLE:-api}.sh"]

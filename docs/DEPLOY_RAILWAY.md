@@ -20,22 +20,29 @@ to your production branch once the wiring below is in place.
 and differ only by start command, selected through three config-as-code files.
 `web` is a separate Next.js image (`apps/web/Dockerfile`).
 
-The **Root Directory** below is each service's Docker build context; the
-config-as-code path is relative to it.
+**Every service builds from the repo root** (leave Root Directory empty). Each
+selects its Dockerfile with the `RAILWAY_DOCKERFILE_PATH` variable, and the three
+backend services share one image, choosing their entrypoint with `SILK_ROLE`.
 
-| Service  | Root Directory | Config-as-code path          | Start command             | Public? |
-|----------|----------------|------------------------------|---------------------------|---------|
-| `api`    | _(repo root)_  | `apps/api/railway.json`        | `scripts/start-api.sh`    | ✅ yes  |
-| `worker` | _(repo root)_  | `apps/api/railway.worker.json` | `scripts/start-worker.sh` | no      |
-| `beat`   | _(repo root)_  | `apps/api/railway.beat.json`   | `scripts/start-beat.sh`   | no      |
-| `web`    | `apps/web`     | `railway.json`               | `pnpm start`              | ✅ yes  |
+| Service  | Root Directory | `RAILWAY_DOCKERFILE_PATH` | `SILK_ROLE` | Public? |
+|----------|----------------|--------------------------|-------------|---------|
+| `api`    | _(repo root)_  | `apps/api/Dockerfile`    | `api`       | ✅ yes  |
+| `worker` | _(repo root)_  | `apps/api/Dockerfile`    | `worker`    | no      |
+| `beat`   | _(repo root)_  | `apps/api/Dockerfile`    | `beat`      | no      |
+| `web`    | _(repo root)_  | `apps/web/Dockerfile`    | —           | ✅ yes  |
 
-> **Why `api`/`worker`/`beat` build from the repo root (not `apps/api`).**
-> `apps/api/pyproject.toml` depends on two editable path packages that live
-> outside `apps/api` — `../../packages/silk_intel` and `../../packages/contracts`.
-> The Docker build context must include them, so the context is the **repo root**
-> and the Dockerfile is referenced as `apps/api/Dockerfile` (leave Root Directory
-> empty). `web` has no cross-package dependency, so it builds from `apps/web`.
+> **Why everything builds from the repo root.** `apps/api/pyproject.toml` depends
+> on two editable path packages outside `apps/api` (`../../packages/silk_intel`,
+> `../../packages/contracts`), so the api image's build context must include them.
+> Building `web` from the root too lets *every* service leave Root Directory empty
+> and pick its Dockerfile via `RAILWAY_DOCKERFILE_PATH` — which the CLI can set,
+> so the whole deploy is headless (no dashboard clicks). The api image's `CMD`
+> reads `SILK_ROLE` to run `scripts/start-<role>.sh`, so api/worker/beat need no
+> per-service start command.
+>
+> The `apps/api/railway*.json` / `apps/web/railway.json` config files encode the
+> same settings (`dockerfilePath` + an explicit `startCommand`) for anyone who
+> prefers wiring services through a config-as-code path in the dashboard instead.
 
 - **`api`** runs Alembic migrations and (by default) the idempotent seed on
   boot — migrations live only here, so schema changes apply exactly once per
@@ -77,28 +84,43 @@ running them), `--help`.
 > The script is safe to re-run: it skips databases and services that already
 > exist (detected via `railway status --json`).
 
+### One command, no dashboard (PowerShell)
+
+On Windows, `deploy-to-railway.ps1` provisions **everything headlessly** — the
+project, Postgres + Redis, all four services (Dockerfile + role selected via the
+`RAILWAY_DOCKERFILE_PATH` / `SILK_ROLE` variables), and the api/web public domains:
+
+```powershell
+.\deploy-to-railway.ps1 owner/repo
+```
+
+Because every service builds from the repo root and picks its Dockerfile from a
+variable, there is **nothing to set in the dashboard afterwards**. (The bash
+script + the dashboard steps below remain available for the config-as-code path.)
+
 ---
 
-## Finish in the dashboard (three steps the CLI can't do)
+## Finish in the dashboard (only for the config-as-code path)
 
-The current Railway CLI (`railway add`) has no flag for a service's **Root
-Directory** or **Config-as-code path**, so those are set once per service in the
-dashboard. Everything else is already wired by the script.
+`deploy-to-railway.ps1` needs none of this. It applies only if you wire services
+through a **Config-as-code path** instead of `RAILWAY_DOCKERFILE_PATH`: the Railway
+CLI has no flag for a service's **Root Directory** or **Config-as-code path**, so
+those are set once per service in the dashboard.
 
 ### a) Root Directory & Config path
 
 For each service: **Settings → Source** (Root Directory) and **Settings → Build**
 (Config-as-code path), using the table at the top of this doc. Then **Redeploy**.
 
-- `api`, `worker`, `beat`: leave **Root Directory empty** (repo root) and set the
-  config path to `apps/api/railway.json` (`.worker.json` / `.beat.json`). The
-  Dockerfile builds from the root so its sibling `packages/*` are in context.
-- `web`: Root Directory `apps/web`, config path `railway.json`.
+Leave **Root Directory empty** (repo root) for **every** service; all four
+Dockerfiles build from the root. Set the config path per service:
 
-The very first build can fail until these are set — that is expected. A build
-that dies almost immediately with
+- `api` / `worker` / `beat`: `apps/api/railway.json` (`.worker.json` / `.beat.json`).
+- `web`: `apps/web/railway.json`.
+
+A build that dies almost immediately with
 `cannot normalize a relative path beyond the base directory: .../packages/...`
-means an api-family service still has Root Directory `apps/api`; clear it.
+means a service still has a non-empty Root Directory; clear it.
 
 ### b) Public domains
 

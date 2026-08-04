@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from app.api.deps import DbDep, get_owned_product
 from app.models import Product
-from app.services import engine, observed_prices
+from app.services import engine, margins, observed_prices
 
 router = APIRouter(tags=["pricing"])
 
@@ -41,3 +41,18 @@ def deepen_prices(
             results.append(observed_prices.fetch_prices_for_market(db, product, market.upper()))
     db.commit()
     return {"detail": "Observed prices fetched", "results": results}
+
+
+@router.get("/products/{product_id}/margins")
+def product_margins(
+    market: str,
+    db: DbDep,
+    product: Product = Depends(get_owned_product),
+) -> dict:
+    """Competitor + margin threads for one market, from the observed prices.
+
+    Read-only (the paid fetch already happened via ``/deepen/prices``). A margin is
+    computed only where a competitor price *and* the product's cost are known;
+    otherwise the thread declares the gap rather than inventing a figure (I1).
+    """
+    return margins.compute_margin_threads(db, product, market.upper())

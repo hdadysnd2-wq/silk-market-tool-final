@@ -48,6 +48,9 @@ class Product(UUIDMixin, TimestampMixin, Base):
     image_url: Mapped[str | None] = mapped_column(String(512))
     price_min: Mapped[float | None] = mapped_column(Numeric(14, 2))
     price_max: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    #: The factory's own unit cost, used to compute the margin against a
+    #: competitor's observed price. Without it the margin is a declared gap.
+    cost_per_unit: Mapped[float | None] = mapped_column(Numeric(14, 2))
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
 
     hs_code: Mapped[str | None] = mapped_column(

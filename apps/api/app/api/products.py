@@ -27,6 +27,7 @@ async def create_product(
     description_en: str | None = Form(None),
     price_min: float | None = Form(None),
     price_max: float | None = Form(None),
+    cost_per_unit: float | None = Form(None),
     currency: str = Form("USD"),
     classify: bool = Form(True),
     image: UploadFile | None = File(None),
@@ -49,6 +50,7 @@ async def create_product(
         image_url=image_url,
         price_min=price_min,
         price_max=price_max,
+        cost_per_unit=cost_per_unit,
         currency=currency,
     )
     db.add(product)

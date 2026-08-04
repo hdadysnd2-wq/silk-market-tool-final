@@ -37,6 +37,7 @@ class ProductOut(BaseModel):
     image_url: str | None
     price_min: float | None
     price_max: float | None
+    cost_per_unit: float | None = None
     currency: str
     hs_code: str | None
     hs_candidates: list[HSCandidate] | None

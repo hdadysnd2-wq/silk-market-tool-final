@@ -84,11 +84,19 @@ def get_market_enrichment_provider(
 ) -> MarketEnrichmentProvider:
     """The Stage-2 market-enrichment layer (applied tariff + PPP).
 
-    Live, a Comtrade/World Bank key routes this through the engine's budgeted data
-    layer; offline the deterministic mock stands in so the funnel's Stage 2 runs
-    end to end without keys.
+    Live (``MARKET_ENRICHMENT_LIVE=1``) selects the World Bank / WITS adapter, which
+    routes tariff + PPP fetches through the engine's hardened data layer (provenance /
+    throttle / circuit-breaker / cache inherited, locked decision #5). Offline (the
+    default) the deterministic mock stands in so the funnel's Stage 2 runs end to end
+    without keys — keeping CI offline-green.
     """
     settings = settings or get_settings()
+    if settings.market_enrichment_live:
+        from app.providers.market_enrichment.worldbank_wits import (
+            WorldBankWitsEnrichmentProvider,
+        )
+
+        return WorldBankWitsEnrichmentProvider()
     from app.providers.market_enrichment.mock import MockMarketEnrichmentProvider
 
     return MockMarketEnrichmentProvider(seed=settings.mock_seed)

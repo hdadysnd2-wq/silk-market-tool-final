@@ -63,7 +63,8 @@
     "empty": "You haven't uploaded any products yet.",
     "findBuyers": "Find buyers",
     "createProduct": "Create product",
-    "viewReport": "View report"
+    "viewReport": "View report",
+    "close": "Close"
   },
   "markets": {
     "title": "Select target markets",

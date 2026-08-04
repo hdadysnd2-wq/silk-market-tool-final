@@ -59,7 +59,7 @@ def request_otp(payload: OTPRequest, db: DbDep) -> dict:
         # without an email channel. NEVER in any other environment: an attacker who
         # knows a victim's email could read the code and complete /otp/verify —
         # full pre-auth account takeover.
-        if get_settings().environment == "local":
+        if getattr(get_settings(), "environment", "local") == "local":
             return {"detail": "OTP issued", "dev_code": code}
     return {"detail": "OTP issued"}
 

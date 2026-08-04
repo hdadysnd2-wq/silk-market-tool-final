@@ -85,6 +85,16 @@ _INTENTIONAL_GLOBAL: dict[tuple[str, str], str] = {
     ("email_queue.py", "SELECT id, attempts FROM email_queue WHERE status = 'sending'"):
         "PR-5 reaper scan for stuck rows is a background job across all "
         "accounts by design, same rationale as the queued-row scan above",
+    # I4 — القمع عابرٌ للمستأجرين بقصد: إلغاء الاشتراك على أيّ حساب يمنع الإرسال
+    # لهذا العنوان من كلّ الحسابات (حماية CAN-SPAM/PDPL). عالميّةٌ متعمَّدة.
+    ("email_queue.py", "SELECT 1 FROM suppression_list WHERE email = ?"):
+        "I4 cross-tenant suppression by design: an unsubscribe on any account "
+        "must block sends to that address from every account (CAN-SPAM/PDPL)",
+    # دَينُ الخصم يُسجَّل على صفٍّ طالبه العامل (status='sending')؛ المعرّف من
+    # مسح العامل نفسه لا من طلب مستخدم — نفس منطق تحويلات الحالة أعلاه.
+    ("email_queue.py", "UPDATE email_queue SET last_error = ? WHERE id = ?"):
+        "worker records debit arrears on a row it already claimed; the id comes "
+        "from the worker's own scan and is never user-supplied",
     # فوترة التخزين تجمع لكل حساب بـGROUP BY owner_id ثم تشحن كل حساب على حدة.
     ("jobs.py", "FROM images GROUP BY owner_id"):
         "monthly billing aggregates per account via GROUP BY owner_id",

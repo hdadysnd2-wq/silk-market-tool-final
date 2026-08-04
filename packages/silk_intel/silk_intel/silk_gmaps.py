@@ -60,8 +60,17 @@ _log = _logging.getLogger(__name__)
 # D-02: الكشط غير متزامن ولا يُحتسب في ميزانية العشر دقائق؛ مهلة صلبة ٨ دقائق
 # (يمكن ضبطها) — إن لم يعُد، نسقط للسلسلة الاحتياطية ونعلن الفجوة. التشغيلة
 # لا تنتظره أبداً (تُقدَّم مبكراً وتُجمَع بمهلة محدودة بعد البعثات).
-_HARD_TIMEOUT_S = int(os.environ.get("SILK_GMAPS_TIMEOUT_SECONDS", "480"))
-_POLL_INTERVAL_S = int(os.environ.get("SILK_GMAPS_POLL_SECONDS", "10"))
+def _env_int(name: str, default: int) -> int:
+    """Parse an int env var, falling back on any bad value — a typo'd env var
+    must not crash module import (this module is imported broadly, incl. api.py)."""
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+_HARD_TIMEOUT_S = _env_int("SILK_GMAPS_TIMEOUT_SECONDS", 480)
+_POLL_INTERVAL_S = _env_int("SILK_GMAPS_POLL_SECONDS", 10)
 _SUBMIT_TIMEOUT_S = 15
 _HTTP_TIMEOUT_S = 20
 _TOP_N = 15                       # C3: أعلى ~١٥ رائداً بعد إزالة التكرار

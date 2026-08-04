@@ -6,10 +6,8 @@ from app.providers.email_finding.mock import MockEmailFinderProvider
 from app.providers.enrichment.mock import MockEnrichmentProvider
 from app.providers.llm.mock import MockLLMProvider
 from app.providers.llm.prompts import (
-    HS_CLASSIFICATION_SCHEMA,
     OUTREACH_EMAIL_SCHEMA,
     email_user_prompt,
-    hs_user_prompt,
 )
 from app.providers.shipments.comtrade import ComtradeProvider
 from app.providers.shipments.mock import MockShipmentsProvider
@@ -41,25 +39,6 @@ def test_mock_verifier_rejects_malformed():
     from app.providers.base import VerificationOutcome
 
     assert MockEmailVerifier().verify("not-an-email").outcome == VerificationOutcome.invalid
-
-
-def test_mock_llm_classify_returns_schema_shape():
-    llm = MockLLMProvider()
-    prompt = hs_user_prompt(
-        name="HDPE Stretch Film",
-        description="polyethylene film for packaging",
-        sector="plastics",
-        has_image=False,
-    )
-    resp = llm.complete_with_image(
-        system="", prompt=prompt, image_bytes=None, json_schema=HS_CLASSIFICATION_SCHEMA
-    )
-    assert resp.parsed is not None
-    candidates = resp.parsed["candidates"]
-    assert 1 <= len(candidates) <= 3
-    assert all("code" in c and "confidence" in c for c in candidates)
-    # Film keyword should surface the polyethylene film code.
-    assert candidates[0]["code"] == "392010"
 
 
 def test_mock_llm_draft_returns_localized_email():

@@ -23,7 +23,7 @@ from app.models import (
     WorldTrade,
     utcnow,
 )
-from app.providers.registry import get_embedding_provider, get_llm_provider
+from app.providers.registry import get_embedding_provider
 from app.security import hash_password
 from app.seeds.reference import HS_CODES, MARKETS
 from app.services import hs_classifier
@@ -140,7 +140,6 @@ def seed_reference(db) -> None:
 
 
 def seed_users_and_factories(db) -> None:
-    llm = get_llm_provider()
     embedder = get_embedding_provider()
 
     for spec in DEMO_USERS:
@@ -208,8 +207,9 @@ def seed_users_and_factories(db) -> None:
         db.add(product)
         db.flush()
 
-        hs_classifier.classify_product(db, product, llm)
-        # Confirm the intended HS code so discovery can run straight away.
+        hs_classifier.classify_product(db, product)
+        # Classification only proposes (I2); confirm the intended demo HS code so
+        # discovery can run straight away. The code is a seeded catalogue entry.
         hs_classifier.confirm_hs_code(db, product, spec["hs"], None)
         product.embedding = embedder.embed([f"{product.name_en} {product.description_en}"])[0]
 

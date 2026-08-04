@@ -8,8 +8,10 @@ typed itself — it only fills what is missing; extracted attributes are additiv
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
+import httpx
 from sqlalchemy.orm import Session
 
 from app.logging import get_logger
@@ -20,14 +22,55 @@ from app.providers.llm.prompts import (
     PRODUCT_VISION_SYSTEM_PROMPT,
     product_vision_prompt,
 )
-from app.services.hs_classifier import _load_image
 
 log = get_logger(__name__)
+
+#: Local-file media type by extension; anything else defaults to JPEG.
+_MEDIA_BY_SUFFIX = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+}
+
+
+def _load_image(product: Product) -> tuple[bytes | None, str]:
+    """Load a product image as ``(bytes, media_type)`` — never raises.
+
+    Handles local ``file://`` uploads (media type by extension) and remote
+    ``http(s)://`` URLs (presigned S3/MinIO or public, fetched with redirects
+    followed). Any failure — no URL, missing file, non-2xx response, unknown
+    scheme — degrades to ``(None, "image/jpeg")`` so vision falls back to a
+    text-only description instead of crashing the upload.
+    """
+    default: tuple[bytes | None, str] = (None, "image/jpeg")
+    url = product.image_url
+    if not url:
+        return default
+    if url.startswith("file://"):
+        path = Path(url[len("file://") :])
+        if not path.exists():
+            return default
+        media = _MEDIA_BY_SUFFIX.get(path.suffix.lower(), "image/jpeg")
+        try:
+            return path.read_bytes(), media
+        except OSError:
+            return default
+    if url.startswith(("http://", "https://")):
+        try:
+            resp = httpx.get(url, timeout=30, follow_redirects=True)
+        except httpx.HTTPError:
+            return default
+        if resp.status_code // 100 == 2:
+            return resp.content, resp.headers.get("content-type", "image/jpeg")
+        return default
+    return default
 
 
 def describe_product(db: Session, product: Product, llm: LLMProvider) -> dict[str, Any]:
     """Fill the product's AR/EN description (if missing) and attributes from vision."""
-    image_bytes = _load_image(product)
+    image_bytes, media_type = _load_image(product)
     prompt = product_vision_prompt(
         name=product.name_en or product.name_ar,
         description=product.description_en or product.description_ar,
@@ -37,6 +80,7 @@ def describe_product(db: Session, product: Product, llm: LLMProvider) -> dict[st
         system=PRODUCT_VISION_SYSTEM_PROMPT,
         prompt=prompt,
         image_bytes=image_bytes,
+        media_type=media_type,
         json_schema=PRODUCT_VISION_SCHEMA,
     )
     parsed = response.parsed or {}

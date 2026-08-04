@@ -9,8 +9,11 @@ factory. Running it twice is safe: every insert is guarded by an existence check
 
 from __future__ import annotations
 
+import os
+
 from sqlalchemy import func, select
 
+from app.config import get_settings
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import (
@@ -277,6 +280,16 @@ def seed_world_trade(db, base_year: int = 2023) -> None:
 
 
 def run() -> dict:
+    # Demo seed plants accounts (incl. an admin) with a well-known password.
+    # Refuse to run against a production database unless explicitly forced —
+    # a stray deploy/entrypoint or a mistaken run against a shared DB would
+    # otherwise be a full auth bypass.
+    if get_settings().environment == "production" and not os.getenv("SILK_ALLOW_PROD_SEED"):
+        raise RuntimeError(
+            "Refusing to run the demo seed in production (it creates accounts "
+            "with a shared, well-known password). Set SILK_ALLOW_PROD_SEED=1 "
+            "only if you truly intend to."
+        )
     with session_scope() as db:
         seed_reference(db)
         seed_users_and_factories(db)

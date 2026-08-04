@@ -74,6 +74,15 @@
     "trend": "Trend",
     "share": "Share"
   },
+  "margin": {
+    "title": "Competitor margins",
+    "fetchPrices": "Fetch competitor prices",
+    "fetching": "Fetching…",
+    "factoryOffer": "Your offer",
+    "medianObserved": "Median market price",
+    "medianMargin": "Median margin",
+    "marginLabel": "margin"
+  },
   "funnel": {
     "title": "World market funnel",
     "screenButton": "Screen world markets",

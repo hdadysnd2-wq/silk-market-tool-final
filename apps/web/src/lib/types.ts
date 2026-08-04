@@ -175,7 +175,33 @@ export interface CompetitorSnapshot {
     | { exporter_iso2: string; exporter_name: string; value_usd: number; share_pct: number }[]
     | null;
   yearly_values: { year: number; value_usd: number }[] | null;
+  observed_prices:
+    | { competitor: string; price: number | null; currency: string; url?: string | null; source: string }[]
+    | null;
   source: string;
+}
+
+export interface CompetitorMargin {
+  competitor: string;
+  observed_price: number | null;
+  currency: string | null;
+  /** Gross headroom vs the market price ((observed - offer) / observed); null = declared gap. */
+  margin_pct: number | null;
+  source: string | null;
+  url?: string | null;
+  note: string;
+}
+
+export interface MarginThread {
+  hs_code: string | null;
+  market_iso2: string;
+  factory_offer: number | null;
+  factory_currency: string | null;
+  median_observed_price: number | null;
+  median_margin_pct: number | null;
+  competitors: CompetitorMargin[];
+  source_line: string;
+  limits: string[];
 }
 
 export type EmailStatus =

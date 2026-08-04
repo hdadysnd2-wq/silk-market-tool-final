@@ -74,6 +74,15 @@
     "trend": "الاتجاه",
     "share": "الحصة"
   },
+  "margin": {
+    "title": "هوامش المنافسين",
+    "fetchPrices": "جلب أسعار المنافسين",
+    "fetching": "جارٍ الجلب…",
+    "factoryOffer": "عرضك",
+    "medianObserved": "وسيط سعر السوق",
+    "medianMargin": "وسيط الهامش",
+    "marginLabel": "هامش"
+  },
   "funnel": {
     "title": "قمع الأسواق العالمية",
     "screenButton": "افحص الأسواق العالمية",

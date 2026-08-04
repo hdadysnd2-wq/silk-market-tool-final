@@ -1,0 +1,29 @@
+[
+  {
+    "id": "p01",
+    "name_en": "Sidr Honey 500g",
+    "name_ar": "عسل السدر",
+    "image": null,
+    "expected_hs6": "040900",
+    "sector": "food",
+    "notes": "raw sidr honey, glass jar"
+  },
+  {
+    "id": "p02",
+    "name_en": "Fresh Medjool Dates 1kg",
+    "name_ar": "تمر مجدول طازج",
+    "image": null,
+    "expected_hs6": "080410",
+    "sector": "food",
+    "notes": "premium medjool dates, vacuum pack"
+  },
+  {
+    "id": "p03",
+    "name_en": "Sultana Raisins",
+    "name_ar": "زبيب سلطانة",
+    "image": null,
+    "expected_hs6": "080620",
+    "sector": "food",
+    "notes": "dried grapes, 500g bag"
+  }
+]

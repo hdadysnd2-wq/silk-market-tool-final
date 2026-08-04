@@ -64,6 +64,8 @@ def _assert_guard(observed: dict, agent: _SpyPaidAgent, deepen: bool) -> None:
     else:
         assert report.failed is True
         assert "paid agent outside /deepen" in report.summary
+        # I5: the report summary carries the literal machine token.
+        assert "paid_agent_outside_deepen" in report.summary
         # I1: the skipped report declares a gap, never a fabricated value.
         assert report.findings[0].value is None
 

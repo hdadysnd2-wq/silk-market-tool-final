@@ -594,3 +594,31 @@ def test_regional_analysis_heading_no_longer_misleading():
         joined = docx_all_text(path)
     assert "التحليل الإقليمي" not in joined
     assert "الأسواق المرشّحة الأخرى" in joined
+
+
+def test_paid_guard_summary_carries_i5_token_without_leaking():
+    """I5: the PAID-outside-deepen skip report carries the literal machine token
+    ``paid_agent_outside_deepen`` on its *summary* (for logs/tests); the
+    customer-facing DataPoint note stays the human phrase, and the token marker
+    is stripped by the narrative humanizer so it can never reach a client."""
+    from silk_agents import AgentReport, BaseAgent
+    from silk_data_layer import DataPoint
+    from silk_narrative import humanize_technical_note
+
+    class _Paid(BaseAgent):
+        PAID = True
+
+        def _execute(self, task):  # pragma: no cover — never reached outside deepen
+            return AgentReport(self.name, [DataPoint("X", self.name, 1.0, "")], False, "ran")
+
+    report = _Paid("SpyPaid").run({})  # outside deepen
+
+    # Machine token present for logs/tests, alongside the human phrase.
+    assert "paid_agent_outside_deepen" in report.summary
+    assert "paid agent outside /deepen" in report.summary
+    # The customer-facing DataPoint note stays human — no raw token in the data layer.
+    assert "paid_agent_outside_deepen" not in report.findings[0].note
+    # Any client-facing render path humanizes the token (and "/deepen") away.
+    human = humanize_technical_note(report.summary)
+    assert "paid_agent_outside_deepen" not in human
+    assert "/deepen" not in human

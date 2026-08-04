@@ -157,10 +157,16 @@ class BaseAgent(Agent):
         if self.PAID and not silk_context.deepen_active():
             note = (f"{self.name}: paid agent outside /deepen — skipped "
                     "(structural guard, no call attempted)")
-            log.warning(note)
+            # I5 machine token on the report *summary* (logs/tests assert the
+            # literal `paid_agent_outside_deepen`); the customer-facing DataPoint
+            # note stays the human phrase (humanized by silk_narrative), and the
+            # bracketed token marker is stripped by the narrative humanizer so it
+            # can never leak into a client-facing report.
+            summary = f"{note} [paid_agent_outside_deepen]"
+            log.warning(summary)
             return AgentReport(
                 self.name, [DataPoint(None, src, 0.0, note, today)],
-                True, note)
+                True, summary)
         steer = (instruction or (silk_context.agent_command(self.PREF_KEY)
                                  if self.PREF_KEY else "")).strip()[:500]
         if steer:

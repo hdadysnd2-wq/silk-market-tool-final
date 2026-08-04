@@ -81,3 +81,47 @@ def test_coresignal_unexpected_shape_degrades_to_none(monkeypatch):
 def test_outscraper_non_json_degrades_to_empty(monkeypatch):
     _patch(monkeypatch, _Resp(raises=True))
     assert OutscraperMapsProvider("key").search_importers("importers", "US") == []
+
+
+class _CapturingClient:
+    """Records the last post() kwargs so auth/payload can be asserted."""
+
+    last_kwargs: dict = {}
+
+    def __init__(self, resp):
+        self._resp = resp
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def post(self, *args, **kwargs):
+        _CapturingClient.last_kwargs = kwargs
+        return self._resp
+
+
+def test_apollo_authenticates_via_header_not_body(monkeypatch):
+    resp = _Resp(json_value={"people": []})
+    monkeypatch.setattr(httpx, "Client", lambda *a, **k: _CapturingClient(resp))
+    ApolloEmailFinderProvider("secret-key").find_contacts("Acme", "acme.com", "US")
+    kwargs = _CapturingClient.last_kwargs
+    # Key travels in the X-Api-Key header, never in the JSON body.
+    assert kwargs["headers"]["X-Api-Key"] == "secret-key"
+    assert "api_key" not in kwargs["json"]
+
+
+def test_apollo_drops_masked_and_locked_emails(monkeypatch):
+    people = {
+        "people": [
+            {"email": "real.buyer@acme.com", "email_status": "verified", "name": "Real"},
+            {"email": "email_not_unlocked@domain.com", "email_status": "locked", "name": "Masked"},
+            {"email": "someone@acme.com", "email_status": "unavailable", "name": "Unavailable"},
+            {"email": None, "email_status": "verified", "name": "NoEmail"},
+        ]
+    }
+    _patch(monkeypatch, _Resp(json_value=people))
+    records = ApolloEmailFinderProvider("key").find_contacts("Acme", "acme.com", "US")
+    # Only the genuinely revealed address survives — no dead/masked leads stored.
+    assert [r.data.email for r in records] == ["real.buyer@acme.com"]

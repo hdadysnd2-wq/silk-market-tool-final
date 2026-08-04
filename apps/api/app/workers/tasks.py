@@ -23,6 +23,7 @@ log = get_logger(__name__)
 @celery_app.task(name="app.workers.tasks.run_discovery")
 def run_discovery(product_id: str, market_iso2: str) -> dict:
     from app.models import Product
+    from app.services.api_budget import budget_scope
     from app.services.buyer_discovery import discover_buyers
     from app.services.competitor_snapshot import build_snapshot
 
@@ -35,9 +36,13 @@ def run_discovery(product_id: str, market_iso2: str) -> dict:
         # gracefully rather than raising, matching the "product not found" style.
         if not (product.hs_code and product.hs_confirmed_by_user):
             return {"error": "hs code not confirmed"}
-        summary = discover_buyers(db, product, market_iso2)
-        if product.hs_code:
-            build_snapshot(db, product.hs_code, market_iso2)
+        # Re-establish the per-analysis live-call budget inside the worker (I5-style
+        # contextvar; does not cross the process boundary) so the competitor
+        # snapshot's live Comtrade calls are capped and logged (locked decision #5).
+        with budget_scope(label=f"discovery:{product_id}:{market_iso2}"):
+            summary = discover_buyers(db, product, market_iso2)
+            if product.hs_code:
+                build_snapshot(db, product.hs_code, market_iso2)
         return summary
 
 
@@ -103,13 +108,17 @@ def run_world_ranking(analysis_id: str, hs6: str, top_n: int = 20) -> dict:
     import uuid as _uuid
 
     from app.models import Analysis
+    from app.services.api_budget import budget_scope
     from app.services.ranking import rank_and_persist
 
     with session_scope() as db:
         analysis = db.get(Analysis, _uuid.UUID(analysis_id))
         if analysis is None:
             return {"error": "analysis not found"}
-        rankings = rank_and_persist(db, analysis, hs6, top_n=top_n)
+        # Stage 1 is a local SQL screen (no live calls), but the same scope caps
+        # the budgeted live enrichment that Stages 2-3 add on top (decision #5).
+        with budget_scope(label=f"ranking:{analysis_id}:{hs6}"):
+            rankings = rank_and_persist(db, analysis, hs6, top_n=top_n)
         if analysis.status in ("pending", "classified"):
             analysis.status = "ranked"
         db.flush()

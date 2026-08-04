@@ -187,12 +187,26 @@ class ComtradeProvider:
         """
         import silk_data_layer
 
+        # Per-analysis call budget (locked decision #5): each year is one live
+        # call. When the analysis budget is exhausted we stop and let the caller
+        # degrade to cache/fixtures — a spent budget is a declared gap, never a
+        # fabricated figure (I1). Unmetered (returns True) outside a budget scope.
+        from app.services.api_budget import charge
+
         reporter_m49 = iso2_to_m49(importer_iso2)
         current_year = datetime.now(UTC).year
         records: list[dict[str, Any]] = []
         any_ok = False
         for offset in range(1, 4):
             year = current_year - offset
+            if not charge(1, source="comtrade"):
+                log.warning(
+                    "comtrade_budget_exhausted",
+                    hs_code=hs_code,
+                    importer=importer_iso2,
+                    year=year,
+                )
+                break
             # partner="all" omits partnerCode so Comtrade returns every partner;
             # None means the year's fetch failed (429/network) — distinct from an
             # empty-but-successful [] (the engine layer already logged the cause).

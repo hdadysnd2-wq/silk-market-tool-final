@@ -10,6 +10,7 @@ from app.models import Market
 from app.schemas.buyer import CompetitorSnapshotOut
 from app.schemas.common import MarketOut
 from app.security import CurrentUser
+from app.services.api_budget import budget_scope
 from app.services.competitor_snapshot import build_snapshot
 
 router = APIRouter(prefix="/markets", tags=["markets"])
@@ -23,7 +24,12 @@ def list_markets(db: DbDep, user: CurrentUser) -> list[MarketOut]:
 
 @router.get("/{iso2}/competitors", response_model=CompetitorSnapshotOut)
 def competitors(iso2: str, hs_code: str, db: DbDep, user: CurrentUser) -> CompetitorSnapshotOut:
-    snapshot = build_snapshot(db, hs_code, iso2.upper())
+    # Cap the interactive snapshot's live Comtrade calls against the same
+    # per-analysis budget the worker paths use — without a scope, api_budget.charge
+    # is unmetered and a client could enumerate (hs, iso2) pairs to drive unbounded
+    # live calls (decision #5's ≤150/analysis ceiling).
+    with budget_scope(label=f"competitors:{iso2.upper()}:{hs_code}"):
+        snapshot = build_snapshot(db, hs_code, iso2.upper())
     db.commit()
     return CompetitorSnapshotOut(
         hs_code=snapshot.hs_code,

@@ -20,6 +20,11 @@ router = APIRouter(tags=["products"])
 # worker memory by streaming a multi-GB body into an in-memory read.
 MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
 
+# Never store an image under a client-declared active-content type (text/html,
+# image/svg+xml): served from the storage origin it would be stored-XSS. Keep a
+# recognised raster type as declared; store anything else as octet-stream.
+_SAFE_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+
 
 @router.post("/products", response_model=ProductAccepted, status_code=status.HTTP_202_ACCEPTED)
 async def create_product(
@@ -49,7 +54,12 @@ async def create_product(
             )
         storage = get_storage()
         key = new_image_key(image.filename or "product.jpg")
-        image_url = storage.put(key, data, image.content_type or "image/jpeg")
+        ctype = (
+            image.content_type
+            if image.content_type in _SAFE_IMAGE_TYPES
+            else "application/octet-stream"
+        )
+        image_url = storage.put(key, data, ctype)
 
     product = Product(
         factory_id=factory.id,

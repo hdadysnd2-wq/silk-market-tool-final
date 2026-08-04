@@ -67,7 +67,25 @@ mocked APIs).
 
 ## Status
 
-**Phase 0 — scaffold & freeze.** The monorepo layout is in place, both source
-repos are vendored, the engine's hermetic suite runs green, and the stack boots
-offline on mocks. Storage unification, contract merge, and end-to-end pipeline
-wiring follow in Phases 1–3 (see `docs/EXECUTION_PLAN.md` and the master prompt).
+`main` is the single source of truth — see
+[`docs/adr/0001-master-prompt-governs.md`](docs/adr/0001-master-prompt-governs.md).
+
+- **Phase 0 — scaffold & freeze:** complete. Monorepo layout in place, both repos
+  vendored, engine hermetic suite green, stack boots offline on mocks.
+- **Phase 1 — contracts + engine wiring:** the unified contract envelope is in
+  place and the Celery workers call the engine for HS resolve + rank with the
+  deepen guard ported. Storage: the product shell persists to Postgres + Redis;
+  the engine-side `silk_storage` → Postgres adapter is still open (locked
+  decision #3 is only partially done — tracked in
+  [`docs/BACKLOG.md`](docs/BACKLOG.md)).
+- **Phase 2 — full pipeline on mocks + funnel Stage 1 + UX:** substantially
+  complete on mocks (image → HS-confirm → world screen → top 5 with transit
+  flags → competitors → leads → draft → 3-layer approval → tracked send). The
+  funnel's Stage 3 deep-dive is not yet wired.
+- **Phase 3 — go live, one key at a time:** not started. Real provider adapters
+  exist but are unproven against live APIs — see
+  [`docs/PHASE3_ADAPTER_READINESS.md`](docs/PHASE3_ADAPTER_READINESS.md).
+
+The invariants (I1–I10) are implemented and covered by tests. See
+[`docs/EXECUTION_PLAN.md`](docs/EXECUTION_PLAN.md) and the master prompt for the
+full plan.

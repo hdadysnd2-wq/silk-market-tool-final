@@ -6,8 +6,11 @@ export countries → lists competitors with observed prices per country → prod
 verified buyer lists → drafts outreach in the buyer's language → sends **only**
 after explicit human approval, with tracking.
 
-This document records the merge architecture and the Phase 0 scaffold. The full
-mission, invariants and phased plan live in the master prompt (`docs/MASTER_PROMPT.md`).
+This document records the merge architecture. Phases 0–2 have substantially
+landed on `main` — the single source of truth (see
+`docs/adr/0001-master-prompt-governs.md`); going live one key at a time (Phase 3)
+is the current frontier. The full mission, invariants and phased plan live in the
+master prompt (`docs/MASTER_PROMPT.md`); current phase status is in `README.md`.
 
 ## Two repos → one modular monolith
 
@@ -73,15 +76,23 @@ drift:
 - **I7 — pandas confined to `etl/`.** CI job `guard-pandas` runs on every push.
 - Invariants I2 (HS human-confirm), I3 (3-layer send approval), I4 (suppression +
   audit), I5 (paid agents only in deepen), I6 (no cold email via transactional
-  ESP), I8 (consent basis), I9 (transit-port guard), I10 (Arabic RTL) are carried
-  by the vendored code and are wired/tested progressively in Phases 1–3.
+  ESP), I8 (consent basis), I9 (transit-port guard), I10 (Arabic RTL) are
+  implemented in the platform and covered by tests (`apps/api/tests/` plus the
+  vendored engine suite).
 
-## Storage & contracts (Phase 1 targets, scaffolded now)
+## Storage & contracts
 
-Storage unifies on **Postgres + Redis**; the engine's SQLite + disk cache are
-replaced behind its existing `silk_storage` interface (strangler shim, no
-big-bang). `DataPoint` + `ProviderRecord` converge on one envelope
-(`packages/contracts`) — defined now, consumed in Phase 1 with deprecation shims.
+`DataPoint` + `ProviderRecord` converge on one envelope (`packages/contracts`) —
+**done**: the platform's number-producing paths carry the unified contract.
+
+Storage unifies on **Postgres + Redis**: the product shell (`apps/api`) persists
+through SQLAlchemy to Postgres and uses Redis for Celery/cache — no SQLite in the
+hot path. The engine-side `silk_storage` → Postgres adapter (locked decision #3,
+"a thin adapter behind Repo A's `silk_storage` interface") is **still open**: the
+vendored engine retains its own SQLite/disk implementation as a legacy shim and
+does not yet persist through Postgres. That adapter is deferred to a dedicated
+storage-conformance session (tracked in `docs/BACKLOG.md`); decision #3 is
+therefore partially, not fully, implemented.
 
 ## Data sources (locked verdicts)
 

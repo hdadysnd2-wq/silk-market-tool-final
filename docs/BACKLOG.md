@@ -43,4 +43,5 @@ Decision #3 ("storage unified on Postgres; write a thin adapter behind Repo A's
 (`apps/api`) is fully on Postgres + Redis, but the vendored engine still uses its
 own SQLite/disk implementation behind `silk_storage`. The conformance adapter is
 deferred to a dedicated storage session (do not build it as a side effect of an
-unrelated change). See the formal reclassification recorded alongside the ADRs.
+unrelated change). See [ADR-0002](adr/0002-decision-3-storage-partially-implemented.md)
+for the formal reclassification of decision #3 as OPEN.

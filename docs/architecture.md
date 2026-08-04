@@ -92,7 +92,8 @@ hot path. The engine-side `silk_storage` → Postgres adapter (locked decision #
 vendored engine retains its own SQLite/disk implementation as a legacy shim and
 does not yet persist through Postgres. That adapter is deferred to a dedicated
 storage-conformance session (tracked in `docs/BACKLOG.md`); decision #3 is
-therefore partially, not fully, implemented.
+therefore partially, not fully, implemented — formally reclassified as OPEN in
+[ADR-0002](adr/0002-decision-3-storage-partially-implemented.md).
 
 ## Data sources (locked verdicts)
 

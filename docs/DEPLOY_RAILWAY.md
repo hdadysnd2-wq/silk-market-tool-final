@@ -73,6 +73,12 @@ The script (`deploy-to-railway.sh` at the repo root):
    [Non-interactive / CI](#non-interactive--ci)).
 3. Creates (or reuses) a Railway project.
 4. Provisions **Postgres** and **Redis**.
+   - **The Postgres MUST have the `pgvector` extension available.** The first
+     migration runs `CREATE EXTENSION IF NOT EXISTS vector` (product embeddings),
+     so a plain Postgres image makes the API crash on boot with
+     `type "vector" does not exist`. Use a pgvector-enabled Postgres — Railway's
+     **pgvector** template, or a service from the `pgvector/pgvector` image —
+     rather than the bare Postgres plugin.
 5. Creates the four GitHub-linked services with their shared variables wired as
    **reference variables** so secrets live in one place.
 6. Prints the exact dashboard steps left to finish.

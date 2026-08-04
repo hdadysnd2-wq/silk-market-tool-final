@@ -399,6 +399,25 @@ WEIGHTS: dict[str, float] = {
     "competition": 0.15,      # fragmented suppliers => easier => higher
 }
 
+# I9 — مراكز إعادة التصدير (ISO3): تستورد بكثافة لأنها تعيد التصدير لا لأنها
+# أسواق نهائية للمصدِّر السعودي. المواصفة تسمّيها صراحةً (AE/NL/SG/HK/BE).
+# كل صفٍّ لها يُوسَم `transit_hub` وتُخصَم نقاطه بمعامل مسقوف حتى لا يتصدّر
+# هابٌ لوجستيّ قائمةَ الأسواق بلا تحذير.
+_TRANSIT_HUBS: frozenset[str] = frozenset({"ARE", "NLD", "SGP", "HKG", "BEL"})
+_TRANSIT_HUB_PENALTY = 0.25  # خصمٌ نسبيّ مسقوف على النقاط النهائية للهاب
+
+
+def _transit_hub_adjust(iso3: str, total: float) -> tuple[float, bool]:
+    """I9: tag re-export hubs and apply a bounded penalty to their final score.
+
+    Returns ``(adjusted_total, is_transit_hub)``. A hub keeps its provenance and
+    still appears — it is just ranked below an equivalent non-hub so a logistics
+    entrepôt cannot top the list for a Saudi exporter without a visible flag.
+    """
+    if iso3 in _TRANSIT_HUBS:
+        return round(total * (1.0 - _TRANSIT_HUB_PENALTY), 4), True
+    return total, False
+
 
 def _market_size_component(total_usd: object, hs_code: str, m49: str,
                            year: int, xval: str = "",
@@ -775,11 +794,15 @@ def rank_markets(hs_code: str, countries: list[dict] | None = None,
         tier = row.get("tier", 1)
         if tier == 2:            # الفئة-٢ مُقيَّدة الثقة بنيوياً (بيانات جزئية)
             confidence = round(min(confidence, _TIER2_CONF_CAP), 2)
+        # I9: علِّم مراكز إعادة التصدير واخصم من نقاطها النهائية (بعد التطبيع
+        # والترجيح) بمعامل مسقوف — تظهر كأكبر مستوردين لأنها تعيد التصدير.
+        total, is_transit_hub = _transit_hub_adjust(iso3, total)
         entry = {
             "country": _name(iso3, row["m49"]),
             "iso3": iso3, "m49": row["m49"],
             "iso2": row.get("iso2"),   # يغذي Trends geo وبحث التسوّق gl (P0-3)
             "total_score": total, "confidence": confidence,
+            "transit_hub": is_transit_hub,   # I9 — وسم هاب إعادة التصدير
             "components": row["components"],
             "income_ppp": row["income_ppp"],
             "population": row["population"],

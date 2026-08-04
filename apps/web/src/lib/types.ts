@@ -148,6 +148,11 @@ export interface Buyer {
   source: "customs" | "comtrade" | "enrichment" | "maps" | "manual";
   source_confidence: number;
   legal_review_required: boolean;
+  // Lead validity (rule 6 / I8): 90-day window derived from when the record was
+  // last refreshed. A stale lead must be shown with an explicit warning.
+  freshness_at: string | null;
+  valid_until: string | null;
+  is_stale: boolean;
 }
 
 export interface BuyerMatch {

@@ -41,6 +41,14 @@ export function BuyerCard({ match }: { match: BuyerMatch }) {
                 {verified ? t("verified") : t("unverified")}
               </span>
             )}
+            {buyer.is_stale && (
+              <span
+                className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                title={buyer.valid_until ?? undefined}
+              >
+                ⚠ {t("stale")}
+              </span>
+            )}
           </div>
 
           {evidence?.summary && (

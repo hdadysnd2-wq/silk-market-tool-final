@@ -62,6 +62,14 @@ Flip one key at a time; everything else stays mock.
 - [ ] Confirm each flip via `GET /health` → `active_provider_summary()`.
 - [ ] Resolve the ⚠️ flags above (Smartlead endpoint/model; Apollo header+email-unlock; Coresignal fields; Outscraper async; Comtrade budget) against the live APIs.
 
-> A keyed live-smoke script (one command per provider, gated behind the keys) is a
-> natural companion to this doc — it turns each ⚠️ into a pass/fail check the moment
-> a key is set. Ask for it when you have a connected environment.
+> **The keyed live-smoke script now exists**: `apps/api/app/live_smoke.py`. It makes
+> one minimal real call per provider — but only for slots whose key is set — so each
+> ⚠️ above becomes a pass/fail the moment you configure that key. With no keys it is
+> a no-op (every slot `SKIP`, exit 0), and it never sends a cold email (the Smartlead /
+> mailbox send path is reported, not exercised — that needs a supervised pilot). Run it
+> from `apps/api`:
+>
+> ```bash
+> uv run python -m app.live_smoke          # human-readable table + exit code
+> uv run python -m app.live_smoke --json   # machine-readable
+> ```

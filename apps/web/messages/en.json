@@ -69,7 +69,12 @@
     "findBuyers": "Find buyers",
     "createProduct": "Create product",
     "viewReport": "View report",
-    "close": "Close"
+    "close": "Close",
+    "cancel": "Cancel",
+    "createError": "Couldn't add the product: {detail}",
+    "createErrorUnknown": "please check your connection and try again",
+    "createSuccess": "Product added — classifying now.",
+    "priceRangeError": "The minimum price can't be greater than the maximum price."
   },
   "markets": {
     "title": "Select target markets",

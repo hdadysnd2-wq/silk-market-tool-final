@@ -69,7 +69,12 @@
     "findBuyers": "ابحث عن مشترين",
     "createProduct": "إنشاء المنتج",
     "viewReport": "عرض التقرير",
-    "close": "إغلاق"
+    "close": "إغلاق",
+    "cancel": "إلغاء",
+    "createError": "تعذّرت إضافة المنتج: {detail}",
+    "createErrorUnknown": "تحقّق من اتصالك وحاول مرة أخرى",
+    "createSuccess": "تمت إضافة المنتج — جارٍ التصنيف الآن.",
+    "priceRangeError": "لا يمكن أن يكون السعر الأدنى أكبر من السعر الأعلى."
   },
   "markets": {
     "title": "اختر الأسواق المستهدفة",

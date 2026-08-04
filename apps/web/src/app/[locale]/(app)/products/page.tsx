@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import type { Product, ProductAccepted } from "@/lib/types";
 
@@ -15,6 +15,7 @@ export default function ProductsPage() {
   const [pollMs, setPollMs] = useState(0);
   const { data, loading, reload } = useApi<Product[]>("/products", pollMs);
   const [open, setOpen] = useState(false);
+  const [notice, setNotice] = useState(false);
 
   useEffect(() => {
     const anyPending = (data ?? []).some((p) => p.classification_status === "pending");
@@ -26,12 +27,31 @@ export default function ProductsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">{t("title")}</h1>
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setNotice(false);
+            setOpen(true);
+          }}
           className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
         >
           {t("upload")}
         </button>
       </div>
+
+      {notice && (
+        <div
+          role="status"
+          className="mt-4 flex items-center justify-between rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800 ring-1 ring-green-200"
+        >
+          <span>{t("createSuccess")}</span>
+          <button
+            onClick={() => setNotice(false)}
+            aria-label={t("close")}
+            className="text-green-700 hover:text-green-900"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <p className="mt-6 text-gray-400">…</p>
@@ -70,6 +90,7 @@ export default function ProductsPage() {
           onClose={() => setOpen(false)}
           onCreated={() => {
             setOpen(false);
+            setNotice(true);
             reload();
           }}
         />
@@ -82,19 +103,37 @@ function UploadDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const t = useTranslations("products");
   const [busy, setBusy] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setBusy(true);
+    setError(null);
     const form = new FormData(e.currentTarget);
     if (file) form.set("image", file);
     else form.delete("image");
+
+    // Client-side guard: a min above the max is never valid, so catch it before
+    // the round-trip. Blank fields are allowed (the backend coerces "" → unset).
+    const min = form.get("price_min");
+    const max = form.get("price_max");
+    if (typeof min === "string" && min !== "" && typeof max === "string" && max !== "") {
+      if (Number(min) > Number(max)) {
+        setError(t("priceRangeError"));
+        return;
+      }
+    }
+
+    setBusy(true);
     try {
       // 202 Accepted: classification runs on a worker. The list poll (above)
       // reflects pending → classified once the entity's status flips.
       await api.post<ProductAccepted>("/products", form);
       onCreated();
-    } finally {
+    } catch (err) {
+      // Surface the failure inline and keep the dialog open so the operator can
+      // fix the input and retry — silently swallowing it made the button look dead.
+      const detail = err instanceof ApiError ? err.message : t("createErrorUnknown");
+      setError(t("createError", { detail }));
       setBusy(false);
     }
   }
@@ -125,14 +164,19 @@ function UploadDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
             className="text-sm"
           />
         </label>
+        {error && (
+          <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </p>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <button
             type="button"
             onClick={onClose}
-            aria-label={t("close")}
-            className="rounded-lg px-4 py-2 text-sm text-gray-600"
+            disabled={busy}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60"
           >
-            ×
+            {t("cancel")}
           </button>
           <button
             type="submit"

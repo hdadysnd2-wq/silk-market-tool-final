@@ -6,11 +6,18 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 // Baseline security headers. The API is same-origin (proxied via rewrites), so
 // connect-src 'self' suffices. 'unsafe-inline' is kept for script/style because
 // the App Router injects inline bootstrap scripts without a nonce; nonce-based
-// hardening is a follow-up. frame-ancestors 'none' + X-Frame-Options block
-// clickjacking; img-src allows https for cross-origin storage (presigned URLs).
+// hardening is a follow-up. 'unsafe-eval' is added in DEV ONLY — `next dev`
+// (used by the Playwright e2e) relies on eval for React Fast Refresh/HMR; the
+// production bundle does not, so prod keeps the stricter policy. frame-ancestors
+// 'none' + X-Frame-Options block clickjacking; img-src allows https for
+// cross-origin storage (presigned URLs).
+const isDev = process.env.NODE_ENV !== "production";
+const scriptSrc = isDev
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+  : "script-src 'self' 'unsafe-inline'";
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  scriptSrc,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",

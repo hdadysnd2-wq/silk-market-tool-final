@@ -60,6 +60,8 @@ def list_buyers(
                 relevance_score=match.relevance_score,
                 score_breakdown=match.score_breakdown,
                 evidence=match.evidence,
+                lawful_basis=match.lawful_basis,
+                basis_note=match.basis_note,
                 contacts=[ContactOut.model_validate(c) for c in contacts],
             )
         )

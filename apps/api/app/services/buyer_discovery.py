@@ -273,7 +273,33 @@ def _score(db: Session, product: Product, buyer: Buyer, market_iso2: str) -> Non
     match.relevance_score = breakdown.total
     match.score_breakdown = breakdown.as_dict()
     match.evidence = evidence
+    # I8 — record the lawful basis for direct marketing to this lead, derived from
+    # the evidence that established it (PDPL Art. 25 prior-interaction / GDPR).
+    match.lawful_basis, match.basis_note = _lawful_basis(shipments, evidence)
     db.flush()
+
+
+def _lawful_basis(shipments: list, evidence: dict) -> tuple[str, str]:
+    """Lawful basis + note for contacting this lead (I8 / PDPL Art. 25 / GDPR).
+
+    Import history on file is a prior commercial interaction with the product
+    category — the basis for B2B direct marketing under Saudi PDPL Art. 25 and a
+    GDPR legitimate-interest basis. A directory-only lead has no such history and
+    is flagged for review before any outreach. Never asserts consent that was not
+    established — a weaker basis is labelled as such, not inflated.
+    """
+    if shipments:
+        note = (
+            f"{evidence.get('summary', 'Import history on file')} — prior commercial "
+            "activity supports B2B direct marketing (PDPL Art. 25 prior-interaction "
+            "basis; GDPR legitimate interest)."
+        )
+        return "prior_import_activity", note
+    return (
+        "directory_listing",
+        "Public business-directory listing; no import history on file — review the "
+        "lawful basis before direct marketing.",
+    )
 
 
 def _evidence(recent_shipments: list, source: str, hs_code: str) -> dict:

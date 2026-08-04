@@ -45,6 +45,9 @@ class BuyerMatchOut(BaseModel):
     relevance_score: int
     score_breakdown: dict | None
     evidence: dict | None
+    #: Lawful basis for direct marketing to this lead (I8), recorded at discovery.
+    lawful_basis: str | None = None
+    basis_note: str | None = None
     contacts: list[ContactOut] = []
 
 

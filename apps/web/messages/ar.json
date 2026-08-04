@@ -11,7 +11,9 @@
     "deliverability": "جودة الإرسال",
     "admin": "لوحة الإدارة",
     "logout": "تسجيل الخروج",
-    "connectEmail": "البريد"
+    "connectEmail": "البريد",
+    "profile": "الملف الشخصي",
+    "sendingEmail": "بريد الإرسال"
   },
   "auth": {
     "login": "تسجيل الدخول",
@@ -42,7 +44,10 @@
     "bounceRate": "معدل الارتداد",
     "pendingApprovals": "بانتظار الموافقة",
     "reviewPending": "مراجعة",
-    "empty": "لا توجد بيانات بعد. ابدأ برفع منتج وإطلاق أول حملة."
+    "empty": "لا توجد بيانات بعد. ابدأ برفع منتج وإطلاق أول حملة.",
+    "noSenderTitle": "اربط صندوق بريد للإرسال",
+    "noSenderBody": "لا يمكنك إرسال الحملات قبل ربط صندوق بريد واحد على الأقل والتحقق منه.",
+    "noSenderCta": "ربط البريد"
   },
   "products": {
     "title": "المنتجات",
@@ -243,7 +248,9 @@
       "pending": "قيد الانتظار",
       "needs_reauth": "يلزم إعادة الربط",
       "disabled": "معطّل"
-    }
+    },
+    "managedTitle": "الإرسال المُدار (تجميعة Smartlead)",
+    "managedBody": "نتكفّل نيابةً عنك بالتسليم والإحماء وتدوير صناديق البريد عبر تجميعة Smartlead المُدارة. لا حاجة لإعداد خوادم أو SMTP — فقط اربط صندوق بريدك بالأعلى ونتولّى الباقي."
   },
   "common": {
     "loading": "جارٍ التحميل…",
@@ -254,5 +261,36 @@
     "close": "إغلاق",
     "error": "حدث خطأ ما",
     "language": "English"
+  },
+  "profile": {
+    "title": "الملف الشخصي والحساب",
+    "factoryTitle": "المصنع",
+    "factoryNameAr": "اسم المصنع (بالعربية)",
+    "factoryNameEn": "اسم المصنع (بالإنجليزية)",
+    "sendingDomain": "نطاق الإرسال",
+    "verified": "مُوثَّق",
+    "notVerified": "غير مُوثَّق",
+    "spf": "SPF",
+    "dkim": "DKIM",
+    "dmarc": "DMARC",
+    "saveFactory": "حفظ بيانات المصنع",
+    "accountTitle": "حسابك",
+    "email": "البريد الإلكتروني",
+    "fullName": "الاسم الكامل",
+    "locale": "اللغة",
+    "localeAr": "العربية",
+    "localeEn": "الإنجليزية",
+    "saveAccount": "حفظ الحساب",
+    "passwordTitle": "تغيير كلمة المرور",
+    "currentPassword": "كلمة المرور الحالية",
+    "newPassword": "كلمة المرور الجديدة",
+    "confirmPassword": "تأكيد كلمة المرور الجديدة",
+    "changePassword": "تغيير كلمة المرور",
+    "saved": "تم الحفظ.",
+    "saveError": "تعذّر الحفظ. حاول مرة أخرى.",
+    "passwordChanged": "تم تغيير كلمة المرور.",
+    "passwordError": "تعذّر تغيير كلمة المرور.",
+    "passwordMismatch": "كلمتا المرور الجديدتان غير متطابقتين.",
+    "passwordTooShort": "يجب أن تتكوّن كلمة المرور الجديدة من 8 أحرف على الأقل."
   }
 }

@@ -11,7 +11,9 @@
     "deliverability": "Deliverability",
     "admin": "Admin",
     "logout": "Log out",
-    "connectEmail": "Email"
+    "connectEmail": "Email",
+    "profile": "Profile",
+    "sendingEmail": "Sending email"
   },
   "auth": {
     "login": "Log in",
@@ -42,7 +44,10 @@
     "bounceRate": "Bounce rate",
     "pendingApprovals": "Pending approvals",
     "reviewPending": "Review",
-    "empty": "No data yet. Start by uploading a product and launching your first campaign."
+    "empty": "No data yet. Start by uploading a product and launching your first campaign.",
+    "noSenderTitle": "Connect a sending mailbox",
+    "noSenderBody": "You can't send outreach until at least one mailbox is connected and verified.",
+    "noSenderCta": "Connect email"
   },
   "products": {
     "title": "Products",
@@ -243,7 +248,9 @@
       "pending": "Pending",
       "needs_reauth": "Reconnect needed",
       "disabled": "Disabled"
-    }
+    },
+    "managedTitle": "Managed sending (Smartlead pool)",
+    "managedBody": "Delivery, warm-up, and inbox rotation are handled for you through our managed Smartlead pool. You don't configure servers or SMTP — just connect your mailbox above and we take care of the rest."
   },
   "common": {
     "loading": "Loading…",
@@ -254,5 +261,36 @@
     "close": "Close",
     "error": "Something went wrong",
     "language": "العربية"
+  },
+  "profile": {
+    "title": "Profile & account",
+    "factoryTitle": "Factory",
+    "factoryNameAr": "Factory name (Arabic)",
+    "factoryNameEn": "Factory name (English)",
+    "sendingDomain": "Sending domain",
+    "verified": "Verified",
+    "notVerified": "Not verified",
+    "spf": "SPF",
+    "dkim": "DKIM",
+    "dmarc": "DMARC",
+    "saveFactory": "Save factory",
+    "accountTitle": "Your account",
+    "email": "Email",
+    "fullName": "Full name",
+    "locale": "Language",
+    "localeAr": "Arabic",
+    "localeEn": "English",
+    "saveAccount": "Save account",
+    "passwordTitle": "Change password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "changePassword": "Change password",
+    "saved": "Saved.",
+    "saveError": "Could not save. Please try again.",
+    "passwordChanged": "Password changed.",
+    "passwordError": "Could not change the password.",
+    "passwordMismatch": "The new passwords don't match.",
+    "passwordTooShort": "The new password must be at least 8 characters."
   }
 }

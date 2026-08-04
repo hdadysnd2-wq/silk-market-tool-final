@@ -9,7 +9,12 @@ const NAV = [
   { href: "/dashboard", key: "dashboard" },
   { href: "/products", key: "products" },
   { href: "/campaigns", key: "campaigns" },
-  { href: "/onboarding/email", key: "connectEmail" },
+] as const;
+
+// Account + sending configuration, grouped under a "Settings" heading in the nav.
+const SETTINGS_NAV = [
+  { href: "/settings/profile", key: "profile" },
+  { href: "/settings/sending-email", key: "sendingEmail" },
   { href: "/settings/deliverability", key: "deliverability" },
 ] as const;
 
@@ -71,6 +76,31 @@ export function AppShell({ children, isAdmin }: { children: React.ReactNode; isA
                 </Link>
               </li>
             )}
+
+            <li className="pt-4">
+              <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                {t("settings")}
+              </p>
+              <ul className="space-y-1">
+                {SETTINGS_NAV.map((item) => {
+                  const active = pathname.startsWith(item.href);
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={`block rounded-lg px-3 py-2 text-sm ${
+                          active
+                            ? "bg-brand-50 font-medium text-brand-700"
+                            : "text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        {t(item.key)}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </li>
           </ul>
         </nav>
         <main className="min-w-0 flex-1">{children}</main>

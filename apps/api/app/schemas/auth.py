@@ -28,6 +28,18 @@ class OTPVerifyRequest(BaseModel):
     code: str = Field(min_length=6, max_length=6)
 
 
+class UpdateMeRequest(BaseModel):
+    """Self-service profile edit. Only supplied fields are changed."""
+
+    full_name: str | None = Field(default=None, max_length=160)
+    locale: str | None = Field(default=None, pattern="^(ar|en)$")
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

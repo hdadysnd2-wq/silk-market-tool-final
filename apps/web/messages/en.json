@@ -100,7 +100,11 @@
     "limits": "Limits of this report",
     "viewCompetitors": "View competitors in this market",
     "discoverTopMarkets": "Discover buyers across the top markets",
-    "discoveringBuyers": "Starting discovery…"
+    "discoveringBuyers": "Starting discovery…",
+    "refine": "Refine (Stage 2)",
+    "refining": "Refining…",
+    "refined": "Refined (Stage 2)",
+    "tariffLabel": "tariff"
   },
   "buyers": {
     "title": "Potential buyers",

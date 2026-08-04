@@ -23,6 +23,9 @@ class CountryRankingOut(BaseModel):
     is_mirror: bool
     tags: list[str] | None
     stage: int
+    #: Stage-2 re-ranking score + enrichment signals (None until Stage 2 runs).
+    stage2_score: float | None = None
+    enrichment: dict | None = None
 
     model_config = {"from_attributes": True}
 

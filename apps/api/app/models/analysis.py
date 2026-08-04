@@ -102,6 +102,13 @@ class CountryRanking(UUIDMixin, TimestampMixin, Base):
     is_mirror: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     #: Visible provenance tags ("transit hub — …", "mirror data", "no data").
     tags: Mapped[list[str] | None] = mapped_column(JSONB)
-    #: Funnel stage that produced this row (1 = local screen).
+    #: Funnel stage that produced this row (1 = local screen; 2 = budgeted
+    #: live enrichment of the shortlist).
     stage: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     source: Mapped[str] = mapped_column(String(64), default="world_trade", nullable=False)
+    #: Stage-2 score after budgeted enrichment re-ranking (None until Stage 2 runs).
+    stage2_score: Mapped[float | None] = mapped_column(Numeric(20, 4))
+    #: Stage-2 enrichment signals + provenance ({applied_tariff_pct,
+    #: ppp_gni_per_capita, source, note}). None until Stage 2 runs; a failed
+    #: signal is a declared gap inside it (I1), never a fabricated number.
+    enrichment: Mapped[dict | None] = mapped_column(JSONB)

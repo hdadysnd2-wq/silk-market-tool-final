@@ -142,6 +142,20 @@ class CompanyFirmographics:
 
 
 @dataclass(frozen=True)
+class MarketEnrichment:
+    """Budgeted macro/tariff signals for one market + HS6 (funnel Stage 2).
+
+    Every field is optional: a signal that could not be fetched stays ``None`` (a
+    declared gap, I1) rather than a fabricated number. ``applied_tariff_pct`` is
+    the market's applied import tariff for the HS6 (a fraction, 0.05 = 5%);
+    ``ppp_gni_per_capita`` is a purchasing-power proxy for demand quality.
+    """
+
+    applied_tariff_pct: float | None = None
+    ppp_gni_per_capita: float | None = None
+
+
+@dataclass(frozen=True)
 class MapsPlace:
     name: str
     country_iso2: str
@@ -330,6 +344,21 @@ class EnrichmentProvider(Protocol):
     def enrich_company(
         self, name: str, country_iso2: str, domain: str | None = None
     ) -> ProviderRecord[CompanyFirmographics] | None: ...
+
+
+class MarketEnrichmentProvider(Protocol):
+    """Budgeted macro/tariff enrichment for funnel Stage 2 (World Bank / WITS-shaped).
+
+    Live, this is a paid/budgeted call (applied tariff + PPP per market); offline
+    a deterministic mock stands in. A failed fetch returns ``None`` so the caller
+    records a declared gap (I1) rather than a fabricated signal.
+    """
+
+    name: str
+
+    def enrich_market(
+        self, importer_iso3: str, hs6: str
+    ) -> ProviderRecord[MarketEnrichment] | None: ...
 
 
 class MapsProvider(Protocol):

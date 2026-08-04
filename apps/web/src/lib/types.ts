@@ -85,6 +85,14 @@ export interface CountryRanking {
   is_mirror: boolean;
   tags: string[] | null;
   stage: number;
+  /** Stage-2 re-ranking score + enrichment signals (null until Stage 2 runs). */
+  stage2_score: number | null;
+  enrichment: {
+    applied_tariff_pct: number | null;
+    ppp_gni_per_capita: number | null;
+    source: string;
+    note: string;
+  } | null;
 }
 
 export interface Analysis {

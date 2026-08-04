@@ -18,8 +18,10 @@ from app.models.product import Product as ProductModel
 from app.providers.countries import iso3_to_iso2
 from app.schemas.analysis import AnalysisOut, CountryRankingOut, FunnelBriefOut
 from app.security import CurrentUser, assert_factory_access
+from app.services.api_budget import budget_scope
 from app.services.funnel_brief import build_funnel_brief
 from app.services.ranking import run_product_world_analysis
+from app.services.stage2 import enrich_shortlist
 
 router = APIRouter(tags=["analyses"])
 
@@ -92,3 +94,28 @@ def get_analysis_brief(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> 
     """Brief-first funnel output: decision + 3 sourced numbers + a limits section."""
     analysis = _owned_analysis(db, analysis_id, user)
     return FunnelBriefOut.model_validate(build_funnel_brief(db, analysis))
+
+
+@router.post("/analyses/{analysis_id}/enrich", response_model=AnalysisOut)
+def enrich_analysis(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> AnalysisOut:
+    """Funnel Stage 2: budgeted enrichment of the Stage-1 shortlist → top 5.
+
+    Enriches the persisted shortlist with applied-tariff + PPP signals under the
+    per-analysis API budget (decision #5) and re-ranks to the top 5. The enrichment
+    is budgeted/paid, so it is an explicit step; the Stage-1 screen stays free. A
+    market whose enrichment fails keeps its Stage-1 score (a declared gap, I1).
+    """
+    analysis = _owned_analysis(db, analysis_id, user)
+    product = db.get(Product, analysis.product_id) if analysis.product_id else None
+    # I2 — never enrich/rank on an unconfirmed HS code.
+    if not (product and product.hs_code and product.hs_confirmed_by_user):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="HS code must be confirmed before Stage-2 enrichment",
+        )
+    with budget_scope(label=f"stage2:{analysis_id}"):
+        enrich_shortlist(db, analysis, product.hs_code)
+    if analysis.status in ("pending", "classified", "ranked"):
+        analysis.status = "enriched"
+    db.commit()
+    return _to_out(db, analysis)

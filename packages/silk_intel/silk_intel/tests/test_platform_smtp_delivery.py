@@ -305,6 +305,58 @@ def test_unsubscribe_then_future_send_is_suppressed(monkeypatch):
     assert eid in summary["suppressed"]
 
 
+def test_unsubscribe_on_one_tenant_suppresses_across_tenants(monkeypatch):
+    # I4 — القمع عابرٌ للمستأجرين: من ألغى اشتراكه عبر مصنعٍ لا يجوز أن يعاود
+    # مصنعٌ آخر مراسلته لنفس العنوان (حماية CAN-SPAM/PDPL). unsubscribe على A ثم
+    # إرسال من B لنفس العنوان يجب أن يُقمَع.
+    seed(monkeypatch)
+    a = make_factory("gold", "tenantA@f.local", fund_cents=100_000)
+    b = make_factory("gold", "tenantB@f.local", fund_cents=100_000)
+    smtp_b = add_active_smtp(b["account_id"])
+    conn = pdb.connect()
+    # العميل يُلغي اشتراكه عبر رابط المصنع A فقط.
+    client().get(_path_and_query(unsubscribe.build_url(a["account_id"], "shared@x.com")))
+    # المصنع B (مستأجرٌ مختلف) يحاول مراسلة نفس العنوان.
+    draft = {"subject_en": "S", "body_en": "B"}
+    prospect = {"email": "shared@x.com", "language_preference": "en"}
+    eid = email_queue.enqueue(conn, account_id=b["account_id"], study_id=None,
+                              prospect=prospect, draft=draft, smtp_config_id=smtp_b,
+                              actor_user_id=b["user_id"])
+    summary = email_queue.process_queue(conn, sender=lambda cfg, row: None)
+    assert eid in summary["suppressed"]  # مقموع عابراً للمستأجرين (I4)
+
+
+def test_debit_failure_does_not_discard_consent_record(monkeypatch):
+    # I4 / HIGH-9 — البريد خرج فعلاً: فشلُ الخصم يجب ألا يمحو قيدَ الموافقة ولا
+    # يعلّم الصفّ 'failed'. يبقى 'sent' + قيد موافقة موجود + دَينٌ في last_error.
+    seed(monkeypatch)
+    f = make_factory("gold", "arrears@f.local", fund_cents=100_000)
+    smtp = add_active_smtp(f["account_id"])
+    conn = pdb.connect()
+    draft = {"subject_en": "S", "body_en": "B"}
+    prospect = {"email": "p9@x.com", "language_preference": "en"}
+    eid = email_queue.enqueue(conn, account_id=f["account_id"], study_id=None,
+                              prospect=prospect, draft=draft, smtp_config_id=smtp,
+                              actor_user_id=f["user_id"])
+
+    def _boom(*a, **k):
+        raise RuntimeError("debit blew up")
+    monkeypatch.setattr(email_queue.wallet, "apply_entry", _boom)
+
+    summary = email_queue.process_queue(conn, sender=lambda cfg, row: None)
+    # مُرسَل رغم فشل الخصم — لا 'failed' مضلِّل.
+    assert eid in summary["sent"]
+    # قيد الموافقة موجود (لم يُتراجَع عنه): الرسالة التي خرجت مسجّلة للامتثال.
+    consent = conn.execute(
+        "SELECT 1 FROM consent_registry WHERE prospect_email = ?", ("p9@x.com",)
+    ).fetchone()
+    assert consent is not None
+    row = conn.execute("SELECT status, last_error FROM email_queue WHERE id = ?",
+                       (eid,)).fetchone()
+    assert row["status"] == "sent"
+    assert "debit_failed_arrears" in (row["last_error"] or "")
+
+
 # ════════════════════════════ password-reset delivery ═════════════════════════
 def test_password_reset_sends_email_when_operator_smtp_configured(monkeypatch):
     info = seed(monkeypatch)

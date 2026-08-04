@@ -6,16 +6,22 @@ can save, print, or forward it with no dependency on the running app.
 
 from __future__ import annotations
 
+import shutil
+import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse, HTMLResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from starlette.background import BackgroundTask
 
 from app.api.deps import DbDep, get_owned_product
 from app.models import Product
 from app.schemas.report import ProductReportOut
 from app.services.report import build_product_report
+from app.services.report_view import build_engine_result
+
+_DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 router = APIRouter(tags=["reports"])
 
@@ -168,3 +174,41 @@ def product_report_html(
         ),
     )
     return HTMLResponse(content=html)
+
+
+@router.get("/products/{product_id}/report.docx")
+def product_report_docx(
+    db: DbDep,
+    product: Product = Depends(get_owned_product),
+) -> FileResponse:
+    """The full report as a Word document (decision #7 — on demand).
+
+    Derived from the engine's ONE template: platform data → ``build_engine_result``
+    → ``silk_render.build_view`` → ``silk_reports.render_docx``. Every figure keeps
+    its source line and the "limits of this report" section is never dropped; a
+    value the platform cannot source is shown as a declared gap, never fabricated
+    (I1). Returns 501 if python-docx is unavailable, mirroring the engine.
+    """
+    from silk_render import build_view
+    from silk_reports import render_docx
+
+    result = build_engine_result(db, product)
+    view = build_view(result)
+
+    tmp_dir = tempfile.mkdtemp(prefix="silk_report_")
+    try:
+        path = render_docx(view, str(Path(tmp_dir) / "report.docx"))
+    except RuntimeError as exc:  # python-docx missing → the engine raises this
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(status_code=501, detail="Word export is unavailable") from exc
+    except Exception:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
+
+    filename = f"silk_report_{product.id}.docx"
+    return FileResponse(
+        path,
+        media_type=_DOCX_MEDIA_TYPE,
+        filename=filename,
+        background=BackgroundTask(shutil.rmtree, tmp_dir, ignore_errors=True),
+    )

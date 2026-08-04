@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-fable-5"
     comtrade_api_key: str = ""
     comtrade_offline: bool = True
+    # Stage-2 market enrichment (applied tariff + PPP). Blank/False keeps the
+    # deterministic mock so CI/offline stays green; True selects the LIVE World
+    # Bank / WITS adapter, which routes through the engine's hardened data layer.
+    market_enrichment_live: bool = False
     coresignal_api_key: str = ""
     outscraper_api_key: str = ""
     apollo_api_key: str = ""

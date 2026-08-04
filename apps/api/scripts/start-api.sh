@@ -7,7 +7,15 @@
 set -e
 
 echo "[start-api] applying database migrations…"
-alembic upgrade head
+if ! alembic upgrade head; then
+  echo "[start-api] ERROR: database migrations failed — the API cannot start." >&2
+  echo "[start-api] Most common cause on a managed platform: the Postgres database has" >&2
+  echo "[start-api] no pgvector extension. The first migration runs" >&2
+  echo "[start-api] 'CREATE EXTENSION IF NOT EXISTS vector'; a plain Postgres image fails it." >&2
+  echo "[start-api] Fix: provision a pgvector-enabled Postgres (e.g. the pgvector/pgvector" >&2
+  echo "[start-api] image) and confirm DATABASE_URL points at it. See docs/DEPLOY_RAILWAY.md." >&2
+  exit 1
+fi
 
 # Seed reference data + demo accounts on boot. The seed is idempotent (every
 # insert is existence-guarded), so it is safe to re-run on every deploy. Set

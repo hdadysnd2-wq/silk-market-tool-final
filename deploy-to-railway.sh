@@ -279,12 +279,14 @@ these in the Railway dashboard (Project → each service → Settings):${RESET}
 
   ${BOLD}a) Root Directory & Config path${RESET}   (Settings → Source / Build)
         service   Root Directory   Config-as-code path
-        ───────   ──────────────   ───────────────────
-        api       apps/api         railway.json
-        worker    apps/api         railway.worker.json
-        beat      apps/api         railway.beat.json
+        ───────   ──────────────   ─────────────────────────────
+        api       (repo root)      apps/api/railway.json
+        worker    (repo root)      apps/api/railway.worker.json
+        beat      (repo root)      apps/api/railway.beat.json
         web       apps/web         railway.json
-     Then redeploy each service (the first build fails until the root is set).
+     api/worker/beat build from the repo root (their Dockerfile needs the
+     sibling packages/* in context) — leave Root Directory EMPTY for those.
+     Then redeploy each service.
 
   ${BOLD}b) Public domains${RESET}   (Settings → Networking → Generate Domain)
      Generate one for ${BOLD}api${RESET} and one for ${BOLD}web${RESET}. Their

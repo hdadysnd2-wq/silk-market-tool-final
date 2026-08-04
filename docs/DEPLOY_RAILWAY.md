@@ -20,12 +20,22 @@ to your production branch once the wiring below is in place.
 and differ only by start command, selected through three config-as-code files.
 `web` is a separate Next.js image (`apps/web/Dockerfile`).
 
-| Service  | Root Directory | Config-as-code path   | Start command             | Public? |
-|----------|----------------|-----------------------|---------------------------|---------|
-| `api`    | `apps/api`     | `railway.json`        | `scripts/start-api.sh`    | ✅ yes  |
-| `worker` | `apps/api`     | `railway.worker.json` | `scripts/start-worker.sh` | no      |
-| `beat`   | `apps/api`     | `railway.beat.json`   | `scripts/start-beat.sh`   | no      |
-| `web`    | `apps/web`     | `railway.json`        | `pnpm start`              | ✅ yes  |
+The **Root Directory** below is each service's Docker build context; the
+config-as-code path is relative to it.
+
+| Service  | Root Directory | Config-as-code path          | Start command             | Public? |
+|----------|----------------|------------------------------|---------------------------|---------|
+| `api`    | _(repo root)_  | `apps/api/railway.json`        | `scripts/start-api.sh`    | ✅ yes  |
+| `worker` | _(repo root)_  | `apps/api/railway.worker.json` | `scripts/start-worker.sh` | no      |
+| `beat`   | _(repo root)_  | `apps/api/railway.beat.json`   | `scripts/start-beat.sh`   | no      |
+| `web`    | `apps/web`     | `railway.json`               | `pnpm start`              | ✅ yes  |
+
+> **Why `api`/`worker`/`beat` build from the repo root (not `apps/api`).**
+> `apps/api/pyproject.toml` depends on two editable path packages that live
+> outside `apps/api` — `../../packages/silk_intel` and `../../packages/contracts`.
+> The Docker build context must include them, so the context is the **repo root**
+> and the Dockerfile is referenced as `apps/api/Dockerfile` (leave Root Directory
+> empty). `web` has no cross-package dependency, so it builds from `apps/web`.
 
 - **`api`** runs Alembic migrations and (by default) the idempotent seed on
   boot — migrations live only here, so schema changes apply exactly once per
@@ -79,7 +89,16 @@ dashboard. Everything else is already wired by the script.
 
 For each service: **Settings → Source** (Root Directory) and **Settings → Build**
 (Config-as-code path), using the table at the top of this doc. Then **Redeploy**.
-The very first build fails until the root directory is set — that is expected.
+
+- `api`, `worker`, `beat`: leave **Root Directory empty** (repo root) and set the
+  config path to `apps/api/railway.json` (`.worker.json` / `.beat.json`). The
+  Dockerfile builds from the root so its sibling `packages/*` are in context.
+- `web`: Root Directory `apps/web`, config path `railway.json`.
+
+The very first build can fail until these are set — that is expected. A build
+that dies almost immediately with
+`cannot normalize a relative path beyond the base directory: .../packages/...`
+means an api-family service still has Root Directory `apps/api`; clear it.
 
 ### b) Public domains
 

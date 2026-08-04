@@ -87,6 +87,29 @@ function Test-Command {
     return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
+# Run a native CLI command (railway/npm/git) attached to the console, so its
+# interactive prompts and browser logins still work, WITHOUT letting its stderr
+# chatter be promoted to a terminating error. Under $ErrorActionPreference =
+# 'Stop', Windows PowerShell 5.1 turns any native stderr line - including a TUI's
+# ANSI escape codes (e.g. `railway init`'s workspace picker) - into a terminating
+# error whose message is empty. This wrapper drops the preference to 'Continue'
+# just for the wrapped call.
+#
+# Call it as a STATEMENT (not `$x = Invoke-Native {...}`) and read $LASTEXITCODE
+# afterwards: the native command's own stdout must flow to the console, and
+# $LASTEXITCODE carries its real exit code out of the wrapper unchanged.
+function Invoke-Native {
+    param([Parameter(Mandatory)][scriptblock]$ScriptBlock)
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $ScriptBlock
+    }
+    finally {
+        $ErrorActionPreference = $prevEap
+    }
+}
+
 # ----------------------------------------------------------------------------
 # 0) Banner
 # ----------------------------------------------------------------------------
@@ -107,7 +130,7 @@ try {
             if (-not (Test-Command 'npm')) {
                 Fail 'npm is required to install the Railway CLI but was not found on PATH. Install Node.js/npm from https://nodejs.org and re-run.'
             }
-            & npm install -g '@railway/cli'
+            Invoke-Native { npm install -g '@railway/cli' }
             if ($LASTEXITCODE -ne 0) { Fail "npm install -g @railway/cli exited with code $LASTEXITCODE." }
 
             if (-not (Test-Command 'railway')) {
@@ -137,7 +160,7 @@ try {
             }
             else {
                 Write-Info 'Opening a browser to log in... (headless? set RAILWAY_TOKEN instead)'
-                & railway login
+                Invoke-Native { railway login }
                 if ($LASTEXITCODE -ne 0) { Fail "railway login exited with code $LASTEXITCODE." }
                 Write-Ok 'Logged in'
             }
@@ -195,7 +218,7 @@ try {
     try {
         if ($Link) {
             Write-Info 'Linking to an existing Railway project (railway link)...'
-            & railway link
+            Invoke-Native { railway link }
             if ($LASTEXITCODE -ne 0) { Fail "railway link exited with code $LASTEXITCODE." }
             Write-Ok 'Linked to existing project'
         }
@@ -208,7 +231,7 @@ try {
             }
             else {
                 Write-Info "Creating project '$ProjectName' (railway init)..."
-                & railway init --name $ProjectName
+                Invoke-Native { railway init --name $ProjectName }
                 if ($LASTEXITCODE -ne 0) { Fail "railway init exited with code $LASTEXITCODE." }
                 Write-Ok "Project '$ProjectName' created and linked"
             }
@@ -227,8 +250,20 @@ try {
         if ($Branch) { $addArgs += @('--branch', $Branch) }
 
         Write-Info ("Running: railway {0}" -f ($addArgs -join ' '))
-        & railway @addArgs
-        if ($LASTEXITCODE -ne 0) { Fail "railway add --repo exited with code $LASTEXITCODE." }
+        Invoke-Native { railway @addArgs }
+        if ($LASTEXITCODE -ne 0) {
+            Fail (@"
+railway add exited with code $LASTEXITCODE.
+If '$Repo' is a PRIVATE repository, Railway cannot pull it until you connect
+your GitHub account to Railway and grant its GitHub App access to this repo:
+  1. Open https://railway.com , then Account Settings -> connect GitHub, and
+     grant access to the '$Repo' repository (all repos, or just this one).
+  2. Re-run this script, or: railway add --repo $Repo
+The easiest path for a private repo is the dashboard: New Project -> Deploy
+from GitHub repo, which walks you through authorising access as you select it.
+See docs/DEPLOY_RAILWAY.md for the full runbook.
+"@)
+        }
         Write-Ok "Repo $Repo linked and deploying"
     }
     catch {

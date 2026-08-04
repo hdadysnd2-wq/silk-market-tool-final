@@ -61,7 +61,13 @@ def _connect(path: str) -> sqlite3.Connection:
     parent = os.path.dirname(path)
     if parent:
         os.makedirs(parent, exist_ok=True)
-    conn = sqlite3.connect(path)
+    # WAL + busy_timeout: async-research threads, status polling and the refresh
+    # scheduler all write these files concurrently; the default rollback journal
+    # + 0ms busy timeout raises "database is locked", which in the money guards
+    # (BEGIN IMMEDIATE) surfaces as a spurious fail-closed denial of a paid run.
+    conn = sqlite3.connect(path, timeout=10.0)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=10000")
     conn.execute(
         "CREATE TABLE IF NOT EXISTS paid_usage ("
         "day TEXT PRIMARY KEY, calls INTEGER NOT NULL DEFAULT 0)"

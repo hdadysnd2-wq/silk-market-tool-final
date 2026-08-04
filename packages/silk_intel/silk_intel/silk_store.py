@@ -70,9 +70,13 @@ def connect():
     d = os.path.dirname(path)
     if d:
         os.makedirs(d, exist_ok=True)
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, timeout=10.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    # WAL + busy_timeout: the fact store is written by concurrent research/refresh
+    # threads; the default journal + 0ms timeout raises "database is locked".
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=10000")
     return conn
 
 

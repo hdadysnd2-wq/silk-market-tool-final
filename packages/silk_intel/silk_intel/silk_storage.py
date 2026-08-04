@@ -112,8 +112,12 @@ def _connect(path: str) -> sqlite3.Connection:
     parent = os.path.dirname(path)
     if parent:
         os.makedirs(parent, exist_ok=True)
-    conn = sqlite3.connect(path)
+    # WAL + busy_timeout so concurrent research threads / mission checkpoints /
+    # status polling don't hit "database is locked" (which would abort a run).
+    conn = sqlite3.connect(path, timeout=10.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=10000")
     return conn
 
 

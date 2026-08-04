@@ -584,7 +584,14 @@ def _competition_component(comps: list[DataPoint]) -> DataPoint:
     # HHI من الحصص (0..1) — sum of squared shares; 1 = monopoly, ~0 = fragmented.
     # صفٌّ بلا حصة يُسقَط (لا يُعدّ صفراً) — .get يمنع KeyError كامناً.
     shares = [c.value.get("share") for c in comps if c.value]
-    hhi = sum((s / 100.0) ** 2 for s in shares if s is not None)
+    valid = [s for s in shares if s is not None]
+    if not valid:
+        # منافسون بلا حصةٍ مرصودة: HHI=0.0 يعني «تجزّؤ تامّ = أسهل سوق» — صفرٌ
+        # مختلَق يخالف عقد عدم الاختلاق. أعلِنها فجوةً لا أفضلَ حالةٍ ملفّقة.
+        return DataPoint(None, "UN Comtrade", 0.0,
+                         note="no supplier shares — HHI unknown",
+                         retrieved_at=_today())
+    hhi = sum((s / 100.0) ** 2 for s in valid)
     conf = min((c.confidence for c in comps if c.value), default=0.9)
     return DataPoint(round(hhi, 4), "UN Comtrade", conf,
                      note=f"supplier HHI over {len(comps)} suppliers",

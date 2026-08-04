@@ -124,9 +124,13 @@ def _safe_error(exc: Exception) -> str:
 
 
 def _suppressed(conn: sqlite3.Connection, account_id: int, email: str) -> bool:
+    # I4 — القمع عابرٌ للمستأجرين: إلغاء الاشتراك على أيّ حساب يجب أن يمنع
+    # الإرسال لهذا العنوان من كلّ الحسابات (حماية CAN-SPAM/PDPL — لا يجوز أن
+    # يعاود مستأجرٌ آخر مراسلة من ألغى اشتراكه). نفحص بالبريد وحده؛ يبقى
+    # `account_id` في التوقيع للسياق. Cross-tenant: match the address alone.
     row = conn.execute(
-        "SELECT 1 FROM suppression_list WHERE account_id = ? AND email = ?",
-        (account_id, email)).fetchone()
+        "SELECT 1 FROM suppression_list WHERE email = ?",
+        (email,)).fetchone()
     return row is not None
 
 

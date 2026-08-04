@@ -16,12 +16,10 @@ from app.api.deps import DbDep, get_owned_product
 from app.models import Analysis, CountryRanking, Product
 from app.models.product import Product as ProductModel
 from app.providers.countries import iso3_to_iso2
-from app.schemas.analysis import AnalysisOut, CountryRankingOut, FunnelBriefOut
+from app.schemas.analysis import AnalysisAccepted, AnalysisOut, CountryRankingOut, FunnelBriefOut
 from app.security import CurrentUser, assert_factory_access
-from app.services.api_budget import budget_scope
 from app.services.funnel_brief import build_funnel_brief
-from app.services.ranking import run_product_world_analysis
-from app.services.stage2 import enrich_shortlist
+from app.workers.tasks import run_stage2_enrich, run_world_ranking
 
 router = APIRouter(tags=["analyses"])
 
@@ -49,13 +47,13 @@ def _to_out(db: DbDep, analysis: Analysis) -> AnalysisOut:
 
 @router.post(
     "/products/{product_id}/analysis",
-    response_model=AnalysisOut,
-    status_code=status.HTTP_201_CREATED,
+    response_model=AnalysisAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
 )
 def start_analysis(
     db: DbDep,
     product: ProductModel = Depends(get_owned_product),
-) -> AnalysisOut:
+) -> AnalysisAccepted:
     # I2 — the world funnel runs only on a human-confirmed HS code. An unconfirmed
     # or missing code is a 409, never a silent run on a guessed code.
     if not (product.hs_code and product.hs_confirmed_by_user):
@@ -63,9 +61,21 @@ def start_analysis(
             status_code=status.HTTP_409_CONFLICT,
             detail="HS code must be confirmed before running a world analysis",
         )
-    analysis = run_product_world_analysis(db, product)
+    # Create the spine record as pending and commit FIRST so the (eager or real)
+    # ranking task can load it in its own session; the task does the Stage-1 screen.
+    analysis = Analysis(
+        product_id=product.id,
+        product_name=product.name_en or product.name_ar,
+        status="pending",
+    )
+    db.add(analysis)
     db.commit()
-    return _to_out(db, analysis)
+
+    # Snapshot the pending analysis for the 202 body BEFORE enqueuing (eager mode
+    # would otherwise bleed the ranked result in). The client polls GET for it.
+    accepted = _to_out(db, analysis)
+    task = run_world_ranking.delay(str(analysis.id), product.hs_code)
+    return AnalysisAccepted(task_id=task.id, analysis=accepted)
 
 
 def _owned_analysis(db: DbDep, analysis_id: uuid.UUID, user: CurrentUser) -> Analysis:
@@ -96,14 +106,18 @@ def get_analysis_brief(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> 
     return FunnelBriefOut.model_validate(build_funnel_brief(db, analysis))
 
 
-@router.post("/analyses/{analysis_id}/enrich", response_model=AnalysisOut)
-def enrich_analysis(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> AnalysisOut:
+@router.post(
+    "/analyses/{analysis_id}/enrich",
+    response_model=AnalysisAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def enrich_analysis(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> AnalysisAccepted:
     """Funnel Stage 2: budgeted enrichment of the Stage-1 shortlist → top 5.
 
-    Enriches the persisted shortlist with applied-tariff + PPP signals under the
-    per-analysis API budget (decision #5) and re-ranks to the top 5. The enrichment
-    is budgeted/paid, so it is an explicit step; the Stage-1 screen stays free. A
-    market whose enrichment fails keeps its Stage-1 score (a declared gap, I1).
+    Enqueues the enrichment task, which enriches the persisted shortlist with
+    applied-tariff + PPP signals under the per-analysis API budget (decision #5)
+    and re-ranks to the top 5. Returns 202 immediately; the client polls
+    ``GET /analyses/{id}`` for the enriched result once the task finishes.
     """
     analysis = _owned_analysis(db, analysis_id, user)
     product = db.get(Product, analysis.product_id) if analysis.product_id else None
@@ -113,9 +127,8 @@ def enrich_analysis(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> Ana
             status_code=status.HTTP_409_CONFLICT,
             detail="HS code must be confirmed before Stage-2 enrichment",
         )
-    with budget_scope(label=f"stage2:{analysis_id}"):
-        enrich_shortlist(db, analysis, product.hs_code)
-    if analysis.status in ("pending", "classified", "ranked"):
-        analysis.status = "enriched"
-    db.commit()
-    return _to_out(db, analysis)
+    # Snapshot the pre-enrich analysis for the 202 body BEFORE enqueuing (eager mode
+    # would otherwise bleed the re-ranked Stage-2 result in).
+    accepted = _to_out(db, analysis)
+    task = run_stage2_enrich.delay(str(analysis_id), product.hs_code)
+    return AnalysisAccepted(task_id=task.id, analysis=accepted)

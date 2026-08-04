@@ -51,12 +51,18 @@ def test_describe_never_overwrites_a_seller_description(db, factory):
 
 
 def test_create_product_endpoint_returns_attributes(client, auth_headers, db, factory):
+    # The intake pipeline is async: POST is accepted (202) with the product still
+    # pending; the vision pass ran eagerly during the POST, so GET carries it.
     res = client.post(
         "/api/v1/products",
         headers=auth_headers,
         data={"name_ar": "عسل السدر", "name_en": "Sidr Honey", "classify": "true"},
     )
-    assert res.status_code == 201
-    body = res.json()
+    assert res.status_code == 202, res.text
+    accepted = res.json()
+    assert accepted["task_id"]
+    assert accepted["product"]["classification_status"] == "pending"
+
+    body = client.get(f"/api/v1/products/{accepted['product']['id']}", headers=auth_headers).json()
     assert body["attributes"]  # the vision pass populated attributes
     assert body["description_en"]  # and filled a description

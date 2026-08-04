@@ -36,8 +36,20 @@ function product(confirmed: boolean) {
       },
     ],
     hs_confirmed_by_user: confirmed,
-    classification_status: confirmed ? "classified" : "pending",
+    // Classification (which produces hs_candidates) is complete here; whether the
+    // user has *confirmed* the code is the separate `hs_confirmed_by_user` flag.
+    classification_status: "classified",
     created_at: "2026-01-01T00:00:00Z",
+  };
+}
+
+// The pending entity the async POST /products returns before the worker runs.
+function pendingProduct() {
+  return {
+    ...product(false),
+    hs_code: null,
+    hs_candidates: null,
+    classification_status: "pending",
   };
 }
 
@@ -45,7 +57,7 @@ const ANALYSIS = {
   id: "an-1",
   product_id: "prod-1",
   product_name: "Premium Dates",
-  status: "complete",
+  status: "ranked",
   deepen: false,
   created_at: "2026-01-01T00:00:00Z",
   total_screened: 190,
@@ -100,8 +112,10 @@ test("full pipeline: login → upload → confirm HS → funnel → discover →
 
   await page.route(/\/api\/v1\/products$/, (route) => {
     if (route.request().method() === "POST") {
+      // Async 202 + poll: the create is accepted and returns the pending entity;
+      // by the time the list re-fetches, the worker has classified it.
       productsList = [product(false)];
-      return json(route, product(false), 201);
+      return json(route, { task_id: "task-prod-1", product: pendingProduct() }, 202);
     }
     return json(route, productsList);
   });
@@ -110,7 +124,12 @@ test("full pipeline: login → upload → confirm HS → funnel → discover →
     hsConfirmed = true;
     return json(route, product(true));
   });
-  await page.route(/\/api\/v1\/products\/prod-1\/analysis$/, (route) => json(route, ANALYSIS, 201));
+  // POST /analysis is 202 + a pending analysis; the funnel then polls GET
+  // /analyses/an-1, which returns the ranked ANALYSIS (rankings populated).
+  await page.route(/\/api\/v1\/products\/prod-1\/analysis$/, (route) =>
+    json(route, { task_id: "task-an-1", analysis: { id: "an-1", status: "pending", rankings: [] } }, 202),
+  );
+  await page.route(/\/api\/v1\/analyses\/an-1$/, (route) => json(route, ANALYSIS));
   await page.route(/\/api\/v1\/analyses\/an-1\/brief$/, (route) => json(route, BRIEF));
   await page.route(/\/api\/v1\/products\/prod-1\/discover$/, (route) => {
     posted.discover = route.request().postDataJSON();

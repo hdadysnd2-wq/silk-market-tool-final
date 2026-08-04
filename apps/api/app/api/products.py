@@ -8,16 +8,16 @@ from sqlalchemy import select
 from app.api.deps import DbDep, get_owned_product, resolve_factory
 from app.models import HSCode, Product
 from app.models.product import Product as ProductModel
-from app.providers.registry import get_embedding_provider, get_llm_provider
-from app.schemas.product import HSCodeOut, HSConfirmRequest, ProductOut
+from app.schemas.product import HSCodeOut, HSConfirmRequest, ProductAccepted, ProductOut
 from app.security import CurrentUser
-from app.services import hs_classifier, product_vision
+from app.services import hs_classifier
 from app.services.storage import get_storage, new_image_key
+from app.workers.tasks import process_product_intake
 
 router = APIRouter(tags=["products"])
 
 
-@router.post("/products", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
+@router.post("/products", response_model=ProductAccepted, status_code=status.HTTP_202_ACCEPTED)
 async def create_product(
     db: DbDep,
     user: CurrentUser,
@@ -30,7 +30,7 @@ async def create_product(
     currency: str = Form("USD"),
     classify: bool = Form(True),
     image: UploadFile | None = File(None),
-) -> ProductOut:
+) -> ProductAccepted:
     factory = resolve_factory(db, user)
 
     image_url = None
@@ -50,26 +50,20 @@ async def create_product(
         price_min=price_min,
         price_max=price_max,
         currency=currency,
+        classification_status="pending",
     )
     db.add(product)
-    db.flush()
-
-    # Classify inline so the upload response already carries HS candidates. In
-    # production this is the Celery ``classify_product`` task; here we call the
-    # same service directly for a synchronous demo experience.
-    if classify:
-        llm = get_llm_provider()
-        # Visual understanding first (DoD step 1): fill AR/EN description +
-        # attributes, which then also inform the HS classification below.
-        product_vision.describe_product(db, product, llm)
-        hs_classifier.classify_product(db, product)
-        embedding = get_embedding_provider().embed(
-            [f"{product.name_en} {product.description_en or ''}"]
-        )[0]
-        product.embedding = embedding
-
+    # Commit FIRST so the (eager or real) worker task can load the row in its own
+    # session, then enqueue the intake pipeline (vision → HS proposal → embedding).
     db.commit()
-    return ProductOut.model_validate(product)
+
+    # Snapshot the *pending* product for the 202 body BEFORE enqueuing: under eager
+    # mode the task runs in-process during .delay() and would otherwise bleed the
+    # classified result into this accepted response. The client polls GET for it.
+    accepted = ProductOut.model_validate(product)
+    accepted.classification_status = "pending"
+    task = process_product_intake.delay(str(product.id), deepen=False)
+    return ProductAccepted(task_id=task.id, product=accepted)
 
 
 @router.get("/products", response_model=list[ProductOut])
@@ -86,11 +80,20 @@ def get_product(product: ProductModel = Depends(get_owned_product)) -> ProductOu
     return ProductOut.model_validate(product)
 
 
-@router.post("/products/{product_id}/classify", response_model=ProductOut)
-def classify(db: DbDep, product: ProductModel = Depends(get_owned_product)) -> ProductOut:
-    hs_classifier.classify_product(db, product)
-    db.commit()
-    return ProductOut.model_validate(product)
+@router.post(
+    "/products/{product_id}/classify",
+    response_model=ProductAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def classify(product: ProductModel = Depends(get_owned_product)) -> ProductAccepted:
+    """Re-run the intake pipeline (vision → HS proposal → embedding) in the worker.
+
+    Returns 202 immediately; the client polls ``GET /products/{id}`` for the
+    refreshed classification once the task finishes.
+    """
+    accepted = ProductOut.model_validate(product)
+    task = process_product_intake.delay(str(product.id), deepen=False)
+    return ProductAccepted(task_id=task.id, product=accepted)
 
 
 @router.put("/products/{product_id}/hs-code", response_model=ProductOut)

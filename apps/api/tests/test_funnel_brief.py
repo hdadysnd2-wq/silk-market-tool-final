@@ -36,7 +36,11 @@ def _seed_world(db, hs6=HS6):
 
 
 def _run_analysis(client, product, auth_headers) -> str:
-    return client.post(f"/api/v1/products/{product.id}/analysis", headers=auth_headers).json()["id"]
+    # Async world funnel: POST is accepted (202); under eager mode the ranking task
+    # ran in-process, so the returned analysis id already resolves a ranked run.
+    resp = client.post(f"/api/v1/products/{product.id}/analysis", headers=auth_headers)
+    assert resp.status_code == 202, resp.text
+    return resp.json()["analysis"]["id"]
 
 
 def test_brief_has_sourced_numbers_and_limits(client, db, product, auth_headers):
@@ -66,8 +70,10 @@ def test_brief_has_sourced_numbers_and_limits(client, db, product, auth_headers)
 
 def test_analysis_persists_and_exposes_total_screened(client, db, product, auth_headers):
     _seed_world(db)  # 5 markets screened worldwide
-    run = client.post(f"/api/v1/products/{product.id}/analysis", headers=auth_headers).json()
-    # The true world count is persisted and returned, not the shortlist length.
+    aid = _run_analysis(client, product, auth_headers)
+    # The true world count is persisted and returned via GET (not the 202 body,
+    # which reports the pending analysis), not the shortlist length.
+    run = client.get(f"/api/v1/analyses/{aid}", headers=auth_headers).json()
     assert run["total_screened"] == 5
 
 

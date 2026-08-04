@@ -64,3 +64,14 @@ class AnalysisOut(BaseModel):
     rankings: list[CountryRankingOut] = []
 
     model_config = {"from_attributes": True}
+
+
+class AnalysisAccepted(BaseModel):
+    """202 envelope for the async world-funnel pipeline: the task + the analysis.
+
+    The analysis is reported as it was *accepted*; the client polls
+    ``GET /analyses/{id}`` for the ranked/enriched result once the worker finishes.
+    """
+
+    task_id: str
+    analysis: AnalysisOut

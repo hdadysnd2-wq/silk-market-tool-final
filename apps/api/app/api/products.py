@@ -11,7 +11,7 @@ from app.models.product import Product as ProductModel
 from app.providers.registry import get_embedding_provider, get_llm_provider
 from app.schemas.product import HSCodeOut, HSConfirmRequest, ProductOut
 from app.security import CurrentUser
-from app.services import hs_classifier
+from app.services import hs_classifier, product_vision
 from app.services.storage import get_storage, new_image_key
 
 router = APIRouter(tags=["products"])
@@ -59,6 +59,9 @@ async def create_product(
     # same service directly for a synchronous demo experience.
     if classify:
         llm = get_llm_provider()
+        # Visual understanding first (DoD step 1): fill AR/EN description +
+        # attributes, which then also inform the HS classification below.
+        product_vision.describe_product(db, product, llm)
         hs_classifier.classify_product(db, product, llm)
         embedding = get_embedding_provider().embed(
             [f"{product.name_en} {product.description_en or ''}"]

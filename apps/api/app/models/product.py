@@ -43,6 +43,8 @@ class Product(UUIDMixin, TimestampMixin, Base):
     name_en: Mapped[str] = mapped_column(String(255), nullable=False)
     description_ar: Mapped[str | None] = mapped_column(Text())
     description_en: Mapped[str | None] = mapped_column(Text())
+    #: Salient visual attributes from the vision pass ([{name, value}, …]).
+    attributes: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     image_url: Mapped[str | None] = mapped_column(String(512))
     price_min: Mapped[float | None] = mapped_column(Numeric(14, 2))
     price_max: Mapped[float | None] = mapped_column(Numeric(14, 2))

@@ -32,6 +32,8 @@ class ProductOut(BaseModel):
     name_en: str
     description_ar: str | None
     description_en: str | None
+    #: Salient visual attributes from the vision pass ([{name, value}, …]).
+    attributes: list[dict] | None = None
     image_url: str | None
     price_min: float | None
     price_max: float | None

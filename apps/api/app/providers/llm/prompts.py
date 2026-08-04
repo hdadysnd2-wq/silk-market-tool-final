@@ -10,6 +10,51 @@ from typing import Any
 
 HS_SCHEMA_TITLE = "HSClassification"
 EMAIL_SCHEMA_TITLE = "OutreachEmail"
+PRODUCT_VISION_SCHEMA_TITLE = "ProductVision"
+
+PRODUCT_VISION_SCHEMA: dict[str, Any] = {
+    "title": PRODUCT_VISION_SCHEMA_TITLE,
+    "type": "object",
+    "required": ["description_en", "description_ar", "attributes"],
+    "properties": {
+        "description_en": {"type": "string", "description": "One-line English description"},
+        "description_ar": {"type": "string", "description": "One-line Arabic description"},
+        "attributes": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+                "type": "object",
+                "required": ["name", "value"],
+                "properties": {
+                    "name": {"type": "string"},
+                    "value": {"type": "string"},
+                },
+            },
+        },
+    },
+}
+
+PRODUCT_VISION_SYSTEM_PROMPT = """You are a product analyst for a Saudi export house.
+From a product image (and any text), describe the product for an export catalogue.
+
+Rules:
+- Give a concise one-line description in English and in Arabic.
+- List the salient visible attributes (material, form, colour, packaging, size cues,
+  apparent grade) as name/value pairs — only what is actually observable.
+- Never invent an attribute you cannot see; omit it rather than guess."""
+
+
+def product_vision_prompt(*, name: str, description: str | None, has_image: bool) -> str:
+    parts = [f"Product name: {name}"]
+    if description:
+        parts.append(f"Seller description: {description}")
+    parts.append(
+        "An image of the product is attached; describe what you see."
+        if has_image
+        else "No image was provided; describe from the text alone."
+    )
+    return "\n".join(parts)
+
 
 HS_CLASSIFICATION_SCHEMA: dict[str, Any] = {
     "title": HS_SCHEMA_TITLE,

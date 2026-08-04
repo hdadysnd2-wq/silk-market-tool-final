@@ -85,6 +85,14 @@ export interface CountryRanking {
   is_mirror: boolean;
   tags: string[] | null;
   stage: number;
+  /** Stage-2 re-ranking score + enrichment signals (null until Stage 2 runs). */
+  stage2_score: number | null;
+  enrichment: {
+    applied_tariff_pct: number | null;
+    ppp_gni_per_capita: number | null;
+    source: string;
+    note: string;
+  } | null;
 }
 
 export interface Analysis {
@@ -94,6 +102,8 @@ export interface Analysis {
   status: string;
   deepen: boolean;
   created_at: string;
+  /** Markets screened worldwide in Stage 1 (funnel transparency); null on older runs. */
+  total_screened: number | null;
   rankings: CountryRanking[];
 }
 
@@ -173,7 +183,33 @@ export interface CompetitorSnapshot {
     | { exporter_iso2: string; exporter_name: string; value_usd: number; share_pct: number }[]
     | null;
   yearly_values: { year: number; value_usd: number }[] | null;
+  observed_prices:
+    | { competitor: string; price: number | null; currency: string; url?: string | null; source: string }[]
+    | null;
   source: string;
+}
+
+export interface CompetitorMargin {
+  competitor: string;
+  observed_price: number | null;
+  currency: string | null;
+  /** Gross headroom vs the market price ((observed - offer) / observed); null = declared gap. */
+  margin_pct: number | null;
+  source: string | null;
+  url?: string | null;
+  note: string;
+}
+
+export interface MarginThread {
+  hs_code: string | null;
+  market_iso2: string;
+  factory_offer: number | null;
+  factory_currency: string | null;
+  median_observed_price: number | null;
+  median_margin_pct: number | null;
+  competitors: CompetitorMargin[];
+  source_line: string;
+  limits: string[];
 }
 
 export type EmailStatus =

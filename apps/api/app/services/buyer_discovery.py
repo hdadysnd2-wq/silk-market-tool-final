@@ -39,6 +39,16 @@ from app.services.scoring import ScoringInput, score_buyer
 
 log = get_logger(__name__)
 
+
+class HsNotConfirmedError(ValueError):
+    """Discovery attempted on an HS code the human has not confirmed (I2).
+
+    Subclasses ``ValueError`` so existing broad ``except ValueError`` handlers
+    keep working, while callers that care can distinguish the confirmation gate
+    from an unclassified product.
+    """
+
+
 _SEARCH_TERMS = {
     "39": "plastics packaging distributor importer",
     "08": "dates dried fruit importer distributor",
@@ -53,6 +63,15 @@ def discover_buyers(db: Session, product: Product, market_iso2: str) -> dict:
     """Run the full pipeline; return a small summary for logging/telemetry."""
     if not product.hs_code:
         raise ValueError("Product must be classified before discovery")
+    # I2 (defense-in-depth). Discovery fetches buyer PII and must run only on a
+    # *human-confirmed* HS code. The API route (``api/buyers.discover``) already
+    # checks this, but the classifier pre-fills ``hs_code`` with its top candidate
+    # before the user confirms — so ``hs_code`` alone is not proof of confirmation,
+    # and a direct service/worker invocation would otherwise bypass the gate.
+    # Re-checking here makes the gate hold on every code path, mirroring the
+    # three-layer discipline the send path uses for I3.
+    if not product.hs_confirmed_by_user:
+        raise HsNotConfirmedError("HS code must be confirmed before discovering buyers")
 
     market = db.get(Market, market_iso2)
     if market is None:

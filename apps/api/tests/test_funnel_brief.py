@@ -64,6 +64,24 @@ def test_brief_has_sourced_numbers_and_limits(client, db, product, auth_headers)
     assert any("Stage-1" in limit for limit in brief["limits"])
 
 
+def test_analysis_persists_and_exposes_total_screened(client, db, product, auth_headers):
+    _seed_world(db)  # 5 markets screened worldwide
+    run = client.post(f"/api/v1/products/{product.id}/analysis", headers=auth_headers).json()
+    # The true world count is persisted and returned, not the shortlist length.
+    assert run["total_screened"] == 5
+
+
+def test_brief_shows_full_funnel_transparency(client, db, product, auth_headers):
+    _seed_world(db)  # 5 screened → 5 shortlisted → top 5
+    aid = _run_analysis(client, product, auth_headers)
+    brief = client.get(f"/api/v1/analyses/{aid}/brief", headers=auth_headers).json()
+    # "screened N → shortlisted M → top K" with the real world count (decision #7).
+    assert any(
+        "Screened 5 markets worldwide" in line and "shortlisted" in line and "top" in line
+        for line in brief["competitive_position"]
+    ), brief["competitive_position"]
+
+
 def test_brief_declares_gap_when_no_world_data(client, db, product, auth_headers):
     # No world_trade seeded → the funnel has nothing to rank.
     aid = _run_analysis(client, product, auth_headers)

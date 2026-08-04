@@ -48,6 +48,7 @@ const ANALYSIS = {
   status: "complete",
   deepen: false,
   created_at: "2026-01-01T00:00:00Z",
+  total_screened: 190,
   rankings: [
     { rank: 1, importer_iso3: "IND", market_iso2: "IN", year: 2024, import_usd: 5_000_000, yoy_growth: 0.12, cagr_3y: 0.08, screen_score: 90, is_transit_hub: false, is_mirror: false, tags: null, stage: 1 },
     { rank: 2, importer_iso3: "NLD", market_iso2: "NL", year: 2024, import_usd: 3_000_000, yoy_growth: 0.05, cagr_3y: 0.04, screen_score: 70, is_transit_hub: true, is_mirror: false, tags: ["transit"], stage: 1 },

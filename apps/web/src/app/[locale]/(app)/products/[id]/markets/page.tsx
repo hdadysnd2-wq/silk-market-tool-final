@@ -6,8 +6,14 @@ import { useRouter } from "@/i18n/routing";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import { CompetitorSnapshot } from "@/components/CompetitorSnapshot";
+import { MarginThread } from "@/components/MarginThread";
 import { WorldFunnel } from "@/components/WorldFunnel";
-import type { CompetitorSnapshot as Snapshot, Market, Product } from "@/lib/types";
+import type {
+  CompetitorSnapshot as Snapshot,
+  Market,
+  MarginThread as Thread,
+  Product,
+} from "@/lib/types";
 
 export default function MarketsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -18,17 +24,40 @@ export default function MarketsPage({ params }: { params: Promise<{ id: string }
   const { data: markets } = useApi<Market[]>("/markets");
   const [selected, setSelected] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [margin, setMargin] = useState<Thread | null>(null);
+  const [fetchingPrices, setFetchingPrices] = useState(false);
   const [starting, setStarting] = useState(false);
   const [discovering, setDiscovering] = useState(false);
+
+  async function loadMargin(iso2: string) {
+    // The margin thread reads the observed prices already fetched (if any); it
+    // never errors when empty — it returns the gap declared in its limits.
+    setMargin(await api.get<Thread>(`/products/${id}/markets/${iso2}/margin`));
+  }
 
   async function pick(iso2: string) {
     setSelected(iso2);
     setSnapshot(null);
+    setMargin(null);
     if (product?.hs_code) {
       const snap = await api.get<Snapshot>(
         `/markets/${iso2}/competitors?hs_code=${product.hs_code}`,
       );
       setSnapshot(snap);
+      await loadMargin(iso2);
+    }
+  }
+
+  // Deepen path (paid, I5): fetch observed competitor prices for the selected
+  // market, then refresh the margin thread so margins appear.
+  async function fetchPrices() {
+    if (!selected) return;
+    setFetchingPrices(true);
+    try {
+      await api.post(`/products/${id}/deepen/prices`, { markets: [selected] });
+      await loadMargin(selected);
+    } finally {
+      setFetchingPrices(false);
     }
   }
 
@@ -90,6 +119,9 @@ export default function MarketsPage({ params }: { params: Promise<{ id: string }
 
         <div>
           {snapshot && <CompetitorSnapshot snapshot={snapshot} />}
+          {margin && (
+            <MarginThread thread={margin} onFetchPrices={fetchPrices} fetching={fetchingPrices} />
+          )}
           {selected && (
             <button
               onClick={discover}

@@ -26,6 +26,9 @@ class CountryRankingOut(BaseModel):
     #: Stage-2 re-ranking score + enrichment signals (None until Stage 2 runs).
     stage2_score: float | None = None
     enrichment: dict | None = None
+    #: Stage-3 per-market deep-dive (competitors, requirements, correlation
+    #: threads). None until Stage 3 runs; a declared gap for an unmapped market.
+    deepdive: dict | None = None
 
     model_config = {"from_attributes": True}
 

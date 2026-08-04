@@ -101,6 +101,9 @@ export interface CountryRanking {
     source: string;
     note: string;
   } | null;
+  /** Stage-3 per-market deep-dive (competitors, requirements, correlation
+   *  threads); null until Stage 3 runs, or a declared gap for an unmapped market. */
+  deepdive?: Record<string, unknown> | null;
 }
 
 export interface Analysis {

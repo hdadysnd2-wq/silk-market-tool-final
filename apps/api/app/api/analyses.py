@@ -19,7 +19,7 @@ from app.providers.countries import iso3_to_iso2
 from app.schemas.analysis import AnalysisAccepted, AnalysisOut, CountryRankingOut, FunnelBriefOut
 from app.security import CurrentUser, assert_factory_access
 from app.services.funnel_brief import build_funnel_brief
-from app.workers.tasks import run_stage2_enrich, run_world_ranking
+from app.workers.tasks import run_stage2_enrich, run_stage3_deepdive, run_world_ranking
 
 router = APIRouter(tags=["analyses"])
 
@@ -131,4 +131,33 @@ def enrich_analysis(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> Ana
     # would otherwise bleed the re-ranked Stage-2 result in).
     accepted = _to_out(db, analysis)
     task = run_stage2_enrich.delay(str(analysis_id), product.hs_code)
+    return AnalysisAccepted(task_id=task.id, analysis=accepted)
+
+
+@router.post(
+    "/analyses/{analysis_id}/deepdive",
+    response_model=AnalysisAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def deepdive_analysis(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> AnalysisAccepted:
+    """Funnel Stage 3: FREE per-market deep-dive of the top-5 finalists (manual re-run).
+
+    Stage 3 auto-chains after Stage-2 enrichment; this endpoint re-runs it on
+    demand. Enqueues the deep-dive task, which annotates each finalist with the
+    engine's FREE offline layers (competitors, requirements checklist, correlation
+    threads) and marks the analysis ``deepened``. Returns 202 immediately; the
+    client polls ``GET /analyses/{id}`` for the deep-dived result.
+    """
+    analysis = _owned_analysis(db, analysis_id, user)
+    product = db.get(Product, analysis.product_id) if analysis.product_id else None
+    # I2 — never deep-dive on an unconfirmed HS code.
+    if not (product and product.hs_code and product.hs_confirmed_by_user):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="HS code must be confirmed before Stage-3 deep-dive",
+        )
+    # Snapshot the pre-deepdive analysis for the 202 body BEFORE enqueuing (eager
+    # mode would otherwise bleed the deep-dived result in).
+    accepted = _to_out(db, analysis)
+    task = run_stage3_deepdive.delay(str(analysis_id), product.hs_code)
     return AnalysisAccepted(task_id=task.id, analysis=accepted)

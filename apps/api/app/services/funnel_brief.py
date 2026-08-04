@@ -91,7 +91,10 @@ def build_funnel_brief(db: Session, analysis: Analysis) -> dict:
             )
         else:
             position.append(f"Shortlisted {len(rankings)} markets → top {top_k}.")
-    stage2_ran = any(r.stage == 2 for r in rankings)
+    # Stage 2 ran if any row reached stage 2 (or was promoted to stage 3, which
+    # a Stage-3 deep-dive only does after Stage-2 enrichment) — so the Stage-2
+    # line survives even when every finalist is promoted to stage 3.
+    stage2_ran = any(r.stage >= 2 for r in rankings)
     if stage2_ran:
         position.append(
             "Top 5 re-ranked by Stage-2 enrichment (applied tariff + purchasing power) "
@@ -123,13 +126,24 @@ def build_funnel_brief(db: Session, analysis: Analysis) -> dict:
             "Transit-hub volumes overstate genuine domestic demand; treat their "
             "raw import figures with care."
         )
+    # Stage-3 ran if any finalist carries a deep-dive (or was promoted to stage 3).
+    stage3_ran = any((getattr(r, "deepdive", None) is not None) or r.stage == 3 for r in rankings)
     if not stage2_ran:
         limits.append(_STAGE1_LIMIT)
     else:
-        limits.append(
-            "Stage-2 applied tariff + PPP to re-rank the shortlist; deeper Stage-3 "
-            "per-market agent enrichment (competitors, requirements) not yet applied."
-        )
+        # Two independent limits so the Stage-2 substring survives and Stage-3
+        # flips on its own once the deep-dive lands.
+        limits.append("Stage-2 applied tariff + PPP to re-rank the shortlist.")
+        if stage3_ran:
+            limits.append(
+                "Stage-3 per-market deep-dive applied: competitors, requirements "
+                "checklist, and correlation threads on the top-5."
+            )
+        else:
+            limits.append(
+                "deeper Stage-3 per-market agent enrichment (competitors, "
+                "requirements) not yet applied."
+            )
 
     return {
         "analysis_id": str(analysis.id),

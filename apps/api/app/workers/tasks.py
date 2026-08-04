@@ -206,6 +206,51 @@ def run_stage2_enrich(analysis_id: str, hs6: str, deepen: bool = False) -> dict:
             if analysis.status in ("pending", "classified", "ranked"):
                 analysis.status = "enriched"
         db.commit()
+        # Auto-chain Stage 3 (FREE per-market deep-dive). Commit-before-enqueue so
+        # the Stage-3 task's own session sees the enriched rows; eager mode runs it
+        # inline (tests), prod queues it. deepen is carried forward (stays False).
+        run_stage3_deepdive.delay(analysis_id, hs6, deepen=deepen)
+        return {
+            "analysis_id": analysis_id,
+            "hs6": hs6,
+            "status": analysis.status,
+            "deepen": deepen,
+        }
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.workers.tasks.run_stage3_deepdive")
+def run_stage3_deepdive(analysis_id: str, hs6: str, deepen: bool = False) -> dict:
+    """Funnel Stage 3 in the worker: FREE per-market deep-dive of the top-5.
+
+    Mirrors ``run_stage2_enrich``'s scope discipline. The ``/deepen`` scope is
+    re-established from the explicit ``deepen`` payload flag (invariant I5) — the
+    auto sweep keeps ``deepen=False`` so the paid engine agents + ``observed_prices``
+    structurally skip — and the per-analysis API budget (decision #5) is re-opened
+    in-process. Inside both scopes ``deepdive_shortlist`` deep-dives the persisted
+    Stage-2 finalists with the engine's free offline layers (competitors,
+    requirements, correlation threads) and the analysis reaches the terminal
+    ``deepened`` status. Opens its own session and commits on success.
+    """
+    import uuid as _uuid
+
+    from app.db import SessionLocal
+    from app.models import Analysis, Product
+    from app.services import engine
+    from app.services.api_budget import budget_scope
+    from app.services.stage3 import deepdive_shortlist
+
+    db = SessionLocal()
+    try:
+        analysis = db.get(Analysis, _uuid.UUID(analysis_id))
+        if analysis is None:
+            return {"error": "analysis not found"}
+        product = db.get(Product, analysis.product_id) if analysis.product_id else None
+        with engine.deepen_scope(deepen), budget_scope(label=f"stage3:{analysis_id}"):
+            deepdive_shortlist(db, analysis, hs6, product)
+            analysis.status = "deepened"
+        db.commit()
         return {
             "analysis_id": analysis_id,
             "hs6": hs6,

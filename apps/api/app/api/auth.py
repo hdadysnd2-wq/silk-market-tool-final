@@ -47,9 +47,8 @@ def login(payload: LoginRequest, db: DbDep) -> TokenResponse:
 def request_otp(payload: OTPRequest, db: DbDep) -> dict:
     from sqlalchemy import select
 
-    from app.models import User
-
     from app.config import get_settings
+    from app.models import User
 
     user = db.scalar(select(User).where(User.email == payload.email.lower().strip()))
     # Don't reveal whether the address exists.

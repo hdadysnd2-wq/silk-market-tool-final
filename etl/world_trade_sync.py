@@ -19,7 +19,12 @@ and the transit-hub fixture test land in Phase 2; first live sync in Phase 3.
 from __future__ import annotations
 
 import argparse
-from collections.abc import Sequence
+import logging
+import os
+from collections.abc import Callable, Sequence
+from datetime import UTC, datetime
+
+log = logging.getLogger(__name__)
 
 # Re-export hubs whose import volumes are inflated by re-export / transshipment.
 # Kept in sync with the ranking guard (invariant I9).
@@ -132,22 +137,212 @@ def build_rows(
     return rows
 
 
-def run(hs6: str | None = None, years: Sequence[int] | None = None) -> int:
-    """Refresh ``world_trade`` for the given HS6 codes / years (live bulk sync).
+#: Type of the two injectable seams (real defaults do the live download / DB
+#: upsert; tests inject fakes so the orchestration is hermetically verifiable).
+Fetcher = Callable[[str, Sequence[int]], "tuple[dict, dict, set[str]]"]
+Writer = Callable[[list[dict]], int]
 
-    Downloads bulk import flows from UN Comtrade (pandas + comtradeapicall — I7,
-    here only), builds rows via :func:`build_rows`, and upserts ``world_trade``.
-    Returns the number of rows written. The download + DB upsert are the Phase-3
-    live piece; the transform (build_rows) is implemented and tested today.
+
+def _default_years(n: int = 3) -> list[int]:
+    """The last ``n`` likely-complete data years (previous calendar year back)."""
+    latest = datetime.now(UTC).year - 1
+    return list(range(latest - n + 1, latest + 1))
+
+
+def run(
+    hs6: str | None = None,
+    years: Sequence[int] | None = None,
+    *,
+    fetcher: Fetcher | None = None,
+    writer: Writer | None = None,
+) -> int:
+    """Refresh ``world_trade`` for one HS6 (live bulk sync).
+
+    Orchestrates three steps: **fetch** per-importer yearly import series from UN
+    Comtrade bulk endpoints, **transform** them into rows via :func:`build_rows`
+    (YoY/CAGR + the I9 transit-hub / mirror flags), and **upsert** them into
+    ``world_trade``. Returns the number of rows written.
+
+    ``fetcher`` and ``writer`` are injectable seams: the real defaults lazy-import
+    pandas + comtradeapicall (the live download, I7 — here only) and SQLAlchemy
+    (the DB upsert), so this module still imports with neither installed and the
+    orchestration is hermetically testable with fakes. The heavy pieces are the
+    live-verification step; the transform is proven today.
     """
-    # Lazy heavy imports — sanctioned here only (I7).
-    #   import pandas as pd
-    #   import comtradeapicall
-    raise NotImplementedError(
-        "world_trade_sync.run() goes live in Phase 3 (Comtrade key + DB upsert). "
-        "The transform (build_rows/compute_yoy/compute_cagr_3y) is live now. See "
-        "etl/README.md."
+    if not hs6:
+        raise ValueError(
+            "world_trade_sync.run() requires an --hs6 code (full-scope batch is TODO)"
+        )
+    hs6 = hs6.strip()
+    resolved_years = list(years) if years else _default_years()
+    fetch = fetcher or _fetch_world_imports
+    write = writer or _upsert_world_trade
+
+    imports_usd, qty, mirror = fetch(hs6, resolved_years)
+    rows = build_rows(
+        hs6,
+        imports_usd,
+        source="UN Comtrade",
+        fetched_at=datetime.now(UTC).isoformat(),
+        mirror_importers=mirror,
+        qty=qty,
     )
+    return write(rows)
+
+
+def _fetch_world_imports(
+    hs6: str, years: Sequence[int]
+) -> tuple[
+    dict[str, dict[int, float | None]], dict[str, dict[int, float | None]], set[str]
+]:
+    """Live bulk download: world imports of ``hs6`` by every reporter, per year.
+
+    Returns ``(imports_usd, imports_qty, mirror_importers)`` where each map is
+    ISO3 → {year: value}. Uses UN Comtrade bulk data via ``comtradeapicall`` and
+    pandas (I7 — permitted HERE ONLY; imported lazily so the module loads without
+    them). A year whose fetch fails contributes no value (a declared gap, I1) —
+    never a fabricated figure.
+
+    ⚠️ Live-verification step: the exact ``comtradeapicall`` entry point and the
+    returned column names must be confirmed against the live API before first use
+    (see etl/README.md). Kept deliberately small and defensive.
+    """
+    import comtradeapicall  # (lazy, etl-only — I7)
+    import pandas as pd  # (lazy, etl-only — I7)
+
+    subscription_key = os.environ.get("COMTRADE_API_KEY", "")
+    imports_usd: dict[str, dict[int, float | None]] = {}
+    imports_qty: dict[str, dict[int, float | None]] = {}
+
+    def _clean(value: object) -> float | None:
+        # Comtrade returns NaN for absent figures; keep it a declared gap (I1).
+        return None if value is None or pd.isna(value) else _as_float(value)
+
+    for year in years:
+        try:
+            # Imports (flowCode="M"), all reporters, partner=World (0), HS6.
+            df = comtradeapicall.getFinalData(
+                subscription_key,
+                typeCode="C",
+                freqCode="A",
+                clCode="HS",
+                period=str(year),
+                reporterCode=None,  # every reporter
+                cmdCode=hs6,
+                flowCode="M",
+                partnerCode="0",  # World
+                partner2Code="0",
+                customsCode="C00",
+                motCode="0",
+            )
+        except Exception as exc:  # noqa: BLE001 — a failed year is a declared gap (I1)
+            log.warning(
+                "comtrade_bulk_year_failed hs6=%s year=%s error=%s", hs6, year, exc
+            )
+            continue
+        if df is None or getattr(df, "empty", True):
+            continue
+        for _, row in df.iterrows():
+            iso3 = str(row.get("reporterISO") or "").upper()
+            if not iso3 or len(iso3) != 3:
+                continue
+            imports_usd.setdefault(iso3, {})[year] = _clean(row.get("primaryValue"))
+            imports_qty.setdefault(iso3, {})[year] = _clean(row.get("qty"))
+
+    # Mirror-data derivation (reconstructing a non-reporter's imports from partner
+    # exports) is a future enhancement; none derived here.
+    return imports_usd, imports_qty, set()
+
+
+def _as_float(value: object) -> float | None:
+    try:
+        if value is None:
+            return None
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
+def _upsert_world_trade(rows: list[dict]) -> int:
+    """Upsert ``world_trade`` rows, keyed on (hs6, importer_iso3, year).
+
+    Uses SQLAlchemy Core against ``DATABASE_URL`` (imported lazily — not an
+    apps/api dependency here). ``id``/``created_at``/``updated_at`` are ORM-side
+    defaults on the model, so this Core path supplies them explicitly. Existing
+    rows are updated in place (idempotent monthly/quarterly refresh).
+    """
+    if not rows:
+        return 0
+
+    import uuid
+
+    from sqlalchemy import (
+        Boolean,
+        Column,
+        DateTime,
+        Integer,
+        MetaData,
+        Numeric,
+        String,
+        Table,
+        create_engine,
+    )
+    from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("DATABASE_URL must be set to upsert world_trade")
+
+    metadata = MetaData()
+    world_trade = Table(
+        "world_trade",
+        metadata,
+        Column("id", PG_UUID(as_uuid=True), primary_key=True),
+        Column("hs6", String(6), nullable=False),
+        Column("importer_iso3", String(3), nullable=False),
+        Column("year", Integer, nullable=False),
+        Column("import_usd", Numeric(18, 2)),
+        Column("import_qty", Numeric(18, 2)),
+        Column("yoy_growth", Numeric(8, 4)),
+        Column("cagr_3y", Numeric(8, 4)),
+        Column("is_transit_hub", Boolean, nullable=False),
+        Column("is_mirror", Boolean, nullable=False),
+        Column("source", String(64), nullable=False),
+        Column("fetched_at", DateTime(timezone=True)),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+        Column("updated_at", DateTime(timezone=True), nullable=False),
+    )
+
+    now = datetime.now(UTC)
+    payload = [
+        {**row, "id": uuid.uuid4(), "created_at": now, "updated_at": now}
+        for row in rows
+    ]
+
+    engine = create_engine(database_url)
+    written = 0
+    with engine.begin() as conn:
+        for record in payload:
+            stmt = pg_insert(world_trade).values(**record)
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_world_trade_hs6_importer_year",
+                set_={
+                    "import_usd": stmt.excluded.import_usd,
+                    "import_qty": stmt.excluded.import_qty,
+                    "yoy_growth": stmt.excluded.yoy_growth,
+                    "cagr_3y": stmt.excluded.cagr_3y,
+                    "is_transit_hub": stmt.excluded.is_transit_hub,
+                    "is_mirror": stmt.excluded.is_mirror,
+                    "source": stmt.excluded.source,
+                    "fetched_at": stmt.excluded.fetched_at,
+                    "updated_at": now,
+                },
+            )
+            conn.execute(stmt)
+            written += 1
+    engine.dispose()
+    return written
 
 
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:

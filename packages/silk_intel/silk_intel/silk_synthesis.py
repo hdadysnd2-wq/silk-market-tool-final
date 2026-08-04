@@ -69,11 +69,11 @@ def _stage2(product: str, market: str, reports: list,
     out = _call(_PRINCIPLE, "\n".join(parts), max_tokens=900)
     if not out:
         return None
-    try:
-        start, end = out.find("{"), out.rfind("}")
-        obj = (json.loads(out[start:end + 1]) if start >= 0
-               else {"reasoning": out})
-    except Exception:  # noqa: BLE001 — non-JSON reply kept as reasoning
+    # مستخلِص JSON المتين نفسه المستخدَم في كل مكان (يتعامل مع أسوار ```json
+    # والأقواس الزائدة) بدل find/rfind الهشّ الذي كان يُسقط التفسير بصمت.
+    from silk_ai_judge import _extract_json
+    obj = _extract_json(out)
+    if not isinstance(obj, dict):
         obj = {"reasoning": out}
     # قاعدة الموجة ١: لا افتراض وسم — فشل التفسير يعني verdict=None صريحًا.
     return {

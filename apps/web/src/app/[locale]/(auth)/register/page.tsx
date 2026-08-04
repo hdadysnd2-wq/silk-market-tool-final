@@ -32,7 +32,9 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       const res = await api.post<TokenResponse>("/auth/register", form);
-      document.cookie = `${TOKEN_COOKIE}=${res.access_token}; path=/; max-age=43200; samesite=lax`;
+      // Secure over HTTPS (prod); omitted on http://localhost so dev still works.
+      const secure = window.location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = `${TOKEN_COOKIE}=${res.access_token}; path=/; max-age=43200; samesite=lax${secure}`;
       router.push("/onboarding");
       router.refresh();
     } catch (err) {

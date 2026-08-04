@@ -33,8 +33,19 @@ def _verify_signature(raw_body: bytes, provided: str | None) -> None:
     secret (the local/mock default) the endpoint stays open so the demo's
     synthetic engagement still animates the dashboard.
     """
-    secret = get_settings().smartlead_webhook_secret
+    settings = get_settings()
+    secret = settings.smartlead_webhook_secret
     if not secret:
+        # Open ONLY for the local mock demo. If a real sending provider is
+        # configured (smartlead_api_key set) or we are not local, refuse: this is
+        # an unauthenticated, state-mutating endpoint that can add addresses to the
+        # global cross-tenant suppression ledger and auto-pause campaigns.
+        if settings.environment != "local" or settings.smartlead_api_key:
+            log.warning("webhook_secret_missing_but_provider_configured")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Webhook secret not configured",
+            )
         return
     if not provided or not hmac.compare_digest(expected_signature(secret, raw_body), provided):
         log.warning("webhook_signature_invalid", has_signature=bool(provided))

@@ -318,7 +318,6 @@ def annotate(result: dict) -> list:
         except Exception:  # noqa: BLE001
             pass
     return flags
-    return flags
 
 
 def _mark_dropped(dr: dict, flags: list) -> None:

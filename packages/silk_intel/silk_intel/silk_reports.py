@@ -713,6 +713,11 @@ def _add_page_header_footer(doc, title: str) -> None:
 _VERDICT_TEXT_COLORS = {"go": (0x1E, 0x7D, 0x32), "conditional": (0x00, 0x69, 0x5C),
                         "preliminary": (0x55, 0x6B, 0x2F),
                         "watch": (0xB8, 0x86, 0x0B),
+                        # «inconclusive» (نتيجة أوّلية غير محسومة) نغمةٌ روتينية
+                        # يصدرها الحَكَم عند فشل بعثة/وكيل مع بقاء نتائج حقيقية —
+                        # لونٌ رماديٌّ محايد كـ«unknown». غيابُه سابقاً كان يُسقط
+                        # كل تصدير بحثٍ عميق بـKeyError غير محاجَز.
+                        "inconclusive": (0x60, 0x60, 0x60),
                         "nogo": (0xC0, 0x00, 0x00), "unknown": (0x60, 0x60, 0x60)}
 _VERDICT_HIGHLIGHTS = {"go": "BRIGHT_GREEN", "conditional": "TEAL",
                        "preliminary": "BRIGHT_GREEN",
@@ -726,10 +731,10 @@ def _add_verdict_badge(doc, vtxt: str) -> None:
     from docx.shared import Pt, RGBColor
     tone = _verdict_tone(vtxt)
     p = doc.add_paragraph()
-    run = p.add_run(f"  {_VERDICT_LABELS_AR[tone]}  ")
+    run = p.add_run(f"  {_VERDICT_LABELS_AR.get(tone, tone)}  ")
     run.bold = True
     run.font.size = Pt(16)
-    rgb = _VERDICT_TEXT_COLORS[tone]
+    rgb = _VERDICT_TEXT_COLORS.get(tone, (0x60, 0x60, 0x60))
     run.font.color.rgb = RGBColor(*rgb)
     try:
         from docx.enum.text import WD_COLOR_INDEX

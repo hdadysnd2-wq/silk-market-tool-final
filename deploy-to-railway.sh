@@ -183,7 +183,10 @@ ok "branch : $BRANCH"
 gen_secret() {
   if command -v openssl >/dev/null 2>&1; then openssl rand -hex 32
   elif command -v python3 >/dev/null 2>&1; then python3 -c 'import secrets;print(secrets.token_hex(32))'
-  else date +%s | sha256sum 2>/dev/null | cut -c1-64 || echo "change-me-$(date +%s)"; fi
+  # NEVER derive a signing/encryption key from time (epoch seconds are only a few
+  # bits of entropy → forgeable session tokens and decryptable OAuth tokens). Fail
+  # hard and make the operator supply a CSPRNG-generated key instead.
+  else die "No CSPRNG available (need openssl or python3). Set SECRET_KEY yourself: openssl rand -hex 32"; fi
 }
 SECRET_KEY=$(gen_secret)
 

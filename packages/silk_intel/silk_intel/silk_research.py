@@ -1249,8 +1249,14 @@ class ResearchOrchestrator:
 
     def run_market(self, task: dict) -> dict:
         outputs: dict[str, dict] = {}
+        # نسخة Context مستقلة لكل وكيل: خيوط العمّال لا ترث ContextVars، فبدون
+        # copy_context تقرأ كل الأدلّة قيمَها الافتراضية — حجبُ الإنفاق
+        # (block_ai_extras) وتعطيلُ الوكلاء من اللوحة وأوامرُ المشغّل والعدّادات
+        # كلها تُفقَد بصمت (نفس فخّ silk_missions المُصلَح). فشل صامت خطير.
+        import contextvars as _contextvars
         with _cf.ThreadPoolExecutor(max_workers=len(self.agents)) as ex:
-            futs = {ex.submit(a.run, dict(task)): a for a in self.agents}
+            futs = {ex.submit(_contextvars.copy_context().run, a.run, dict(task)): a
+                    for a in self.agents}
             deadline = _time.monotonic() + self.timeout
             for fut, a in futs.items():
                 try:

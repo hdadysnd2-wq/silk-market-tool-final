@@ -95,5 +95,7 @@ def compute_source_coverage(dr: dict) -> dict:
             total += 1
             if _is_backed(f.get("source"), f.get("note")):
                 backed += 1
-    pct = (backed / total * 100.0) if total else 100.0
+    # تقريرٌ بلا مؤشّرات مُسلَّمة (total==0) تغطيتُه 0% لا 100%: «تغطية ١٠٠٪ من
+    # لا شيء» تمرّر بوابةَ التغطية على تقريرٍ فارغ/فاشل — نعُدّها فشلاً صريحاً.
+    pct = (backed / total * 100.0) if total else 0.0
     return {"total": total, "backed": backed, "pct": pct}

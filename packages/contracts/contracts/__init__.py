@@ -123,7 +123,9 @@ def from_datapoint(dp: Any, *, provider: str = "") -> DataContract[Any]:
         data_year=getattr(dp, "data_year", None),
         note=getattr(dp, "note", "") or "",
         status=getattr(dp, "status", "") or "",
-        sources=tuple(getattr(dp, "sources", ()) or ()),
+        # Repo A's DataPoint names this field ``source_ids`` (not ``sources``);
+        # reading the wrong name silently dropped every composite attribution.
+        sources=tuple(getattr(dp, "source_ids", None) or getattr(dp, "sources", ()) or ()),
     )
 
 

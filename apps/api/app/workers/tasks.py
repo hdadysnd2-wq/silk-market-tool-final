@@ -30,6 +30,11 @@ def run_discovery(product_id: str, market_iso2: str) -> dict:
         product = db.get(Product, uuid.UUID(product_id))
         if product is None:
             return {"error": "product not found"}
+        # I2 (defense-in-depth) — never run discovery on an unconfirmed HS code,
+        # even for a job enqueued directly (bypassing the API gate). Degrade
+        # gracefully rather than raising, matching the "product not found" style.
+        if not (product.hs_code and product.hs_confirmed_by_user):
+            return {"error": "hs code not confirmed"}
         summary = discover_buyers(db, product, market_iso2)
         if product.hs_code:
             build_snapshot(db, product.hs_code, market_iso2)

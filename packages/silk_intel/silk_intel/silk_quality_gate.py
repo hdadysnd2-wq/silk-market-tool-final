@@ -916,8 +916,8 @@ _AUDIT_APPENDIX_CAP = AUDIT_APPENDIX_CAP   # الاسم القديم — توا�
 
 
 def _check_audit_coverage(dr: dict) -> list[dict]:
-    """سقف ملحق ٨٠ صفاً — إن تجاوزه إجمالي الاستشهادات، أعلن القطع صراحة
-    بدل حذف صامت (نفس مبدأ "لا سقف صامت" المتّبع في هذا المشروع)."""
+    """سقف ملحق ١٥٠ صفاً (AUDIT_APPENDIX_CAP) — إن تجاوزه إجمالي الاستشهادات،
+    أعلن القطع صراحة بدل حذف صامت (نفس مبدأ "لا سقف صامت" المتّبع في المشروع)."""
     total = sum(len(m.get("findings") or [])
                for m in (dr.get("missions") or {}).values())
     if total > _AUDIT_APPENDIX_CAP:

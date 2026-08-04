@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
 import requests
 
@@ -29,6 +30,11 @@ log = logging.getLogger(__name__)
 # قاطع الدارة — يُضبط عند أول 401/403 في هذه العملية؛ يحمل نص الحالة
 # للملاحظة المعلنة. reset_auth_block() للاختبارات (وإعادة التفعيل يدوياً).
 _auth_blocked: str | None = None
+_auth_blocked_at: float = 0.0
+# TTL للقاطع (٣٠ دقيقة افتراضاً): عطلٌ عابر (401/403 مؤقّت، حدّ معدّل) يجب ألا
+# يعطّل FAOSTAT لكل المستأجرين حتى إعادة النشر — بعد المهلة نسمح بمحاولة استكشاف
+# واحدة بدل تعطيلٍ دائم. `SILK_DISABLE_FAOSTAT` يبقى مفتاح الإيقاف الصريح.
+_BREAKER_TTL_S = 1800.0
 
 
 def reset_auth_block() -> None:
@@ -43,8 +49,10 @@ def _disabled_note(iso3: str, item: str) -> str | None:
         return (f"FAOSTAT معطَّل صراحة (SILK_DISABLE_FAOSTAT) — فجوة معلنة "
                 f"لـ{iso3}/{item}، لا محاولة جلب")
     if _auth_blocked:
-        return (f"FAOSTAT يتطلب مصادقة حالياً ({_auth_blocked} في نداء سابق "
-                f"بهذه العملية) — عُطّل تلقائياً؛ فجوة معلنة لـ{iso3}/{item}")
+        if time.monotonic() - _auth_blocked_at < _BREAKER_TTL_S:
+            return (f"FAOSTAT يتطلب مصادقة حالياً ({_auth_blocked} في نداء سابق "
+                    f"بهذه العملية) — عُطّل تلقائياً؛ فجوة معلنة لـ{iso3}/{item}")
+        reset_auth_block()  # انقضت مهلة القاطع — اسمح بمحاولة استكشاف واحدة
     return None
 
 # قاعدة فاوستات — FAOSTAT data endpoint (domain filled per call).
@@ -106,8 +114,9 @@ def per_capita_supply(
     try:
         r = requests.get(url, params=params, timeout=_TIMEOUT)
         if r.status_code in (401, 403):
-            global _auth_blocked
+            global _auth_blocked, _auth_blocked_at
             _auth_blocked = f"HTTP {r.status_code}"  # قاطع الدارة — لا محاولات لاحقة
+            _auth_blocked_at = time.monotonic()
             note = (f"FAOSTAT unavailable: HTTP {r.status_code} for {iso3}/{item} "
                     "(auth now required?) — عُطّلت المحاولات اللاحقة تلقائياً "
                     "لهذه العملية")

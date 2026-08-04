@@ -20,15 +20,30 @@ import re
 
 log = logging.getLogger(__name__)
 
+def _env_int(name: str, default: int) -> int:
+    """Guarded int env parse — a typo'd env var must not crash module import."""
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 # ── حدود السلامة — image safety limits ───────────────────────────────────────
-MAX_IMAGE_BYTES = int(os.environ.get("SILK_INTAKE_MAX_BYTES", str(5 * 1024 * 1024)))
+MAX_IMAGE_BYTES = _env_int("SILK_INTAKE_MAX_BYTES", 5 * 1024 * 1024)
 ALLOWED_MEDIA_TYPES = {"image/jpeg", "image/png", "image/webp"}
-_MIN_CONFIDENCE = float(os.environ.get("SILK_INTAKE_MIN_CONFIDENCE", "0.55"))
+_MIN_CONFIDENCE = _env_float("SILK_INTAKE_MIN_CONFIDENCE", 0.55)
 _INTAKE_MODEL = os.environ.get(
     "SILK_INTAKE_MODEL",
     os.environ.get("SILK_AI_FAST_MODEL", "claude-haiku-4-5-20251001"))
-_INTAKE_TIMEOUT = float(os.environ.get("SILK_INTAKE_TIMEOUT_S", "30"))
-_MAX_TOKENS = int(os.environ.get("SILK_INTAKE_MAX_TOKENS", "700"))
+_INTAKE_TIMEOUT = _env_float("SILK_INTAKE_TIMEOUT_S", 30)
+_MAX_TOKENS = _env_int("SILK_INTAKE_MAX_TOKENS", 700)
 
 # الرسالة الصادقة الموحّدة عند تعذّر القراءة — asserted by exact match in tests.
 READ_FAILED_MSG = "تعذّرت القراءة — اكتب الاسم يدوياً"

@@ -24,7 +24,9 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await api.post<TokenResponse>("/auth/login", { email, password });
-      document.cookie = `${TOKEN_COOKIE}=${res.access_token}; path=/; max-age=43200; samesite=lax`;
+      // Secure over HTTPS (prod); omitted on http://localhost so dev login still works.
+      const secure = window.location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = `${TOKEN_COOKIE}=${res.access_token}; path=/; max-age=43200; samesite=lax${secure}`;
       router.push("/dashboard");
       router.refresh();
     } catch (err) {

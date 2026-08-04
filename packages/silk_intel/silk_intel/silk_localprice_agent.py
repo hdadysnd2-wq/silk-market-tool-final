@@ -123,9 +123,13 @@ def retail_prices(query: str, market: str | None = None) -> list[DataPoint]:
         r.raise_for_status()
         payload = r.json()
     except Exception as e:  # noqa: BLE001 — never raise to caller
-        log.warning("local price fetch failed (q=%r, market=%s): %s", q, market, e)
+        # المفتاح المدفوع يُمرَّر في استعلام URL، فرسالة الاستثناء تضمّه
+        # ("... for url: ...&api_key=<SECRET>") — نُنقّيه قبل التسجيل والملاحظة
+        # حتى لا يتسرّب لسجلّات الخادم أو لملاحظةٍ قد تظهر في تقرير العميل.
+        err = str(e).replace(key, "***") if key else str(e)
+        log.warning("local price fetch failed (q=%r, market=%s): %s", q, market, err)
         return [DataPoint(None, "Local retail", 0.0,
-                          f"local price fetch failed: {e}", _today())]
+                          f"local price fetch failed: {err}", _today())]
     listings = _extract(payload)
     if not listings:
         return [DataPoint(None, "Local retail", 0.0,

@@ -16,6 +16,10 @@ from app.workers.tasks import process_product_intake
 
 router = APIRouter(tags=["products"])
 
+# Product images are small photos; cap the upload so a client can't exhaust
+# worker memory by streaming a multi-GB body into an in-memory read.
+MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
+
 
 @router.post("/products", response_model=ProductAccepted, status_code=status.HTTP_202_ACCEPTED)
 async def create_product(
@@ -35,7 +39,14 @@ async def create_product(
 
     image_url = None
     if image is not None:
-        data = await image.read()
+        # Bounded read: pull at most MAX+1 bytes so an oversized upload is rejected
+        # without buffering the whole body.
+        data = await image.read(MAX_IMAGE_BYTES + 1)
+        if len(data) > MAX_IMAGE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Image too large (max 10 MB)",
+            )
         storage = get_storage()
         key = new_image_key(image.filename or "product.jpg")
         image_url = storage.put(key, data, image.content_type or "image/jpeg")

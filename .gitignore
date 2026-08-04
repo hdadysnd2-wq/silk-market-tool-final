@@ -24,10 +24,10 @@ playwright-report/
 test-results/
 apps/web/playwright/.cache/
 
-# Env & secrets
+# Env & secrets — ignore every .env* except the committed example
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
 # Local runtime artifacts
 storage/
@@ -40,11 +40,13 @@ outbox/
 packages/silk_intel/silk_intel/data/cache/
 packages/silk_intel/silk_intel/data/traces/
 
-# Terraform
+# Terraform — ignore state and any secret-bearing var files; the provider lock
+# (.terraform.lock.hcl) is intentionally committed for reproducible provider hashes.
 .terraform/
 *.tfstate
 *.tfstate.*
-.terraform.lock.hcl
+*.tfvars
+*.tfvars.json
 
 # OS
 .DS_Store

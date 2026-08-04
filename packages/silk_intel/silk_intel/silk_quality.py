@@ -44,7 +44,10 @@ def validate_market_row(row: dict) -> list[str]:
         flags.append("all components missing — no usable data for this market")
         return flags
 
-    if size is not None and 0.0 <= float(size) < _NEAR_ZERO_USD:
+    if size is not None and float(size) < 0.0:
+        flags.append("market_size negative — bad data (import totals "
+                     "cannot be negative)")
+    elif size is not None and 0.0 <= float(size) < _NEAR_ZERO_USD:
         flags.append("market_size suspiciously near-zero (possible "
                      "HS-version/subheading mismatch)")
 

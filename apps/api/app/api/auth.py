@@ -47,6 +47,7 @@ def login(payload: LoginRequest, db: DbDep) -> TokenResponse:
 def request_otp(payload: OTPRequest, db: DbDep) -> dict:
     from sqlalchemy import select
 
+    from app.config import get_settings
     from app.models import User
 
     user = db.scalar(select(User).where(User.email == payload.email.lower().strip()))
@@ -54,8 +55,12 @@ def request_otp(payload: OTPRequest, db: DbDep) -> dict:
     if user is not None:
         code = auth_service.issue_otp(db, user)
         db.commit()
-        # Locally the code is also returned to make the flow demoable without email.
-        return {"detail": "OTP issued", "dev_code": code}
+        # Return the code in the response ONLY in local/dev so the flow is demoable
+        # without an email channel. NEVER in any other environment: an attacker who
+        # knows a victim's email could read the code and complete /otp/verify —
+        # full pre-auth account takeover.
+        if getattr(get_settings(), "environment", "local") == "local":
+            return {"detail": "OTP issued", "dev_code": code}
     return {"detail": "OTP issued"}
 
 

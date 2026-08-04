@@ -268,20 +268,22 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         result["product_card_hint"] = ("أضف بطاقة منتجك (product_card) للحصول "
                                        "على تحليل تنافسي مخصص — موقعك ضد "
                                        "منافسين مرصودين بالاسم")
+    from silk_context import agent_enabled as _agent_on
     if with_websearch:
         top_country = (result.get("markets") or [{}])[0].get("country") or ""
         result["websearch"] = _websearch(product_name, top_country)
         # الطبقة ٣: كلود يستخلص ثقافةَ المستهلك من العناوين بدل عرض روابطَ خام
         # (بلاغ المالك المتكرّر «ترسل روابط = أنت قوقل»). غيابٌ ظاهرٌ بلا مفتاح.
-        result["consumer_culture"] = _consumer_culture(
-            product_name, top_country, result["websearch"])
-    from silk_context import agent_enabled as _agent_on
+        # الفحص **قبل** النداء لا بعده: كان بعده، فيُنفَّذ نداءُ كلود ثم يُهمَل
+        # (تعطيلٌ ميّت) — تعطيلُ وكيل «consumer» من اللوحة يجب أن يمنع النداء.
+        if _agent_on("consumer"):
+            result["consumer_culture"] = _consumer_culture(
+                product_name, top_country, result["websearch"])
+        else:
+            log.info("consumer-culture layer disabled by user prefs — skipped")
     if with_dynamics and not _agent_on("dynamics"):
         log.info("dynamics agent disabled by user prefs — skipped")
         with_dynamics = False
-    if with_websearch and not _agent_on("consumer"):
-        log.info("consumer-culture layer disabled by user prefs — skipped")
-        with_websearch = False
     if with_dynamics:
         # وكيل الديناميكيات (P2-8): إشارات ويب مصنّفة في أطر معلنة بمصادرها
         # للسوق الأول — يتدهور صادقاً بلا مفاتيح (فجوة/إشارات خام معلنة).
@@ -452,8 +454,14 @@ def _enrich_research(rows: list[dict], product_name: str, hs_code: str,
     # مستقل (لا حالة مشتركة)، والمنسّق نفسه محاجز بمهلة. Markets researched
     # concurrently — was sequential, tripling wall-clock.
     if rows:
+        # نسخة Context مستقلة لكل سوق: خيوط العمّال لا ترث ContextVars، فبدون
+        # copy_context ينكسر حجبُ الإنفاق وتعطيلُ الوكلاء وأوامرُ المشغّل بصمت
+        # داخل وكلاء البحث المُشغَّلة هنا (نفس فخّ silk_missions المُصلَح).
+        import contextvars as _contextvars
         with ThreadPoolExecutor(max_workers=min(len(rows), 3)) as ex:
-            list(ex.map(_one, rows))
+            futs = [ex.submit(_contextvars.copy_context().run, _one, r) for r in rows]
+            for _f in futs:
+                _f.result()
 
 
 def _enrich_trends(rows: list[dict], product_name: str) -> None:

@@ -218,7 +218,7 @@ def _judge_prompt(result: dict) -> str:
     return (
         "قيّم تقرير بحث عميق على أربعة محاور (٠-١٠٠ لكل محور)، بعيداً عن "
         "استشهاد الأرقام (يُفحص برمجياً بمعزل عنك):\n"
-        "1. section_completeness: هل الأقسام الخمسة عشر المطلوبة حاضرة "
+        "1. section_completeness: هل الأقسام المطلوبة كاملةً حاضرة "
         "بمحتوى فعلي لا عناوين فارغة؟\n"
         "2. gaps_declared: هل الفجوات (بيانات غائبة/بعثات فاشلة) مُعلَنة "
         "صراحة بدل تجاهلها؟\n"
@@ -249,11 +249,9 @@ def evaluate_report(result: dict) -> dict | None:
         raw = _call(_PRINCIPLE, _judge_prompt(result), max_tokens=700,
                     model=_FAST_MODEL, timeout=30)
         if raw:
-            try:
-                start, end = raw.find("{"), raw.rfind("}")
-                llm_axes = json.loads(raw[start:end + 1]) if start >= 0 else None
-            except Exception:  # noqa: BLE001 — رد غير-JSON = محاور كلود غائبة
-                llm_axes = None
+            from silk_ai_judge import _extract_json
+            parsed = _extract_json(raw)  # مستخلِص متين بدل find/rfind الهشّ
+            llm_axes = parsed if isinstance(parsed, dict) else None
     for axis in ("section_completeness", "gaps_declared",
                 "recommendation_grounded", "intersections_quality"):
         val = (llm_axes or {}).get(axis)

@@ -63,7 +63,8 @@
     "empty": "لم ترفع أي منتج بعد.",
     "findBuyers": "ابحث عن مشترين",
     "createProduct": "إنشاء المنتج",
-    "viewReport": "عرض التقرير"
+    "viewReport": "عرض التقرير",
+    "close": "إغلاق"
   },
   "markets": {
     "title": "اختر الأسواق المستهدفة",

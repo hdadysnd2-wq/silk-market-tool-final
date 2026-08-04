@@ -129,7 +129,16 @@ def _domain_of(link: object) -> str:
 _PREFERRED_NOTE = "◐ نطاق مُفضَّل (دليل ثانوي — استشهاد برابط، لا مصدر أوّلي)"
 # سقف استعلامات site: الفرعية لكل نداء بحث (تدقيق مراجعة: كل استعلام فرعيّ نداء
 # Serper إضافي — المُضاعِف مسقوف صراحةً، وأيّ اقتطاع يُعلَن لا يُبتَر صامتاً).
-_MAX_PREFERRED_SUBQUERIES = int(os.environ.get("SILK_MAX_PREFERRED_SUBQUERIES", "2"))
+def _env_int(name: str, default: int) -> int:
+    """Parse an int env var, falling back to the default on any bad value —
+    a typo'd env var must not crash module import (whole-app boot failure)."""
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+_MAX_PREFERRED_SUBQUERIES = _env_int("SILK_MAX_PREFERRED_SUBQUERIES", 2)
 
 
 def web_search_prioritized(

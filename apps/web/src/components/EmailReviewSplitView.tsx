@@ -115,7 +115,7 @@ export function EmailReviewSplitView({
                 onChange={(e) => setBody(e.target.value)}
                 rows={10}
                 className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm text-start"
-                dir={email.language === "ar" || email.language === "hi" ? "rtl" : "ltr"}
+                dir={["ar", "ur", "he", "fa"].includes(email.language) ? "rtl" : "ltr"}
               />
             </div>
           ) : (
@@ -123,7 +123,7 @@ export function EmailReviewSplitView({
               <p className="text-sm font-medium text-gray-900">{email.subject}</p>
               <pre
                 className="mt-2 whitespace-pre-wrap font-sans text-sm text-gray-700"
-                dir={email.language === "ar" || email.language === "hi" ? "rtl" : "ltr"}
+                dir={["ar", "ur", "he", "fa"].includes(email.language) ? "rtl" : "ltr"}
               >
                 {email.body_text}
               </pre>

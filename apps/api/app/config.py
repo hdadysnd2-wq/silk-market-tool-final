@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     # deterministic mock so CI/offline stays green; True selects the LIVE World
     # Bank / WITS adapter, which routes through the engine's hardened data layer.
     market_enrichment_live: bool = False
+    # Observed-price layer (paid, deepen-gated). Blank keeps the deterministic
+    # MockPriceProvider so CI/offline stays green; a value selects the LIVE
+    # LocalPriceProvider, which routes through the engine's paid LocalPriceAgent.
+    # This field is only the registry's switch signal — the engine agent reads its
+    # own vendor key from the environment; the adapter never passes it.
+    serper_api_key: str = ""
     coresignal_api_key: str = ""
     outscraper_api_key: str = ""
     apollo_api_key: str = ""

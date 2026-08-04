@@ -1,0 +1,33 @@
+"""Product visual attributes from the vision pass.
+
+Stores the salient observable attributes the vision adapter extracts from a
+product image ([{name, value}, …]), alongside the AR/EN description. Nullable so
+existing rows are untouched.
+
+Revision ID: 0007
+Revises: 0006
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects import postgresql
+
+revision: str = "0007"
+down_revision: str | None = "0006"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.add_column(
+        "products",
+        sa.Column("attributes", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    )
+
+
+def downgrade() -> None:
+    op.drop_column("products", "attributes")

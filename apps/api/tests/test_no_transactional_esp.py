@@ -51,8 +51,7 @@ def test_sending_provider_is_never_a_transactional_esp():
         settings = base.model_copy(update={"smartlead_api_key": key})
         provider = get_sending_provider(settings)
         assert type(provider).__name__ in ALLOWED_SENDING, (
-            f"cold-send provider {type(provider).__name__!r} is not an approved "
-            f"cold adapter (I6)"
+            f"cold-send provider {type(provider).__name__!r} is not an approved cold adapter (I6)"
         )
 
 
@@ -70,8 +69,7 @@ def test_mailbox_provider_is_never_a_transactional_esp():
             settings = base.model_copy(update=update)
             provider = get_mailbox_provider(provider_type, settings)
             assert type(provider).__name__ in ALLOWED_MAILBOX, (
-                f"mailbox provider {type(provider).__name__!r} is not an approved "
-                f"cold adapter (I6)"
+                f"mailbox provider {type(provider).__name__!r} is not an approved cold adapter (I6)"
             )
 
 
@@ -89,6 +87,6 @@ def test_no_sending_module_imports_a_transactional_esp_sdk():
                 root = name.split(".", 1)[0]
                 if root in TRANSACTIONAL_ESP_MODULES:
                     offenders.append(f"{path.name}: imports {name!r}")
-    assert not offenders, (
-        "transactional-ESP SDK imported on the cold-send path (I6): " + "; ".join(offenders)
+    assert not offenders, "transactional-ESP SDK imported on the cold-send path (I6): " + "; ".join(
+        offenders
     )

@@ -142,7 +142,9 @@ export function WorldFunnel({
       {analysis && (
         <div className="mt-4">
           <p className="text-sm text-gray-500">
-            {t("screened", { count: analysis.rankings.length })}
+            {/* The real world count screened (funnel transparency), not the
+                shortlist length; older runs without it fall back gracefully. */}
+            {t("screened", { count: analysis.total_screened ?? analysis.rankings.length })}
           </p>
           <ul className="mt-3 divide-y divide-gray-100">
             {top5.map((r) => {

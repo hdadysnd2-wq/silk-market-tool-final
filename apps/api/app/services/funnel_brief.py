@@ -77,9 +77,17 @@ def build_funnel_brief(db: Session, analysis: Analysis) -> dict:
     # --- competitive position -------------------------------------------
     position: list[str] = []
     if rankings:
-        # total_screened is not persisted per row; the shortlist length is a
-        # faithful lower bound and is honestly labelled as such.
-        position.append(f"Shortlisted {len(rankings)} markets → top {min(5, len(top5))}.")
+        top_k = min(5, len(top5))
+        screened = analysis.total_screened
+        # Show the funnel transparently when we know the true world count;
+        # otherwise fall back to the shortlist length (older runs) — honestly.
+        if screened and screened >= len(rankings):
+            position.append(
+                f"Screened {screened} markets worldwide → shortlisted "
+                f"{len(rankings)} → top {top_k}."
+            )
+        else:
+            position.append(f"Shortlisted {len(rankings)} markets → top {top_k}.")
     hubs = [r for r in top5 if r.is_transit_hub]
     if hubs:
         names = ", ".join(r.importer_iso3 for r in hubs)

@@ -94,6 +94,8 @@ export interface Analysis {
   status: string;
   deepen: boolean;
   created_at: string;
+  /** Markets screened worldwide in Stage 1 (funnel transparency); null on older runs. */
+  total_screened: number | null;
   rankings: CountryRanking[];
 }
 

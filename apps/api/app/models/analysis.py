@@ -37,6 +37,10 @@ class Analysis(UUIDMixin, TimestampMixin, Base):
     )  # pending | classified | failed
     #: Whether this run activated the paid /deepen scope (I5). Recorded for audit.
     deepen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    #: Total markets screened worldwide in Stage 1 (funnel transparency): lets the
+    #: report show "screened N → shortlisted M → top 5" with the real world count,
+    #: not the shortlist length. None for runs predating this column.
+    total_screened: Mapped[int | None] = mapped_column(Integer)
 
 
 class HSClassification(UUIDMixin, TimestampMixin, Base):

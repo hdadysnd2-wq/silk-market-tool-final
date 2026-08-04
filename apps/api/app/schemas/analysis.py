@@ -54,6 +54,9 @@ class AnalysisOut(BaseModel):
     status: str
     deepen: bool
     created_at: datetime
+    #: Markets screened worldwide in Stage 1 — the real world count behind the
+    #: funnel ("screened N → shortlisted M → top 5"). None for older runs.
+    total_screened: int | None = None
     #: The world-funnel shortlist ("world screened → top 5"), transit-flagged.
     rankings: list[CountryRankingOut] = []
 

@@ -10,13 +10,15 @@ Guarantee I1 — *never fabricate data*: on any failure the envelope carries
 ``value=None`` and ``confidence=0.0`` with a human-readable ``note`` explaining
 the gap. A missing number is always representable and always explains itself.
 
-Phase 0 status
---------------
+Adoption status
+---------------
 This package DEFINES the unified contract and the adapters that map each side's
-existing model onto it. It does NOT yet rewrite either side to consume it — that
-is Phase 1, done strangler-style with deprecation shims (no big-bang rename).
-Defining the target here first lets both sides converge toward a single,
-importable source of truth.
+existing model onto it. Both sides now have a live bridge into it — the engine
+via ``from_datapoint`` (``services.engine``) and the platform via
+``ProviderRecord.to_contract`` (``providers.base`` → ``from_provider_record``).
+Column-level persistence of the full envelope is migrated strangler-style, so DB
+rows still carry provenance as discrete columns where the envelope has not landed
+yet; no big-bang rename.
 
 Field mapping
 -------------
@@ -54,7 +56,7 @@ class DataContract(Generic[T]):
     source: str
     provider: str
     confidence: float
-    fetched_at: str | None = None   # ISO-8601 string (date or datetime)
+    fetched_at: str | None = None  # ISO-8601 string (date or datetime)
     data_year: int | None = None
     note: str = ""
     # Optional structural distinction carried by Repo A's engine:
@@ -128,10 +130,16 @@ def from_datapoint(dp: Any, *, provider: str = "") -> DataContract[Any]:
 def from_provider_record(rec: Any) -> DataContract[Any]:
     """Adapt a Repo B ``ProviderRecord[T]`` to the unified contract."""
     fetched = getattr(rec, "fetched_at", None)
+    src = getattr(rec, "source", "")
+    # A ``SourceType`` enum carries a clean string in ``.value`` ("comtrade"); a
+    # plain string passes through. Never emit "SourceType.COMTRADE".
+    source = getattr(src, "value", None) or str(src)
+    data = getattr(rec, "data", None)
     return DataContract(
-        value=getattr(rec, "data", None),
-        source=str(getattr(rec, "source", "")),
+        value=data,
+        source=source,
         provider=getattr(rec, "provider_name", ""),
-        confidence=float(getattr(rec, "confidence", 0.0) or 0.0),
+        # No payload ⇒ a missing envelope (I1): value None with zero confidence.
+        confidence=float(getattr(rec, "confidence", 0.0) or 0.0) if data is not None else 0.0,
         fetched_at=fetched.isoformat() if hasattr(fetched, "isoformat") else fetched,
     )

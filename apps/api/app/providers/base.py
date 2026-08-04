@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Generic, Protocol, TypeVar
 
+from contracts import DataContract, from_provider_record
+
 from app.models.base import utcnow
 
 T = TypeVar("T")
@@ -52,6 +54,17 @@ class ProviderRecord(Generic[T]):
     provider_name: str
     confidence: float
     fetched_at: datetime = field(default_factory=utcnow)
+
+    def to_contract(self) -> DataContract:
+        """This record as the ONE platform-wide provenance envelope (I1 / decision #4).
+
+        ``DataContract`` and ``ProviderRecord`` are the two provenance models the
+        merge unified; this is the bridge, so provider data can travel as the same
+        ``{value, source, provider, confidence, fetched_at, …}`` envelope the
+        engine side already uses — never a fabricated value, a missing payload
+        becoming a zero-confidence gap.
+        """
+        return from_provider_record(self)
 
 
 # --------------------------------------------------------------------------

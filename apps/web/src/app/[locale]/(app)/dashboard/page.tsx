@@ -3,16 +3,20 @@
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { useApi } from "@/lib/useApi";
-import type { DashboardStats } from "@/lib/types";
+import type { DashboardStats, SenderAccount } from "@/lib/types";
 
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
   const { data, loading } = useApi<DashboardStats>("/dashboard");
+  const { data: senders } = useApi<SenderAccount[]>("/sender-accounts");
 
   if (loading) return <p className="text-gray-400">…</p>;
   if (!data) return null;
 
   const hasActivity = data.campaigns > 0;
+  // A factory can't send until at least one mailbox is connected AND verified.
+  // Until then, surface a callout that routes straight to the connect flow.
+  const needsSender = senders !== null && !senders.some((s) => s.verification_status === "verified");
 
   const tiles: { label: string; value: string; href?: string; hint?: string }[] = [
     { label: t("campaigns"), value: String(data.campaigns) },
@@ -35,6 +39,22 @@ export default function DashboardPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900">{t("title")}</h1>
+
+      {needsSender && (
+        <div className="mt-6 flex flex-col gap-3 rounded-xl bg-amber-50 p-5 ring-1 ring-amber-200 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-medium text-amber-900">{t("noSenderTitle")}</p>
+            <p className="mt-1 text-sm text-amber-800">{t("noSenderBody")}</p>
+          </div>
+          <Link
+            href="/settings/sending-email"
+            className="shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-brand-700"
+          >
+            {t("noSenderCta")}
+          </Link>
+        </div>
+      )}
+
       {!hasActivity ? (
         <p className="mt-6 rounded-xl bg-white p-8 text-center text-gray-500 ring-1 ring-black/5">
           {t("empty")}

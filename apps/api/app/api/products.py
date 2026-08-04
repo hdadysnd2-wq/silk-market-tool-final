@@ -21,6 +21,28 @@ router = APIRouter(tags=["products"])
 MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
+def _coerce_optional_price(value: str | None, field: str) -> float | None:
+    """Coerce an optional numeric multipart field.
+
+    Browsers submit empty ``<input>`` values as ``""`` rather than omitting the
+    field, so declaring these as ``float`` makes FastAPI 422 on a blank price.
+    We take them as strings instead: blank (or whitespace) means "unset" → None,
+    anything else must parse as a float, and genuine garbage is a clean 400.
+    """
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{field} must be a number or left blank",
+        ) from None
+
+
 @router.post("/products", response_model=ProductAccepted, status_code=status.HTTP_202_ACCEPTED)
 async def create_product(
     db: DbDep,
@@ -29,13 +51,16 @@ async def create_product(
     name_en: str = Form(...),
     description_ar: str | None = Form(None),
     description_en: str | None = Form(None),
-    price_min: float | None = Form(None),
-    price_max: float | None = Form(None),
+    price_min: str | None = Form(None),
+    price_max: str | None = Form(None),
     currency: str = Form("USD"),
     classify: bool = Form(True),
     image: UploadFile | None = File(None),
 ) -> ProductAccepted:
     factory = resolve_factory(db, user)
+
+    price_min_val = _coerce_optional_price(price_min, "price_min")
+    price_max_val = _coerce_optional_price(price_max, "price_max")
 
     image_url = None
     if image is not None:
@@ -58,8 +83,8 @@ async def create_product(
         description_ar=description_ar,
         description_en=description_en,
         image_url=image_url,
-        price_min=price_min,
-        price_max=price_max,
+        price_min=price_min_val,
+        price_max=price_max_val,
         currency=currency,
         classification_status="pending",
     )

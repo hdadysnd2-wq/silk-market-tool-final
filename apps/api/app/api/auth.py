@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 
 from app.api.deps import DbDep
 from app.models import utcnow
 from app.schemas.auth import (
+    ChangePasswordRequest,
     LoginRequest,
     OTPRequest,
     OTPVerifyRequest,
     RegisterRequest,
     TokenResponse,
+    UpdateMeRequest,
     UserOut,
 )
-from app.security import CurrentUser, create_access_token
-from app.services import auth_service
+from app.security import CurrentUser, create_access_token, hash_password, verify_password
+from app.services import audit, auth_service, rate_limit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -82,3 +84,37 @@ def verify_otp(payload: OTPVerifyRequest, db: DbDep) -> TokenResponse:
 @router.get("/me", response_model=UserOut)
 def me(user: CurrentUser) -> UserOut:
     return UserOut.model_validate(user)
+
+
+@router.put("/me", response_model=UserOut)
+def update_me(payload: UpdateMeRequest, db: DbDep, user: CurrentUser) -> UserOut:
+    """Self-service profile edit (display name + UI locale)."""
+    data = payload.model_dump(exclude_unset=True)
+    for field, value in data.items():
+        setattr(user, field, value)
+    db.commit()
+    return UserOut.model_validate(user)
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(payload: ChangePasswordRequest, db: DbDep, user: CurrentUser) -> Response:
+    """Change the signed-in user's password after re-verifying the current one.
+
+    Rate-limited per account so a stolen session can't brute-force the current
+    password, and audited (without ever recording either password).
+    """
+    rate_limit.check(f"change_password:{user.id}", limit=5, window_seconds=300)
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect"
+        )
+    user.password_hash = hash_password(payload.new_password)
+    audit.record(
+        db,
+        action="user.password_changed",
+        entity_type="user",
+        entity_id=user.id,
+        actor=user,
+    )
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

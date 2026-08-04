@@ -62,7 +62,7 @@ async def create_product(
         # Visual understanding first (DoD step 1): fill AR/EN description +
         # attributes, which then also inform the HS classification below.
         product_vision.describe_product(db, product, llm)
-        hs_classifier.classify_product(db, product, llm)
+        hs_classifier.classify_product(db, product)
         embedding = get_embedding_provider().embed(
             [f"{product.name_en} {product.description_en or ''}"]
         )[0]
@@ -88,7 +88,7 @@ def get_product(product: ProductModel = Depends(get_owned_product)) -> ProductOu
 
 @router.post("/products/{product_id}/classify", response_model=ProductOut)
 def classify(db: DbDep, product: ProductModel = Depends(get_owned_product)) -> ProductOut:
-    hs_classifier.classify_product(db, product, get_llm_provider())
+    hs_classifier.classify_product(db, product)
     db.commit()
     return ProductOut.model_validate(product)
 

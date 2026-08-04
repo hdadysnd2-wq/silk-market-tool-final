@@ -17,7 +17,6 @@ from app.providers.base import LLMMessage, LLMResponse
 from app.providers.determinism import rng_for
 from app.providers.llm.prompts import (
     EMAIL_SCHEMA_TITLE,
-    HS_SCHEMA_TITLE,
     PRODUCT_VISION_SCHEMA_TITLE,
 )
 
@@ -166,9 +165,7 @@ class MockLLMProvider:
 
     def _dispatch(self, prompt: str, json_schema: dict[str, Any] | None) -> LLMResponse:
         title = (json_schema or {}).get("title")
-        if title == HS_SCHEMA_TITLE:
-            parsed = self._classify(prompt)
-        elif title == EMAIL_SCHEMA_TITLE:
+        if title == EMAIL_SCHEMA_TITLE:
             parsed = self._draft_email(prompt)
         elif title == PRODUCT_VISION_SCHEMA_TITLE:
             parsed = self._describe(prompt)
@@ -176,46 +173,6 @@ class MockLLMProvider:
             parsed = None
         text = json.dumps(parsed, ensure_ascii=False) if parsed else "(mock response)"
         return LLMResponse(text=text, provider_name=self.name, model=self.model, parsed=parsed)
-
-    def _classify(self, prompt: str) -> dict[str, Any]:
-        """Score the HS keyword table against the prompt text."""
-        haystack = prompt.lower()
-        scored: list[tuple[float, dict[str, Any]]] = []
-        for entry in self.keywords:
-            hits = sum(1 for kw in entry["keywords"] if kw.lower() in haystack)
-            if hits:
-                scored.append((hits / len(entry["keywords"]), entry))
-
-        scored.sort(key=lambda pair: (-pair[0], pair[1]["code"]))
-
-        if not scored:
-            # Nothing matched: fall back to a stable pick so the pipeline still
-            # produces three reviewable candidates for the user to override.
-            fallback = self.keywords[:3] or [
-                {"code": "999999", "description": "Unclassified", "keywords": []}
-            ]
-            return {
-                "candidates": [
-                    {
-                        "code": entry["code"],
-                        "confidence": round(0.34 - 0.08 * idx, 2),
-                        "rationale": "No distinctive keyword matched; broad guess only.",
-                    }
-                    for idx, entry in enumerate(fallback[:3])
-                ]
-            }
-
-        candidates = []
-        for idx, (ratio, entry) in enumerate(scored[:3]):
-            confidence = round(min(0.94, 0.55 + 0.4 * ratio) - 0.15 * idx, 2)
-            candidates.append(
-                {
-                    "code": entry["code"],
-                    "confidence": max(confidence, 0.05),
-                    "rationale": f"Matched on {entry['description'].lower()}.",
-                }
-            )
-        return {"candidates": candidates}
 
     def _describe(self, prompt: str) -> dict[str, Any]:
         """Deterministic product understanding (AR/EN description + attributes).

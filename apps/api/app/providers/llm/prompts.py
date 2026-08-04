@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from typing import Any
 
-HS_SCHEMA_TITLE = "HSClassification"
 EMAIL_SCHEMA_TITLE = "OutreachEmail"
 PRODUCT_VISION_SCHEMA_TITLE = "ProductVision"
 
@@ -52,56 +51,6 @@ def product_vision_prompt(*, name: str, description: str | None, has_image: bool
         "An image of the product is attached; describe what you see."
         if has_image
         else "No image was provided; describe from the text alone."
-    )
-    return "\n".join(parts)
-
-
-HS_CLASSIFICATION_SCHEMA: dict[str, Any] = {
-    "title": HS_SCHEMA_TITLE,
-    "type": "object",
-    "required": ["candidates"],
-    "properties": {
-        "candidates": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 3,
-            "items": {
-                "type": "object",
-                "required": ["code", "confidence"],
-                "properties": {
-                    "code": {"type": "string", "description": "Six-digit HS code"},
-                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                    "rationale": {"type": "string"},
-                },
-            },
-        }
-    },
-}
-
-HS_SYSTEM_PROMPT = """You are a customs classification specialist working for a Saudi export house.
-Given a product image and description, identify the three most likely six-digit HS codes.
-
-Rules:
-- Return exactly three candidates, most likely first.
-- Codes must be valid six-digit HS6 codes with no punctuation.
-- Confidence is your calibrated probability that the code is correct, 0 to 1.
-- The rationale is one short sentence naming the deciding physical characteristic.
-- Never invent a code to fill the list; if unsure, give a broader heading within the
-  correct chapter and lower the confidence accordingly."""
-
-
-def hs_user_prompt(
-    *, name: str, description: str | None, sector: str | None, has_image: bool
-) -> str:
-    parts = [f"Product name: {name}"]
-    if description:
-        parts.append(f"Description: {description}")
-    if sector:
-        parts.append(f"Manufacturer sector: {sector}")
-    parts.append(
-        "An image of the product is attached."
-        if has_image
-        else "No product image was provided; classify from the text alone."
     )
     return "\n".join(parts)
 

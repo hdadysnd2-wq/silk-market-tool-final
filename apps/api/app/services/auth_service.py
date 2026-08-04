@@ -85,7 +85,9 @@ def issue_otp(db: Session, user: User) -> str:
     user.otp_code_hash = hash_otp(code)
     user.otp_expires_at = utcnow() + timedelta(minutes=ttl)
     db.flush()
-    log.info("otp_issued", user_id=str(user.id), code_for_local_delivery=code)
+    # Never log the code — anyone with log access could complete /otp/verify.
+    # The caller returns it out-of-band (and only in local env, per the API).
+    log.info("otp_issued", user_id=str(user.id))
     return code
 
 

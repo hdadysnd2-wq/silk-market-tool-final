@@ -258,12 +258,13 @@ def _score(db: Session, product: Product, buyer: Buyer, market_iso2: str) -> Non
     shipments = db.scalars(select(Shipment).where(Shipment.buyer_id == buyer.id)).all()
 
     today = utcnow().date()
-    recent = [s for s in shipments if 0 <= (today - s.shipment_date).days <= 365]
+    # A provider gap can leave shipment_date None; exclude those from the date
+    # math so one dateless row can't crash the whole discovery task (I1 spirit).
+    dated = [s for s in shipments if s.shipment_date is not None]
+    recent = [s for s in dated if 0 <= (today - s.shipment_date).days <= 365]
     total_value = sum(float(s.value_usd or 0) for s in recent)
     buyer_hs = sorted({s.hs_code for s in shipments}) or [product.hs_code]
-    last_days = (
-        max(0, min((today - s.shipment_date).days for s in shipments)) if shipments else None
-    )
+    last_days = max(0, min((today - s.shipment_date).days for s in dated)) if dated else None
 
     breakdown = score_buyer(
         ScoringInput(

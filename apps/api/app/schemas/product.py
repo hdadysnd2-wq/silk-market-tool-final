@@ -6,16 +6,6 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-class ProductCreate(BaseModel):
-    name_ar: str = Field(min_length=1, max_length=255)
-    name_en: str = Field(min_length=1, max_length=255)
-    description_ar: str | None = None
-    description_en: str | None = None
-    price_min: float | None = None
-    price_max: float | None = None
-    currency: str = "USD"
-
-
 class HSCandidate(BaseModel):
     code: str
     confidence: float

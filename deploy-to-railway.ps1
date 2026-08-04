@@ -1,12 +1,12 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Deploy the whole Silk United platform to Railway from GitHub — end to end,
+    Deploy the whole Silk United platform to Railway from GitHub - end to end,
     with no manual dashboard steps.
 
 .DESCRIPTION
-    Silk United is a monorepo: one GitHub repo → four services (api · worker ·
-    beat · web) that share one Postgres and one Redis. This script provisions all
+    Silk United is a monorepo: one GitHub repo -> four services (api - worker -
+    beat - web) that share one Postgres and one Redis. This script provisions all
     of it headlessly:
 
       1. Ensure the Railway CLI (installs via `npm i -g @railway/cli` if missing).
@@ -21,18 +21,18 @@
     --------------------------------------
     The Railway CLI cannot set a service's Root Directory or config-as-code path,
     so this script sidesteps both:
-      • Every service builds from the REPOSITORY ROOT (Root Directory stays empty,
+      - Every service builds from the REPOSITORY ROOT (Root Directory stays empty,
         which is the default), so nothing to set.
-      • Each service selects its Dockerfile with the RAILWAY_DOCKERFILE_PATH
-        service variable (api/worker/beat → apps/api/Dockerfile, web →
-        apps/web/Dockerfile) — set from the CLI, not the dashboard.
-      • api, worker, and beat share ONE image; the SILK_ROLE variable selects the
+      - Each service selects its Dockerfile with the RAILWAY_DOCKERFILE_PATH
+        service variable (api/worker/beat -> apps/api/Dockerfile, web ->
+        apps/web/Dockerfile) - set from the CLI, not the dashboard.
+      - api, worker, and beat share ONE image; the SILK_ROLE variable selects the
         entrypoint (api | worker | beat), so no per-service start command is needed.
-      • Shared secrets are wired as Railway reference variables
-        (${{Postgres.DATABASE_URL}}, ${{api.RAILWAY_PUBLIC_DOMAIN}}, …).
+      - Shared secrets are wired as Railway reference variables that resolve at
+        deploy time (Postgres.DATABASE_URL, api.RAILWAY_PUBLIC_DOMAIN, and so on).
 
     NOTE: this depends on the Dockerfiles building from the repo root and on the
-    SILK_ROLE / RAILWAY_DOCKERFILE_PATH conventions — those changes must be on the
+    SILK_ROLE / RAILWAY_DOCKERFILE_PATH conventions - those changes must be on the
     branch Railway deploys.
 
 .PARAMETER Repo
@@ -54,7 +54,7 @@
 .NOTES
     Non-interactive auth (CI): set RAILWAY_TOKEN (project token) or
     RAILWAY_API_TOKEN (account token) and the login step is skipped.
-    Vendor keys (ANTHROPIC_API_KEY, SMARTLEAD_API_KEY, OAuth, …) are all optional —
+    Vendor keys (ANTHROPIC_API_KEY, SMARTLEAD_API_KEY, OAuth, ...) are all optional -
     blank keeps the deterministic mock adapter. Add real keys later in the dashboard.
 #>
 
@@ -107,6 +107,16 @@ function New-SecretKey {
     return -join ($bytes | ForEach-Object { $_.ToString('x2') })
 }
 
+# Build a Railway reference-variable token: RailwayRef 'Postgres.DATABASE_URL'
+# returns a dollar sign followed by double braces around the expression (the syntax
+# Railway resolves at deploy time). The dollar and braces are kept in SEPARATE
+# string literals so this source never contains a dollar-then-brace sequence, which
+# Windows PowerShell would otherwise try to parse as a braced variable name.
+function RailwayRef {
+    param([Parameter(Mandatory)][string]$Expr)
+    return '$' + '{{' + $Expr + '}}'
+}
+
 # Create one GitHub-linked service and attach its variables in a single call.
 function Add-RailwayService {
     param(
@@ -121,7 +131,7 @@ function Add-RailwayService {
     foreach ($v in $Variables) { $rwArgs += @('--variables', $v) }
     Invoke-Native { railway @rwArgs }
     if ($LASTEXITCODE -ne 0) {
-        Write-Warn "railway add --service $Name exited with code $LASTEXITCODE (it may already exist) — continuing."
+        Write-Warn "railway add --service $Name exited with code $LASTEXITCODE (it may already exist) - continuing."
         return $false
     }
     Write-Ok "service '$Name' created"
@@ -232,6 +242,11 @@ try {
     Write-Info 'Adding Postgres...'
     Invoke-Native { railway add --database postgres }
     if ($LASTEXITCODE -ne 0) { Write-Warn 'Postgres may already exist - continuing.' } else { Write-Ok 'Postgres added' }
+    Write-Warn 'IMPORTANT: the api migration runs CREATE EXTENSION vector, which the plain'
+    Write-Warn 'Postgres plugin does NOT ship. If the api later crashes with'
+    Write-Warn '  type "vector" does not exist'
+    Write-Warn 'replace this Postgres with a pgvector one (Railway pgvector template, or a'
+    Write-Warn 'service from the pgvector/pgvector image) and keep DATABASE_URL pointing at it.'
     Write-Info 'Adding Redis...'
     Invoke-Native { railway add --database redis }
     if ($LASTEXITCODE -ne 0) { Write-Warn 'Redis may already exist - continuing.' } else { Write-Ok 'Redis added' }
@@ -240,44 +255,43 @@ try {
     Write-Step '6 - Services (api - worker - beat - web)'
     $secret = New-SecretKey
 
-    # Shared backend variables. Reference variables (${{...}}) are stored verbatim
-    # and resolved by Railway at deploy time — single-quoted so PowerShell does not
-    # try to expand them.
+    # Shared backend variables. The Railway reference tokens are built with
+    # RailwayRef so no dollar-then-brace sequence ever appears in this source.
     $backend = @(
         'ENVIRONMENT=production',
         "SECRET_KEY=$secret",
-        'DATABASE_URL=${{Postgres.DATABASE_URL}}',
-        'REDIS_URL=${{Redis.REDIS_URL}}',
-        'API_BASE_URL=https://${{api.RAILWAY_PUBLIC_DOMAIN}}',
-        'APP_BASE_URL=https://${{web.RAILWAY_PUBLIC_DOMAIN}}',
-        'CORS_ORIGINS=https://${{web.RAILWAY_PUBLIC_DOMAIN}}',
+        ('DATABASE_URL=' + (RailwayRef 'Postgres.DATABASE_URL')),
+        ('REDIS_URL=' + (RailwayRef 'Redis.REDIS_URL')),
+        ('API_BASE_URL=https://' + (RailwayRef 'api.RAILWAY_PUBLIC_DOMAIN')),
+        ('APP_BASE_URL=https://' + (RailwayRef 'web.RAILWAY_PUBLIC_DOMAIN')),
+        ('CORS_ORIGINS=https://' + (RailwayRef 'web.RAILWAY_PUBLIC_DOMAIN')),
         'STORAGE_BACKEND=local',
         'COMTRADE_OFFLINE=1'
     )
 
-    # api — public HTTP; runs migrations + seed on boot (RUN_SEED handled by start-api.sh).
+    # api - public HTTP; runs migrations + seed on boot (RUN_SEED handled by start-api.sh).
     Add-RailwayService -Name 'api' -RepoSlug $Repo -BranchName $Branch -Variables (
         $backend + @('SILK_ROLE=api', 'RAILWAY_DOCKERFILE_PATH=apps/api/Dockerfile', 'RUN_SEED=1')
     ) | Out-Null
     # Generate the api domain BEFORE creating web, so web's build-time API_PROXY_TARGET resolves.
     New-RailwayDomain -Name 'api' | Out-Null
 
-    # worker — Celery worker (same image, SILK_ROLE=worker), no public domain.
+    # worker - Celery worker (same image, SILK_ROLE=worker), no public domain.
     Add-RailwayService -Name 'worker' -RepoSlug $Repo -BranchName $Branch -Variables (
         $backend + @('SILK_ROLE=worker', 'RAILWAY_DOCKERFILE_PATH=apps/api/Dockerfile')
     ) | Out-Null
 
-    # beat — Celery scheduler (same image, SILK_ROLE=beat), no public domain.
+    # beat - Celery scheduler (same image, SILK_ROLE=beat), no public domain.
     Add-RailwayService -Name 'beat' -RepoSlug $Repo -BranchName $Branch -Variables (
         $backend + @('SILK_ROLE=beat', 'RAILWAY_DOCKERFILE_PATH=apps/api/Dockerfile')
     ) | Out-Null
 
-    # web — Next.js. API_PROXY_TARGET is read at BUILD time; it points at the api
+    # web - Next.js. API_PROXY_TARGET is read at BUILD time; it points at the api
     # public domain (resolves because the api domain was generated above).
     Add-RailwayService -Name 'web' -RepoSlug $Repo -BranchName $Branch -Variables @(
         'RAILWAY_DOCKERFILE_PATH=apps/web/Dockerfile',
         'NODE_ENV=production',
-        'API_PROXY_TARGET=https://${{api.RAILWAY_PUBLIC_DOMAIN}}'
+        ('API_PROXY_TARGET=https://' + (RailwayRef 'api.RAILWAY_PUBLIC_DOMAIN'))
     ) | Out-Null
     New-RailwayDomain -Name 'web' | Out-Null
 
@@ -296,8 +310,8 @@ If a domain step warned, generate it in the dashboard (service -> Settings ->
 Networking -> Generate Domain) for api and web, then redeploy web so its
 API_PROXY_TARGET picks up the api domain.
 
-Optional real vendor keys (ANTHROPIC_API_KEY, SMARTLEAD_API_KEY, OAuth, S3, …)
-are all optional — add them per service later; blank keeps the built-in mocks.
+Optional real vendor keys (ANTHROPIC_API_KEY, SMARTLEAD_API_KEY, OAuth, S3, ...)
+are all optional - add them per service later; blank keeps the built-in mocks.
 "@ -ForegroundColor DarkGray
 }
 catch {

@@ -20,6 +20,15 @@ os.environ.setdefault("COMTRADE_OFFLINE", "1")
 os.environ.setdefault("MOCK_EMIT_ENGAGEMENT", "0")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-at-least-32-bytes-long-000")
 
+# Run Celery tasks inline (eager) during tests so ``.delay()`` executes the task
+# synchronously in-process — no broker needed. This MUST be set before anything
+# imports ``app.workers.celery_app`` (which reads it at import time), i.e. before
+# the ``app.main`` import below pulls in the routers that enqueue tasks. A route
+# commits its entity before ``.delay()``, so the eager task's own session sees it;
+# after the eager task commits, a subsequent ``GET`` (new session) sees the result.
+os.environ["CELERY_TASK_ALWAYS_EAGER"] = "1"
+os.environ["CELERY_TASK_EAGER_PROPAGATES"] = "1"
+
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 

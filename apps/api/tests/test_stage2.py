@@ -45,7 +45,11 @@ def _seed_world(db, hs6=HS6):
 
 
 def _run_stage1(client, product, auth_headers) -> str:
-    return client.post(f"/api/v1/products/{product.id}/analysis", headers=auth_headers).json()["id"]
+    # Async world funnel: POST is accepted (202); under eager mode the ranking task
+    # ran in-process, so the analysis id already resolves a ranked Stage-1 run.
+    resp = client.post(f"/api/v1/products/{product.id}/analysis", headers=auth_headers)
+    assert resp.status_code == 202, resp.text
+    return resp.json()["analysis"]["id"]
 
 
 def test_stage2_score_applies_tariff_drag_and_ppp_lift():
@@ -63,9 +67,13 @@ def test_enrich_reranks_shortlist_and_persists_stage2(client, db, product, auth_
     _seed_world(db)
     aid = _run_stage1(client, product, auth_headers)
 
+    # Async Stage 2: POST is accepted (202); under eager mode the enrich task ran
+    # in-process, so GET carries the re-ranked, enriched shortlist.
     res = client.post(f"/api/v1/analyses/{aid}/enrich", headers=auth_headers)
-    assert res.status_code == 200, res.text
-    out = res.json()
+    assert res.status_code == 202, res.text
+    assert res.json()["task_id"]
+
+    out = client.get(f"/api/v1/analyses/{aid}", headers=auth_headers).json()
     assert out["status"] == "enriched"
 
     rankings = out["rankings"]
@@ -85,7 +93,8 @@ def test_enrich_reranks_shortlist_and_persists_stage2(client, db, product, auth_
 def test_enrich_brief_reflects_stage2(client, db, product, auth_headers):
     _seed_world(db)
     aid = _run_stage1(client, product, auth_headers)
-    client.post(f"/api/v1/analyses/{aid}/enrich", headers=auth_headers)
+    res = client.post(f"/api/v1/analyses/{aid}/enrich", headers=auth_headers)
+    assert res.status_code == 202, res.text
 
     brief = client.get(f"/api/v1/analyses/{aid}/brief", headers=auth_headers).json()
     assert any("Stage-2" in line for line in brief["competitive_position"])

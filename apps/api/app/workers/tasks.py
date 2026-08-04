@@ -96,18 +96,63 @@ def run_hs_analysis(product_id: str, deepen: bool = False) -> dict:
         }
 
 
+@celery_app.task(name="app.workers.tasks.process_product_intake")
+def process_product_intake(product_id: str, deepen: bool = False) -> dict:
+    """Pipeline steps 1-2 for one product: vision → HS proposal → embedding (I5).
+
+    Mirrors the old inline body of ``products.create_product`` exactly, but in the
+    worker. The ``/deepen`` scope is re-established from the explicit ``deepen``
+    payload flag (invariant I5 — ``contextvars`` do NOT cross the process boundary,
+    and eager mode must not bypass this): the vision pass fills the AR/EN
+    description + attributes (DoD step 1), the engine proposes HS6 candidates
+    (I2 — proposal only, ``product.hs_code`` is never set here), and the product
+    embedding is computed exactly as the inline route did. Opens its own session
+    and commits on success.
+    """
+    import uuid as _uuid
+
+    from app.db import SessionLocal
+    from app.models import Product
+    from app.providers.registry import get_embedding_provider, get_llm_provider
+    from app.services import engine, hs_classifier, product_vision
+
+    db = SessionLocal()
+    try:
+        product = db.get(Product, _uuid.UUID(product_id))
+        if product is None:
+            return {"error": "product not found"}
+        with engine.deepen_scope(deepen):
+            product_vision.describe_product(db, product, get_llm_provider())
+            hs_classifier.classify_product(db, product)
+            embedding = get_embedding_provider().embed(
+                [f"{product.name_en} {product.description_en or ''}"]
+            )[0]
+            product.embedding = embedding
+        db.commit()
+        return {
+            "product_id": product_id,
+            "classification_status": product.classification_status,
+            "deepen": deepen,
+        }
+    finally:
+        db.close()
+
+
 @celery_app.task(name="app.workers.tasks.run_world_ranking")
-def run_world_ranking(analysis_id: str, hs6: str, top_n: int = 20) -> dict:
+def run_world_ranking(analysis_id: str, hs6: str, top_n: int = 20, deepen: bool = False) -> dict:
     """Screen the world for a confirmed HS6 and persist the country shortlist.
 
     Stage 1 of the world funnel: reads the precomputed ``world_trade`` table and
     persists the ranked markets (with transit-port flags + provenance, I9/I1)
     against the analysis. ``hs6`` is the human-confirmed code (I2) — the caller
-    passes it explicitly; this task never re-classifies.
+    passes it explicitly; this task never re-classifies. The ``/deepen`` scope is
+    re-established from the explicit ``deepen`` payload flag (I5) so any budgeted
+    paid enrichment folded into the screen is gated in-process.
     """
     import uuid as _uuid
 
     from app.models import Analysis
+    from app.services import engine
     from app.services.api_budget import budget_scope
     from app.services.ranking import rank_and_persist
 
@@ -116,18 +161,59 @@ def run_world_ranking(analysis_id: str, hs6: str, top_n: int = 20) -> dict:
         if analysis is None:
             return {"error": "analysis not found"}
         # Stage 1 is a local SQL screen (no live calls), but the same scope caps
-        # the budgeted live enrichment that Stages 2-3 add on top (decision #5).
-        with budget_scope(label=f"ranking:{analysis_id}:{hs6}"):
+        # the budgeted live enrichment that Stages 2-3 add on top (decision #5),
+        # and the deepen scope (I5) gates the paid engine agents behind /deepen.
+        with engine.deepen_scope(deepen), budget_scope(label=f"ranking:{analysis_id}:{hs6}"):
             rankings = rank_and_persist(db, analysis, hs6, top_n=top_n)
-        if analysis.status in ("pending", "classified"):
-            analysis.status = "ranked"
+            if analysis.status in ("pending", "classified"):
+                analysis.status = "ranked"
         db.flush()
         return {
             "analysis_id": analysis_id,
             "hs6": hs6,
             "ranked": len(rankings),
             "top5": [r.importer_iso3 for r in rankings[:5]],
+            "deepen": deepen,
         }
+
+
+@celery_app.task(name="app.workers.tasks.run_stage2_enrich")
+def run_stage2_enrich(analysis_id: str, hs6: str, deepen: bool = False) -> dict:
+    """Funnel Stage 2 in the worker: budgeted enrichment of the shortlist → top 5.
+
+    Mirrors ``analyses.enrich_analysis``'s old inline body. The ``/deepen`` scope
+    is re-established from the explicit ``deepen`` payload flag (invariant I5) and
+    the per-analysis API budget (decision #5) is re-opened in-process; inside both
+    scopes ``enrich_shortlist`` enriches the persisted Stage-1 shortlist and
+    re-ranks it, and the analysis is marked ``enriched``. Opens its own session
+    and commits on success.
+    """
+    import uuid as _uuid
+
+    from app.db import SessionLocal
+    from app.models import Analysis
+    from app.services import engine
+    from app.services.api_budget import budget_scope
+    from app.services.stage2 import enrich_shortlist
+
+    db = SessionLocal()
+    try:
+        analysis = db.get(Analysis, _uuid.UUID(analysis_id))
+        if analysis is None:
+            return {"error": "analysis not found"}
+        with engine.deepen_scope(deepen), budget_scope(label=f"stage2:{analysis_id}"):
+            enrich_shortlist(db, analysis, hs6)
+            if analysis.status in ("pending", "classified", "ranked"):
+                analysis.status = "enriched"
+        db.commit()
+        return {
+            "analysis_id": analysis_id,
+            "hs6": hs6,
+            "status": analysis.status,
+            "deepen": deepen,
+        }
+    finally:
+        db.close()
 
 
 @celery_app.task(name="app.workers.tasks.draft_campaign_emails")

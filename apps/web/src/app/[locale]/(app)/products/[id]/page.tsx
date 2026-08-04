@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { useApi } from "@/lib/useApi";
@@ -10,7 +10,19 @@ import type { Product } from "@/lib/types";
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const t = useTranslations("products");
-  const { data: product, loading, reload } = useApi<Product>(`/products/${id}`);
+  // Classification runs async on a worker. Poll until it reaches a terminal
+  // state so `HsSuggestionCard` (which reads `product.hs_candidates`) renders
+  // once classification completes; stop polling once classified/failed.
+  const [pollMs, setPollMs] = useState(2000);
+  const { data: product, loading, reload } = useApi<Product>(`/products/${id}`, pollMs);
+
+  useEffect(() => {
+    if (!product) return;
+    const terminal =
+      product.classification_status === "classified" ||
+      product.classification_status === "failed";
+    setPollMs(terminal ? 0 : 2000);
+  }, [product]);
 
   if (loading) return <p className="text-gray-400">…</p>;
   if (!product) return null;

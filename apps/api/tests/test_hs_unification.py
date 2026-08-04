@@ -27,13 +27,25 @@ _NONSENSE = {"name_ar": "ززز", "name_en": "zzzqqxnonsense"}
 
 
 def _create(client, auth_headers, spec: dict) -> dict:
+    """POST a product (202 + pending) and return the classified product via GET.
+
+    The intake pipeline is async: the POST is accepted with the product still
+    ``pending``; under eager mode the task ran in-process during the POST, so a
+    follow-up GET carries the classified result the client polls for.
+    """
     res = client.post(
         "/api/v1/products",
         headers=auth_headers,
         data={**spec, "classify": "true"},
     )
-    assert res.status_code == 201, res.text
-    return res.json()
+    assert res.status_code == 202, res.text
+    accepted = res.json()
+    assert accepted["task_id"]
+    assert accepted["product"]["classification_status"] == "pending"
+    product_id = accepted["product"]["id"]
+    got = client.get(f"/api/v1/products/{product_id}", headers=auth_headers)
+    assert got.status_code == 200, got.text
+    return got.json()
 
 
 # -- (a) create → classified proposal, hs_code left uncommitted (I2) -----------

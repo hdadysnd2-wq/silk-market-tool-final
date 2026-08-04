@@ -60,6 +60,14 @@ export interface Product {
   created_at: string;
 }
 
+// Async 202 envelope for product create/classify: the pipeline step was accepted
+// and runs on a worker; the client polls GET /products/{id} until
+// `classification_status` reaches a terminal state.
+export interface ProductAccepted {
+  task_id: string;
+  product: Product;
+}
+
 export interface Market {
   iso2: string;
   name_en: string;
@@ -105,6 +113,14 @@ export interface Analysis {
   /** Markets screened worldwide in Stage 1 (funnel transparency); null on older runs. */
   total_screened: number | null;
   rankings: CountryRanking[];
+}
+
+// Async 202 envelope for analysis screen/enrich: the step was accepted and runs
+// on a worker; the client polls GET /analyses/{id} until `status` is terminal
+// (`ranked` after screening, `enriched` after Stage-2 enrichment).
+export interface AnalysisAccepted {
+  task_id: string;
+  analysis: Analysis;
 }
 
 export interface BriefFigure {

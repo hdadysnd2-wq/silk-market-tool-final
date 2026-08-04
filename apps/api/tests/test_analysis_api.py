@@ -36,8 +36,15 @@ def test_start_analysis_returns_transit_flagged_top5(client, db, product, auth_h
     _seed_world(db)
 
     resp = client.post(f"/api/v1/products/{product.id}/analysis", headers=auth_headers)
-    assert resp.status_code == 201, resp.text
-    body = resp.json()
+    # Async world funnel: POST is accepted (202) with the analysis pending; under
+    # eager mode the ranking task ran in-process, so GET carries the ranked result.
+    assert resp.status_code == 202, resp.text
+    accepted = resp.json()
+    assert accepted["task_id"]
+    assert accepted["analysis"]["status"] == "pending"
+    assert accepted["analysis"]["product_id"] == str(product.id)
+
+    body = client.get(f"/api/v1/analyses/{accepted['analysis']['id']}", headers=auth_headers).json()
     assert body["status"] == "ranked"
     assert body["product_id"] == str(product.id)
 
@@ -79,7 +86,7 @@ def test_get_analysis_returns_rankings(client, db, product, auth_headers):
     _seed_world(db)
     created = client.post(f"/api/v1/products/{product.id}/analysis", headers=auth_headers).json()
 
-    resp = client.get(f"/api/v1/analyses/{created['id']}", headers=auth_headers)
+    resp = client.get(f"/api/v1/analyses/{created['analysis']['id']}", headers=auth_headers)
     assert resp.status_code == 200
     assert {r["importer_iso3"] for r in resp.json()["rankings"]} == {
         "DEU",
@@ -96,6 +103,7 @@ def test_get_analysis_cross_factory_forbidden(client, db, product, auth_headers)
 
     _seed_world(db)
     created = client.post(f"/api/v1/products/{product.id}/analysis", headers=auth_headers).json()
+    analysis_id = created["analysis"]["id"]
 
     other_factory = Factory(name_ar="آخر", name_en="Other Factory")
     db.add(other_factory)
@@ -111,6 +119,6 @@ def test_get_analysis_cross_factory_forbidden(client, db, product, auth_headers)
 
     token = create_access_token(other_user.id, other_user.role)
     resp = client.get(
-        f"/api/v1/analyses/{created['id']}", headers={"Authorization": f"Bearer {token}"}
+        f"/api/v1/analyses/{analysis_id}", headers={"Authorization": f"Bearer {token}"}
     )
     assert resp.status_code == 403

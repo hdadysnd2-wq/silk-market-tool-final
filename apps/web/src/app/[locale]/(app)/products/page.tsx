@@ -1,16 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
-import type { Product } from "@/lib/types";
+import type { Product, ProductAccepted } from "@/lib/types";
 
 export default function ProductsPage() {
   const t = useTranslations("products");
-  const { data, loading, reload } = useApi<Product[]>("/products");
+  // Classification runs async on a worker (202 + poll). While any product is
+  // still `pending`, poll the list so a newly-created product flips to
+  // `classified` without a manual refresh; stop once none are pending.
+  const [pollMs, setPollMs] = useState(0);
+  const { data, loading, reload } = useApi<Product[]>("/products", pollMs);
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const anyPending = (data ?? []).some((p) => p.classification_status === "pending");
+    setPollMs(anyPending ? 2000 : 0);
+  }, [data]);
 
   return (
     <div>
@@ -81,7 +90,9 @@ function UploadDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
     if (file) form.set("image", file);
     else form.delete("image");
     try {
-      await api.post("/products", form);
+      // 202 Accepted: classification runs on a worker. The list poll (above)
+      // reflects pending → classified once the entity's status flips.
+      await api.post<ProductAccepted>("/products", form);
       onCreated();
     } finally {
       setBusy(false);

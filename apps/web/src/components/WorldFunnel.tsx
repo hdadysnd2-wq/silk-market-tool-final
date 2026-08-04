@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { api, ApiError } from "@/lib/api";
-import type { Analysis, FunnelBrief, Product } from "@/lib/types";
+import { pollUntil } from "@/lib/poll";
+import type { Analysis, AnalysisAccepted, FunnelBrief, Product } from "@/lib/types";
 
 /**
  * Stage-1 world funnel for a product: screens every market locally and shows the
@@ -49,10 +50,17 @@ export function WorldFunnel({
     setError(null);
     setBrief(null);
     try {
-      const run = await api.post<Analysis>(`/products/${product.id}/analysis`);
+      // 202 Accepted: Stage-1 screening runs on a worker. Poll the analysis
+      // until it's `ranked` (rankings populated) before reading the result.
+      const accepted = await api.post<AnalysisAccepted>(`/products/${product.id}/analysis`);
+      const analysisId = accepted.analysis.id;
+      const run = await pollUntil(
+        () => api.get<Analysis>(`/analyses/${analysisId}`),
+        (a) => a.status === "ranked" || a.status === "enriched",
+      );
       setAnalysis(run);
       // Brief-first: the decision + sourced numbers + limits headline the result.
-      setBrief(await api.get<FunnelBrief>(`/analyses/${run.id}/brief`));
+      setBrief(await api.get<FunnelBrief>(`/analyses/${analysisId}/brief`));
     } catch (err) {
       setAnalysis(null);
       setError(
@@ -72,9 +80,16 @@ export function WorldFunnel({
     setEnriching(true);
     setError(null);
     try {
-      const run = await api.post<Analysis>(`/analyses/${analysis.id}/enrich`);
+      // 202 Accepted: Stage-2 enrichment runs on a worker. Poll the analysis
+      // until it's `enriched` before reading the re-ranked result.
+      const accepted = await api.post<AnalysisAccepted>(`/analyses/${analysis.id}/enrich`);
+      const analysisId = accepted.analysis.id;
+      const run = await pollUntil(
+        () => api.get<Analysis>(`/analyses/${analysisId}`),
+        (a) => a.status === "enriched",
+      );
       setAnalysis(run);
-      setBrief(await api.get<FunnelBrief>(`/analyses/${run.id}/brief`));
+      setBrief(await api.get<FunnelBrief>(`/analyses/${analysisId}/brief`));
     } catch (err) {
       setError((err as Error).message);
     } finally {

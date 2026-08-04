@@ -47,6 +47,18 @@ class ProductOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ProductAccepted(BaseModel):
+    """202 envelope for the async intake pipeline: the enqueued task + the product.
+
+    The product is reported as it was *accepted* (``classification_status`` still
+    ``pending``); the client polls ``GET /products/{id}`` for the classified result
+    once the worker finishes.
+    """
+
+    task_id: str
+    product: ProductOut
+
+
 class HSConfirmRequest(BaseModel):
     hs_code: str = Field(min_length=2, max_length=6)
 

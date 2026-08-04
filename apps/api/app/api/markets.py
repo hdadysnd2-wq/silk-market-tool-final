@@ -32,5 +32,6 @@ def competitors(iso2: str, hs_code: str, db: DbDep, user: CurrentUser) -> Compet
         trend_pct=float(snapshot.trend_pct) if snapshot.trend_pct is not None else None,
         top_exporters=snapshot.top_exporters,
         yearly_values=snapshot.yearly_values,
+        observed_prices=snapshot.observed_prices,
         source=snapshot.source,
     )

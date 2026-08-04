@@ -213,16 +213,13 @@ def process_queue(conn: sqlite3.Connection, *, sender=None,
             summary["failed"].append(eid)
             processed += 1
             continue
-        # نجح الإرسال — الموافقة + الخصم + الحالة في **معاملة واحدة** كي لا يقع
-        # خصم مزدوج عند تعطّل بين التزامين. الالتزام الذرّي: إمّا تُثبَت الثلاثة
-        # أو لا شيء. Atomic: consent + debit + status='sent' commit together.
-        #
-        # `allow_negative=True` مقصود هنا وليس تسامحاً: البريد **خرج فعلاً**.
-        # فحص الرصيد قبل الإرسال هو البوّابة؛ أمّا بعد الخروج فرفضُ الخصم كان
-        # سيتراجع بسجلّ الموافقة أيضاً (خصمٌ مفقود + بريدٌ مُرسَل بلا قيد موافقة
-        # = خرق امتثال). الدَّين يُسجَّل ويُسوّى، ولا يُمحى أثر رسالة أُرسِلت.
-        # The message physically left: never roll back its consent record — book
-        # the debit even if a concurrent charge pushed the balance below zero.
+        # نجح الإرسال — البريد **خرج فعلاً**. سجِّل الموافقة + الحالة أوّلاً في
+        # معاملةٍ ملتزَمة مستقلّة، ثمّ اخصِم في معاملةٍ منفصلة (allow_negative).
+        # هكذا لا يُفقَد قيدُ موافقةٍ لرسالةٍ أُرسِلت لو فشل الخصم (I4 — سجلّ
+        # الموافقة لا يُتراجَع عنه أبداً لرسالةٍ خرجت). المطالبة ('sending')
+        # تمنع الإرسالَ والخصمَ المزدوج، فلا حاجة لدمجهما في معاملةٍ واحدة.
+        # Record consent + 'sent' first, then debit separately so a debit
+        # failure can never discard the consent record of a message that left.
         verbatim = f"Subject: {email['subject']}\n\n{email['body']}"
         try:
             conn.commit()                       # اطوِ المعلّق قبل BEGIN الصريح
@@ -233,6 +230,23 @@ def process_queue(conn: sqlite3.Connection, *, sender=None,
                 "consent_granted_at) VALUES (?,?,?,?,?,?,?)",
                 (email["prospect_email"], email["study_id"], email["account_id"],
                  email["actor_user_id"], verbatim, now_iso(), now_iso()))
+            # محروس بحالة المطالبة — guarded by the claim we own.
+            conn.execute("UPDATE email_queue SET status = 'sent', sent_at = ? "
+                         "WHERE id = ? AND status = 'sending'", (now_iso(), eid))
+            conn.commit()
+        except Exception as exc:  # noqa: BLE001 — الرسالة خرجت: لا نُخفي أثرها
+            # فشلُ تسجيل الموافقة لا يُبرّر إعادة الإرسال (queued = إرسالٌ مزدوج).
+            # علّمها 'sent' مع خطأ تشخيصي للتسوية اليدوية، لا 'failed' المضلِّل.
+            conn.rollback()
+            conn.execute("UPDATE email_queue SET status = 'sent', sent_at = ?, "
+                         "last_error = ? WHERE id = ?",
+                         (now_iso(), "consent_record_failed: " + _safe_error(exc), eid))
+            conn.commit()
+        # الخصم في معاملةٍ منفصلة — فشلُه دَينٌ معلن (allow_negative) يُسجَّل في
+        # last_error ولا يمحو قيدَ الإرسال/الموافقة. لا خصمَ مزدوج: الصفّ مملوكٌ
+        # بالمطالبة فيُخصَم مرّةً في هذا المرور.
+        try:
+            conn.execute("BEGIN IMMEDIATE")
             wallet.apply_entry(conn, account_id=email["account_id"],
                                actor_user_id=email["actor_user_id"],
                                operation=Operation.EMAIL_SENT,
@@ -242,18 +256,12 @@ def process_queue(conn: sqlite3.Connection, *, sender=None,
                                          "prospect_id": email["prospect_id"],
                                          "email_queue_id": eid},
                                allow_negative=True)
-            # محروس بحالة المطالبة — guarded by the claim we own.
-            conn.execute("UPDATE email_queue SET status = 'sent', sent_at = ? "
-                         "WHERE id = ? AND status = 'sending'", (now_iso(), eid))
             conn.commit()
-        except Exception as exc:  # noqa: BLE001 — الفشل يُسجَّل، لا خصم جزئي
+        except Exception as exc:  # noqa: BLE001 — دَينٌ غير محصَّل، يُسجَّل لا يُسقِط الأثر
             conn.rollback()
-            conn.execute("UPDATE email_queue SET status = 'failed', "
-                         "last_error = ? WHERE id = ?", (_safe_error(exc), eid))
+            conn.execute("UPDATE email_queue SET last_error = ? WHERE id = ?",
+                         ("debit_failed_arrears: " + _safe_error(exc), eid))
             conn.commit()
-            summary["failed"].append(eid)
-            processed += 1
-            continue
         summary["sent"].append(eid)
         processed += 1
     summary["remaining"] = int(conn.execute(

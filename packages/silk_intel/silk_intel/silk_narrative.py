@@ -108,6 +108,9 @@ INTERNAL_AR: dict[str, str] = {
      "no call attempted)"):
         "وكيل مدفوع لا يعمل خارج خدمة التعميق المدفوعة — تخطٍّ بنيوي "
         "بلا أي نداء",
+    # Machine-readable I5 marker appended to the guard's report summary — an
+    # internal token that must never surface in a client report; stripped here.
+    "[paid_agent_outside_deepen]": "",
     "requires SEARCH_API_KEY (or SERPER_API_KEY)":
         "يتطلب تهيئة مفتاح خدمة البحث (Serper)",
     "تتطلب SEARCH_API_KEY و/أو GOOGLE_MAPS_API_KEY في بيئة الخادم":

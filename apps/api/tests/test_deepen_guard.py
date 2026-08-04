@@ -57,6 +57,8 @@ def test_paid_agent_skipped_outside_deepen():
     assert agent.executed is False, "paid agent must not attempt any call outside deepen"
     assert report.failed is True
     assert "paid agent outside /deepen" in report.summary
+    # I5: the report summary carries the literal machine token for logs/tests.
+    assert "paid_agent_outside_deepen" in report.summary
     # I1: the skipped report declares a gap, never a fabricated value.
     assert report.findings[0].value is None
     assert report.findings[0].confidence == 0.0
@@ -79,6 +81,7 @@ def test_deepen_scope_false_keeps_guard_closed():
 
     assert agent.executed is False
     assert "paid agent outside /deepen" in report.summary
+    assert "paid_agent_outside_deepen" in report.summary
 
 
 def test_deepen_scope_activates_and_resets_contextvar():

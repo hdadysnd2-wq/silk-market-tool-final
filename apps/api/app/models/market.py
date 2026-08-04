@@ -41,6 +41,9 @@ class MarketSnapshot(UUIDMixin, TimestampMixin, Base):
     top_exporters: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     #: [{year, value_usd}]
     yearly_values: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    #: Observed competitor prices from the paid local-price layer, fetched only via
+    #: the deepen path (I5): [{competitor, price, currency, url, store, source}].
+    observed_prices: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     source: Mapped[str] = mapped_column(String(32), default="comtrade", nullable=False)
     provider_name: Mapped[str | None] = mapped_column(String(64))
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

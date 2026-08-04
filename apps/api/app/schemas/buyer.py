@@ -62,4 +62,6 @@ class CompetitorSnapshotOut(BaseModel):
     trend_pct: float | None
     top_exporters: list[dict] | None
     yearly_values: list[dict] | None
+    #: Observed competitor prices from the deepen price layer (I5); None until fetched.
+    observed_prices: list[dict] | None = None
     source: str

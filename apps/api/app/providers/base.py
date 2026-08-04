@@ -96,6 +96,21 @@ class ExporterShare:
 
 
 @dataclass(frozen=True)
+class ObservedPrice:
+    """One competitor's observed selling price for a product category in a market.
+
+    Sourced from the paid local-price layer (retail/wholesale listings). A price is
+    only ever an *observed* figure with its source link — never an estimate.
+    """
+
+    competitor: str
+    price: float
+    currency: str
+    url: str | None = None
+    store: str | None = None
+
+
+@dataclass(frozen=True)
 class ShipmentRecord:
     """A single customs / bill-of-lading movement."""
 
@@ -290,6 +305,21 @@ class ShipmentsProvider(Protocol):
     def importer_shipments(
         self, hs_code: str, importer_iso2: str, limit: int = 100
     ) -> list[ProviderRecord[ShipmentRecord]]: ...
+
+
+class PriceProvider(Protocol):
+    """Paid local-price layer — observed competitor prices per market.
+
+    A paid layer: it runs ONLY inside the deepen context (I5). Callers must gate it
+    accordingly; the provider itself just answers with observed listings (never an
+    estimate, never a fabricated price).
+    """
+
+    name: str
+
+    def observed_prices(
+        self, hs_code: str, market_iso2: str, limit: int = 10
+    ) -> list[ProviderRecord[ObservedPrice]]: ...
 
 
 class EnrichmentProvider(Protocol):

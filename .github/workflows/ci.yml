@@ -2,10 +2,19 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+# A PR-branch push fires only the pull_request event (push is filtered to main),
+# and superseded runs of the same ref are cancelled — except on main, where every
+# merge commit keeps its full run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # One pipeline for the whole monorepo:
 #   guard-pandas  — invariant I7 (pandas confined to etl/)
+#   etl           — offline transform + packages/contracts suites (pure Python)
 #   silk_intel    — vendored engine hermetic suite (packages/silk_intel)
 #   api           — apps/api ruff + migrations + pytest (Postgres + Redis)
 #   web           — apps/web lint + typecheck + build
@@ -24,7 +33,7 @@ jobs:
       - run: python tools/check_no_pandas.py
 
   etl:
-    name: ETL — offline transform tests
+    name: ETL + contracts — offline pure-Python tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -32,24 +41,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      # The world_trade transform (yoy/cagr/transit tagging) is pure Python and
-      # hermetically testable; the bulk Comtrade download (pandas) is Phase 3.
+      # Both suites are pure Python with no deps beyond pytest, so they share a
+      # lane: the world_trade transform (yoy/cagr/transit tagging; the bulk
+      # Comtrade download with pandas is Phase 3) and the packages/contracts
+      # envelope + adapters (decision #4 / I1 — its conftest puts the package
+      # on sys.path, no install step needed).
       - run: pip install pytest
-      - run: python -m pytest etl/tests -q
-
-  contracts:
-    name: Contracts — unified data-contract tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      # Pure-Python, dependency-free envelope + adapters (decision #4 / I1);
-      # a conftest puts the package on sys.path, no install step needed.
-      - run: pip install pytest
-      - run: python -m pytest packages/contracts/tests -q
+      - run: python -m pytest etl/tests packages/contracts/tests -q
 
   silk_intel:
     name: Engine — silk_intel hermetic tests

@@ -58,12 +58,13 @@ can't set (each service's root directory + config path). Full runbook:
 ## Tests & CI
 
 ```bash
-make test    # pandas guard + engine suite + api (ruff+pytest) + web (lint+typecheck+build)
+make test    # pandas guard + data contracts + engine suite + api (ruff+pytest) + web (lint+typecheck+build)
 ```
 
-One CI pipeline (`.github/workflows/ci.yml`) runs five jobs: `guard-pandas`,
-`silk_intel` (engine hermetic suite), `api`, `web`, and `e2e` (Playwright against
-mocked APIs).
+One CI pipeline (`.github/workflows/ci.yml`) runs six jobs: `guard-pandas`,
+`etl` (offline transforms + the `packages/contracts` suite), `silk_intel`
+(engine hermetic suite), `api`, `web`, and `e2e` (Playwright against mocked
+APIs).
 
 ## Status
 

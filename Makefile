@@ -2,7 +2,7 @@
 #
 #   make dev    boot the full stack offline on mocks (Postgres+Redis+MinIO+api+worker+beat+web)
 #   make demo   run the golden-path pipeline end to end and print each step
-#   make test   backend + frontend + engine tests + the pandas-import guard
+#   make test   backend + frontend + engine + data-contract tests + the pandas-import guard
 #   make lint   ruff (api) + pandas guard + eslint (web)
 #   make etl    show the offline ETL jobs (pandas/comtradeapicall live here only)
 
@@ -41,7 +41,7 @@ demo: ## Run the golden-path demo end to end and print each step
 
 # ---- tests -----------------------------------------------------------------
 
-test: guard-pandas test-contracts test-intel test-api test-web ## Everything CI runs, locally
+test: guard-pandas test-contracts test-intel test-api test-web ## The local lanes (CI also runs etl + e2e)
 
 test-api: ## Backend (apps/api) ruff + pytest
 	cd apps/api && uv run ruff check . && uv run ruff format --check . && uv run pytest -q
@@ -54,8 +54,10 @@ test-intel: ## Vendored engine hermetic suite (packages/silk_intel)
 		--with pytest --with httpx --with-requirements silk_intel/requirements.txt \
 		python -m pytest
 
+# Runs from the repo root on purpose: that exercises the same conftest-driven
+# sys.path import CI uses (cd'ing into the package would mask a broken conftest).
 test-contracts: ## Unified data-contract package tests (packages/contracts)
-	cd packages/contracts && uv run --no-project --with pytest python -m pytest tests -q
+	uv run --no-project --with pytest python -m pytest packages/contracts/tests -q
 
 # ---- lint ------------------------------------------------------------------
 

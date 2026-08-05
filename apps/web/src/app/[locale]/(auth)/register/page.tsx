@@ -3,11 +3,6 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter, Link } from "@/i18n/routing";
-import { api, ApiError, TOKEN_COOKIE } from "@/lib/api";
-
-interface TokenResponse {
-  access_token: string;
-}
 
 export default function RegisterPage() {
   const t = useTranslations("auth");
@@ -31,14 +26,22 @@ export default function RegisterPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await api.post<TokenResponse>("/auth/register", form);
-      // Secure over HTTPS (prod); omitted on http://localhost so dev still works.
-      const secure = window.location.protocol === "https:" ? "; Secure" : "";
-      document.cookie = `${TOKEN_COOKIE}=${res.access_token}; path=/; max-age=43200; samesite=lax${secure}`;
+      // Server-side register + auto-login sets the httpOnly cookie; client never
+      // holds the token.
+      const res = await fetch("/api/session/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.detail ?? t("loginError"));
+        return;
+      }
       router.push("/onboarding");
       router.refresh();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("loginError"));
+    } catch {
+      setError(t("connectionError"));
     } finally {
       setLoading(false);
     }

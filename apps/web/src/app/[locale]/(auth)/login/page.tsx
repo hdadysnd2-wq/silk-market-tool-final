@@ -4,12 +4,6 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import { Link } from "@/i18n/routing";
-import { api, ApiError, TOKEN_COOKIE } from "@/lib/api";
-import { decodeRole, isStaffRole } from "@/lib/auth";
-
-interface TokenResponse {
-  access_token: string;
-}
 
 export default function LoginPage() {
   const t = useTranslations("auth");
@@ -24,22 +18,25 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await api.post<TokenResponse>("/auth/login", { email, password });
-      // Secure over HTTPS (prod); omitted on http://localhost so dev login still works.
-      const secure = window.location.protocol === "https:" ? "; Secure" : "";
-      document.cookie = `${TOKEN_COOKIE}=${res.access_token}; path=/; max-age=43200; samesite=lax${secure}`;
-      // Staff land in the concierge console; factory users in their dashboard.
-      router.push(isStaffRole(decodeRole(res.access_token)) ? "/admin" : "/dashboard");
-      router.refresh();
-    } catch (err) {
-      if (err instanceof ApiError) {
-        // 401 means the credentials were rejected; any other status is a
-        // server-side failure and must not read as "wrong password".
-        setError(err.status === 401 ? t("loginError") : t("serverError"));
-      } else {
-        // fetch rejects (TypeError) when the backend is unreachable.
-        setError(t("connectionError"));
+      // The server-side route handler sets the httpOnly cookie; the client never
+      // sees the token. It returns only the role, for the redirect.
+      const res = await fetch("/api/session/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        // 401 → wrong credentials; anything else is a server-side failure.
+        setError(res.status === 401 ? t("loginError") : t("serverError"));
+        return;
       }
+      const { role } = await res.json();
+      // Staff land in the concierge console; factory users in their dashboard.
+      router.push(role === "admin" || role === "analyst" ? "/admin" : "/dashboard");
+      router.refresh();
+    } catch {
+      // fetch rejects (TypeError) when the server is unreachable.
+      setError(t("connectionError"));
     } finally {
       setLoading(false);
     }

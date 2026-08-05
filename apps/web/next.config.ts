@@ -43,9 +43,11 @@ const nextConfig: NextConfig = {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },
   async rewrites() {
-    // Proxy API calls to the FastAPI backend so the browser talks to one origin.
+    // Proxy backend calls to FastAPI so the browser talks to one origin. Scoped
+    // to /api/v1 so the Next session route handlers under /api/session/* (which
+    // set the httpOnly cookie) are served locally, not proxied.
     const apiBase = process.env.API_PROXY_TARGET ?? "http://localhost:8000";
-    return [{ source: "/api/:path*", destination: `${apiBase}/api/:path*` }];
+    return [{ source: "/api/v1/:path*", destination: `${apiBase}/api/v1/:path*` }];
   },
 };
 

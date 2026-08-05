@@ -105,9 +105,9 @@ test("full pipeline: login → upload → confirm HS → funnel → discover →
   // Fallback first; specific routes registered after it take precedence.
   await page.route(/\/api\/v1\//, (route) => json(route, []));
 
-  await page.route(/\/api\/v1\/auth\/login$/, (route) =>
-    json(route, { access_token: fakeToken() }),
-  );
+  // Login now goes through the Next session route handler (httpOnly cookie set
+  // server-side); it returns only the role for the redirect.
+  await page.route(/\/api\/session\/login$/, (route) => json(route, { role: "factory_user" }));
   await page.route(/\/api\/v1\/dashboard$/, (route) => json(route, DASHBOARD));
 
   await page.route(/\/api\/v1\/products$/, (route) => {

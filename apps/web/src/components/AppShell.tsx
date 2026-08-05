@@ -3,7 +3,6 @@
 import { useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { LocaleSwitcher } from "./LocaleSwitcher";
-import { TOKEN_COOKIE } from "@/lib/api";
 
 const NAV = [
   { href: "/dashboard", key: "dashboard" },
@@ -24,8 +23,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  function logout() {
-    document.cookie = `${TOKEN_COOKIE}=; path=/; max-age=0`;
+  async function logout() {
+    await fetch("/api/session/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
   }

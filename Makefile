@@ -9,7 +9,7 @@
 COMPOSE := docker compose -f infra/docker-compose.dev.yml --project-directory .
 
 .PHONY: help dev up down migrate seed demo test test-api test-web test-intel \
-        lint lint-api lint-web guard-pandas etl logs api-shell env
+        test-contracts lint lint-api lint-web guard-pandas etl logs api-shell env
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -41,7 +41,7 @@ demo: ## Run the golden-path demo end to end and print each step
 
 # ---- tests -----------------------------------------------------------------
 
-test: guard-pandas test-intel test-api test-web ## Everything CI runs, locally
+test: guard-pandas test-contracts test-intel test-api test-web ## Everything CI runs, locally
 
 test-api: ## Backend (apps/api) ruff + pytest
 	cd apps/api && uv run ruff check . && uv run ruff format --check . && uv run pytest -q
@@ -53,6 +53,9 @@ test-intel: ## Vendored engine hermetic suite (packages/silk_intel)
 	cd packages/silk_intel && uv run --no-project \
 		--with pytest --with httpx --with-requirements silk_intel/requirements.txt \
 		python -m pytest
+
+test-contracts: ## Unified data-contract package tests (packages/contracts)
+	cd packages/contracts && uv run --no-project --with pytest python -m pytest tests -q
 
 # ---- lint ------------------------------------------------------------------
 

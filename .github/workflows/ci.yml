@@ -37,6 +37,20 @@ jobs:
       - run: pip install pytest
       - run: python -m pytest etl/tests -q
 
+  contracts:
+    name: Contracts — unified data-contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # Pure-Python, dependency-free envelope + adapters (decision #4 / I1);
+      # a conftest puts the package on sys.path, no install step needed.
+      - run: pip install pytest
+      - run: python -m pytest packages/contracts/tests -q
+
   silk_intel:
     name: Engine — silk_intel hermetic tests
     runs-on: ubuntu-latest

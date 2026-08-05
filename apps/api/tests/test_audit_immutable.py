@@ -35,6 +35,14 @@ def test_audit_delete_raises(db, _seeded_entry):
     db.rollback()
 
 
+def test_audit_truncate_raises(db, _seeded_entry):
+    """TRUNCATE must not be a hole in the append-only guarantee (C6)."""
+    with pytest.raises((InternalError, ProgrammingError)):
+        db.execute(text("TRUNCATE audit_log"))
+        db.flush()
+    db.rollback()
+
+
 def test_audit_insert_allowed(db):
     entry = audit.record(db, action="ok", entity_type="test", entity_id="y")
     db.commit()

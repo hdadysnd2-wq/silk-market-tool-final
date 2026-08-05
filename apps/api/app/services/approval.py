@@ -75,6 +75,9 @@ def approve(db: Session, email: Email, actor: User) -> Email:
     _assert_allowed(email.status, EmailStatus.approved)
     email.status = EmailStatus.approved
     email.approved_by = actor.id
+    # Durable snapshot so the approval trail survives erasure of the approver's
+    # user row (approved_by is nulled by ON DELETE SET NULL; this label is not).
+    email.approved_by_label = actor.email
     email.approved_at = utcnow()
     db.flush()
     audit.record(
@@ -118,6 +121,7 @@ def revert_to_draft(db: Session, email: Email, actor: User) -> Email:
     _assert_allowed(email.status, EmailStatus.draft)
     email.status = EmailStatus.draft
     email.approved_by = None
+    email.approved_by_label = None
     email.approved_at = None
     db.flush()
     return email

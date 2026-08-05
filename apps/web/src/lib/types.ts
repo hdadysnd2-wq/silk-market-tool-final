@@ -415,6 +415,18 @@ export interface ProductReport {
   markets: ReportMarket[];
 }
 
+export interface AdminUser {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: "factory_user" | "admin" | "analyst";
+  factory_id: string | null;
+  locale: string;
+  is_active: boolean;
+  last_login_at: string | null;
+  created_at: string;
+}
+
 export interface AdminOverview {
   factories: number;
   active_campaigns: number;

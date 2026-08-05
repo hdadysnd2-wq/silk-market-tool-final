@@ -35,10 +35,13 @@ from app.models.base import (
 
 _SENT_FAMILY_SQL = ", ".join(f"'{s.value}'" for s in SENT_FAMILY_STATUSES)
 
-#: A message may only carry a sent-family status if a human approved it.
-APPROVAL_CHECK_SQL = (
-    f"status NOT IN ({_SENT_FAMILY_SQL}) OR (approved_at IS NOT NULL AND approved_by IS NOT NULL)"
-)
+#: A message may only carry a sent-family status if a human approved it. The gate
+#: keys on ``approved_at`` (the timestamp of the human act), NOT ``approved_by``:
+#: the approver's user row may later be erased (PDPL/offboarding), which sets
+#: ``approved_by`` NULL via ``ON DELETE SET NULL``. Who approved is preserved
+#: durably in ``approved_by_label`` (a snapshot), so the record stays complete
+#: while user erasure is no longer blocked by this constraint.
+APPROVAL_CHECK_SQL = f"status NOT IN ({_SENT_FAMILY_SQL}) OR approved_at IS NOT NULL"
 
 
 class Email(UUIDMixin, TimestampMixin, Base):
@@ -82,6 +85,9 @@ class Email(UUIDMixin, TimestampMixin, Base):
     approved_by: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
+    #: Durable snapshot of who approved (email/label), captured at approval time so
+    #: the trail survives erasure of the approver's user row (approved_by → NULL).
+    approved_by_label: Mapped[str | None] = mapped_column(String(255))
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     rejected_by: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")

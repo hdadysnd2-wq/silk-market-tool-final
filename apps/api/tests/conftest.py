@@ -67,6 +67,23 @@ def _schema():
                 """
                 CREATE OR REPLACE FUNCTION audit_log_immutable() RETURNS trigger AS $$
                 BEGIN
+                    IF TG_OP = 'UPDATE'
+                       AND NEW.id          IS NOT DISTINCT FROM OLD.id
+                       AND NEW.actor_label IS NOT DISTINCT FROM OLD.actor_label
+                       AND NEW.action      IS NOT DISTINCT FROM OLD.action
+                       AND NEW.entity_type IS NOT DISTINCT FROM OLD.entity_type
+                       AND NEW.entity_id   IS NOT DISTINCT FROM OLD.entity_id
+                       AND NEW.payload     IS NOT DISTINCT FROM OLD.payload
+                       AND NEW.occurred_at IS NOT DISTINCT FROM OLD.occurred_at
+                       AND NEW.created_at  IS NOT DISTINCT FROM OLD.created_at
+                       AND NEW.updated_at  IS NOT DISTINCT FROM OLD.updated_at
+                       AND (NEW.actor_user_id IS NULL
+                            OR NEW.actor_user_id IS NOT DISTINCT FROM OLD.actor_user_id)
+                       AND (NEW.factory_id IS NULL
+                            OR NEW.factory_id IS NOT DISTINCT FROM OLD.factory_id)
+                    THEN
+                        RETURN NEW;  -- privacy-mandated FK null-ing; content untouched
+                    END IF;
                     RAISE EXCEPTION 'audit_log is append-only: % is not permitted', TG_OP;
                 END;
                 $$ LANGUAGE plpgsql;
@@ -83,6 +100,18 @@ def _schema():
                 """
             )
         )
+        # Mirror the migration's BEFORE TRUNCATE guard (C6) so tests match prod:
+        # the ledger rejects TRUNCATE too, not only UPDATE/DELETE.
+        conn.execute(text("DROP TRIGGER IF EXISTS audit_log_no_truncate ON audit_log"))
+        conn.execute(
+            text(
+                """
+                CREATE TRIGGER audit_log_no_truncate
+                BEFORE TRUNCATE ON audit_log
+                FOR EACH STATEMENT EXECUTE FUNCTION audit_log_immutable();
+                """
+            )
+        )
     yield
     Base.metadata.drop_all(engine)
 
@@ -90,11 +119,16 @@ def _schema():
 @pytest.fixture
 def db(_schema):
     session = SessionLocal()
-    # Clean slate per test. TRUNCATE (unlike DELETE) does not fire the row-level
-    # BEFORE-DELETE trigger that makes audit_log append-only, so it can reset
-    # every table including the ledger.
+    # Clean slate per test. audit_log is append-only AND now rejects TRUNCATE
+    # (the C6 BEFORE TRUNCATE trigger), so it can no longer be reset "through the
+    # hole" (TRUNCATE silently skipping the row-level DELETE trigger). Explicitly
+    # disable its immutability triggers for the reset, TRUNCATE every table, then
+    # re-enable — the bypass is visible and scoped to test teardown, not a gap in
+    # the production guard.
     table_names = ", ".join(t.name for t in Base.metadata.sorted_tables)
+    session.execute(text("ALTER TABLE audit_log DISABLE TRIGGER USER"))
     session.execute(text(f"TRUNCATE {table_names} RESTART IDENTITY CASCADE"))
+    session.execute(text("ALTER TABLE audit_log ENABLE TRIGGER USER"))
     session.commit()
     try:
         yield session

@@ -1,3 +1,8 @@
+---
+name: security-review
+description: Use when touching authentication, authorization, secrets, external APIs, database or file access, logging, or error handling. Enforces no secret exposure, least privilege, and treating external input as untrusted.
+---
+
 # Security Review Skill
 
 Use this skill for authentication, authorization, secrets, external APIs, database access, file access, logging, and error handling.

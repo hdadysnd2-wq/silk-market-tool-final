@@ -1,3 +1,9 @@
+---
+name: security-reviewer
+description: Reviews changes for security regressions — authn/authz, secret exposure, injection, SSRF, sensitive data in responses or logs, CORS/CSRF. Read-only; returns findings with severity, evidence, and recommended fix. Use before merging security-sensitive changes.
+tools: Read, Grep, Glob, Bash
+---
+
 # Security Reviewer
 
 Review changes for security regressions.

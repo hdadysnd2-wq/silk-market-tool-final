@@ -1,3 +1,8 @@
+---
+name: api-contracts
+description: Use whenever an API endpoint, request/response schema, authentication or authorization flow, or external integration is added or changed. Enforces contract stability, consumer-impact review, validation, and test coverage before shipping the change.
+---
+
 # API Contracts Skill
 
 Use this skill whenever an API endpoint, schema, authentication flow, or external integration changes.

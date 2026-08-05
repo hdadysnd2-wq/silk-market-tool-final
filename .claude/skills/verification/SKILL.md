@@ -1,3 +1,8 @@
+---
+name: verification
+description: Use before declaring any task complete. Runs the relevant tests (focused first, then broader), inspects the final diff, confirms no secrets or unrelated files changed, and reports command evidence — a green result must come from an actual run.
+---
+
 # Verification Skill
 
 Use this skill before declaring a task complete.

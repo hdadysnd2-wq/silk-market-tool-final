@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_DEV_SECRET_DEFAULT = "dev-secret-key-not-for-production"
 
 
 class Settings(BaseSettings):
@@ -18,7 +20,7 @@ class Settings(BaseSettings):
 
     # Core
     environment: str = "local"
-    secret_key: str = "dev-secret-key-not-for-production"
+    secret_key: str = _DEV_SECRET_DEFAULT
     database_url: str = "postgresql+psycopg://silk:silk@localhost:5432/silk"
     redis_url: str = "redis://localhost:6379/0"
     api_base_url: str = "http://localhost:8000"
@@ -138,6 +140,23 @@ class Settings(BaseSettings):
         if scheme in ("postgres", "postgresql"):
             return f"postgresql+psycopg://{rest}"
         return value
+
+    @model_validator(mode="after")
+    def _reject_default_secret_outside_local(self) -> Settings:
+        """Fail closed if SECRET_KEY is still the built-in dev default in a
+        non-local environment. The default is public, so signing tokens with it
+        lets anyone forge an admin session (and derives a public mailbox
+        token-encryption key). Local dev/CI keep the default; staging/prod must
+        set a real SECRET_KEY.
+        """
+        if self.environment.strip().lower() != "local" and (self.secret_key == _DEV_SECRET_DEFAULT):
+            raise ValueError(
+                "SECRET_KEY is unset (still the built-in dev default) but "
+                f"ENVIRONMENT={self.environment!r} is not 'local'. Set a strong, "
+                "random SECRET_KEY — it signs session tokens and derives the "
+                "mailbox token-encryption key."
+            )
+        return self
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -41,6 +41,16 @@ ENV PATH="/app/apps/api/.venv/bin:$PATH"
 # scripts run under /bin/sh, then make them executable.
 RUN sed -i 's/\r$//' scripts/*.sh && chmod +x scripts/*.sh
 
+# Run the app as a non-root user (least privilege — HIGH-11). Build steps above
+# run as root; the runtime process does not. Every writable runtime path lives
+# under /app (the celerybeat schedule file, STORAGE_BACKEND=local uploads), so
+# chowning /app keeps them writable. If a persistent volume is later mounted
+# (e.g. at /app/storage), ensure it is writable by uid 10001.
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser \
+    && mkdir -p /app/storage \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 # One image serves all three backend roles; SILK_ROLE selects the entrypoint

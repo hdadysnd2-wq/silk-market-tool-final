@@ -28,6 +28,12 @@ ENV API_PROXY_TARGET=${API_PROXY_TARGET}
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
+# Run as the image's built-in non-root `node` user (least privilege — HIGH-11).
+# Build steps above run as root; the runtime `pnpm start` serves the prebuilt
+# .next as node. chown /app so the server can write .next/cache at runtime.
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 3000
 
 # Bind to the platform-assigned $PORT (falls back to 3000 locally). The absolute

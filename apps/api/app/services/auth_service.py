@@ -66,12 +66,13 @@ def authenticate(db: Session, *, email: str, password: str) -> User:
     # Always run a bcrypt verification, even when the user is missing, so the
     # miss path and the wrong-password path take the same time (no enumeration).
     password_ok = verify_password(password, user.password_hash if user else _DUMMY_PASSWORD_HASH)
-    if user is None or not password_ok:
+    # A deactivated account is treated exactly like a bad credential — same 401,
+    # same message — so login never reveals that the address exists but is
+    # disabled (anti-enumeration; also what the admin deactivate flow relies on).
+    if user is None or not password_ok or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
         )
-    if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled")
     return user
 
 

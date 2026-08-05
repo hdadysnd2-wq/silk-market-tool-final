@@ -8,9 +8,10 @@ services (and the same approval gate) that the factory-facing API uses.
 
 from __future__ import annotations
 
+import secrets
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, select
 
 from app.api.deps import DbDep
@@ -24,6 +25,7 @@ from app.models import (
     SuppressionEntry,
     SuppressionReason,
     User,
+    UserRole,
 )
 from app.schemas.common import (
     AdminOverviewOut,
@@ -31,11 +33,18 @@ from app.schemas.common import (
     ErasureRequest,
     FactoryOut,
     MessageResponse,
+    UserAdminOut,
+    UserCreateRequest,
+    UserUpdateRequest,
 )
-from app.security import require_staff
-from app.services import retention, suppression
+from app.security import hash_password, require_roles, require_staff
+from app.services import audit, auth_service, retention, suppression
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_staff)])
+
+# User mutations are admin-only; analysts may read (list) but not change users.
+require_admin = require_roles(UserRole.admin)
+_STAFF_ROLES = (UserRole.admin, UserRole.analyst)
 
 
 @router.get("/overview", response_model=AdminOverviewOut)
@@ -69,6 +78,196 @@ def overview(db: DbDep) -> AdminOverviewOut:
         bounce_rate=round(int(bounced) / sent, 4) if sent else 0.0,
         complaint_rate=round(int(complained) / sent, 4) if sent else 0.0,
     )
+
+
+# --- User management (admin-only mutations; staff may list) ---------------
+
+
+def _factory_for_role(db: DbDep, role: UserRole, factory_id: uuid.UUID | None) -> uuid.UUID | None:
+    """Enforce role↔factory consistency: staff are never tenant-scoped (NULL);
+    factory users require an existing factory."""
+    if role in _STAFF_ROLES:
+        return None
+    if factory_id is None:
+        raise HTTPException(status_code=400, detail="Factory users require a factory_id")
+    if db.get(Factory, factory_id) is None:
+        raise HTTPException(status_code=404, detail="Factory not found")
+    return factory_id
+
+
+def _active_admin_count(db: DbDep, *, exclude_id: uuid.UUID | None = None) -> int:
+    query = select(func.count(User.id)).where(User.role == UserRole.admin, User.is_active.is_(True))
+    if exclude_id is not None:
+        query = query.where(User.id != exclude_id)
+    return db.scalar(query) or 0
+
+
+@router.get("/users", response_model=list[UserAdminOut])
+def list_users(
+    db: DbDep,
+    role: UserRole | None = None,
+    factory_id: uuid.UUID | None = None,
+    q: str | None = None,
+    limit: int = 100,
+) -> list[UserAdminOut]:
+    query = select(User).order_by(User.created_at.desc()).limit(limit)
+    if role is not None:
+        query = query.where(User.role == role)
+    if factory_id is not None:
+        query = query.where(User.factory_id == factory_id)
+    if q:
+        pattern = f"%{q.lower()}%"
+        query = query.where(
+            func.lower(User.email).like(pattern)
+            | func.lower(func.coalesce(User.full_name, "")).like(pattern)
+        )
+    return [UserAdminOut.model_validate(u) for u in db.scalars(query).all()]
+
+
+@router.post("/users", response_model=UserAdminOut, status_code=status.HTTP_201_CREATED)
+def create_user(
+    payload: UserCreateRequest,
+    db: DbDep,
+    actor: User = Depends(require_admin),
+) -> UserAdminOut:
+    email = payload.email.lower().strip()
+    if db.scalar(select(User).where(User.email == email)) is not None:
+        raise HTTPException(status_code=409, detail="Email already in use")
+    factory_id = _factory_for_role(db, payload.role, payload.factory_id)
+    user = User(
+        email=email,
+        full_name=payload.full_name,
+        role=payload.role,
+        factory_id=factory_id,
+        locale=payload.locale,
+        # Unusable credential — the user gains access via the OTP/reset flow.
+        # No password is ever accepted from or returned to the caller.
+        password_hash=hash_password(secrets.token_urlsafe(32)),
+        is_active=True,
+    )
+    db.add(user)
+    db.flush()
+    audit.record(
+        db,
+        action="user.created",
+        entity_type="user",
+        entity_id=user.id,
+        actor=actor,
+        payload={"email": email, "role": payload.role.value},
+    )
+    db.commit()
+    return UserAdminOut.model_validate(user)
+
+
+@router.put("/users/{user_id}", response_model=UserAdminOut)
+def update_user(
+    user_id: uuid.UUID,
+    payload: UserUpdateRequest,
+    db: DbDep,
+    actor: User = Depends(require_admin),
+) -> UserAdminOut:
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    data = payload.model_dump(exclude_unset=True)
+
+    if "role" in data or "factory_id" in data:
+        new_role = data.get("role", user.role)
+        new_factory = data.get("factory_id", user.factory_id)
+        demoting_admin = user.role == UserRole.admin and new_role != UserRole.admin
+        if demoting_admin and user.id == actor.id:
+            raise HTTPException(status_code=400, detail="You cannot change your own admin role")
+        if demoting_admin and user.is_active and _active_admin_count(db, exclude_id=user.id) == 0:
+            raise HTTPException(status_code=400, detail="At least one active admin must remain")
+        user.factory_id = _factory_for_role(db, new_role, new_factory)
+        user.role = new_role
+    if "full_name" in data:
+        user.full_name = data["full_name"]
+    if "locale" in data:
+        user.locale = data["locale"]
+
+    audit.record(
+        db,
+        action="user.updated",
+        entity_type="user",
+        entity_id=user.id,
+        actor=actor,
+        payload={"role": user.role.value},
+    )
+    db.commit()
+    return UserAdminOut.model_validate(user)
+
+
+@router.post("/users/{user_id}/deactivate", response_model=UserAdminOut)
+def deactivate_user(
+    user_id: uuid.UUID,
+    db: DbDep,
+    actor: User = Depends(require_admin),
+) -> UserAdminOut:
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == actor.id:
+        raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
+    if (
+        user.role == UserRole.admin
+        and user.is_active
+        and _active_admin_count(db, exclude_id=user.id) == 0
+    ):
+        raise HTTPException(status_code=400, detail="At least one active admin must remain")
+    user.is_active = False
+    audit.record(
+        db,
+        action="user.deactivated",
+        entity_type="user",
+        entity_id=user.id,
+        actor=actor,
+    )
+    db.commit()
+    return UserAdminOut.model_validate(user)
+
+
+@router.post("/users/{user_id}/activate", response_model=UserAdminOut)
+def activate_user(
+    user_id: uuid.UUID,
+    db: DbDep,
+    actor: User = Depends(require_admin),
+) -> UserAdminOut:
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_active = True
+    audit.record(
+        db,
+        action="user.activated",
+        entity_type="user",
+        entity_id=user.id,
+        actor=actor,
+    )
+    db.commit()
+    return UserAdminOut.model_validate(user)
+
+
+@router.post("/users/{user_id}/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+def reset_user_password(
+    user_id: uuid.UUID,
+    db: DbDep,
+    actor: User = Depends(require_admin),
+) -> Response:
+    """Trigger the OTP/reset flow for a user. Never returns (or logs) the code."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    auth_service.issue_otp(db, user)  # code is stored hashed; never surfaced here
+    audit.record(
+        db,
+        action="user.password_reset",
+        entity_type="user",
+        entity_id=user.id,
+        actor=actor,
+    )
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/factories", response_model=list[FactoryOut])

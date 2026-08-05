@@ -3,7 +3,9 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
+
+from app.models import UserRole
 
 
 class FactoryOut(BaseModel):
@@ -63,6 +65,41 @@ class DnsCheckOut(BaseModel):
     dkim_ok: bool
     dmarc_ok: bool
     notes: dict[str, str]
+
+
+class UserAdminOut(BaseModel):
+    """A user as the admin console sees it — never includes any secret."""
+
+    id: uuid.UUID
+    # Plain str on output: the address was validated on input, and re-validating
+    # here would reject reserved TLDs used by seeded/test accounts (e.g. .test).
+    email: str
+    full_name: str | None
+    role: str
+    factory_id: uuid.UUID | None
+    locale: str
+    is_active: bool
+    last_login_at: datetime | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class UserCreateRequest(BaseModel):
+    # No password: the account is created with an unusable credential and the
+    # user establishes access via the OTP/reset flow. Never accept or return one.
+    email: EmailStr
+    full_name: str | None = None
+    role: UserRole
+    factory_id: uuid.UUID | None = None
+    locale: str = "ar"
+
+
+class UserUpdateRequest(BaseModel):
+    full_name: str | None = None
+    locale: str | None = None
+    role: UserRole | None = None
+    factory_id: uuid.UUID | None = None
 
 
 class AdminOverviewOut(BaseModel):

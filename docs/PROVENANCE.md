@@ -19,9 +19,12 @@ below so any file can be traced back.
   `silk_platform/`, `data/`, `config/`, `tools/`, `migrations/`, `samples/`,
   `evals/`, `web/`, engine `docs/`, `requirements*.txt`) →
   `packages/silk_intel/silk_intel/`. Its `tests/` →
-  `packages/silk_intel/silk_intel/tests/` (byte-identical; see the deviation note
-  in `architecture.md`). Excluded: `.git/`, `.github/` (Repo A's CI is superseded
-  by the unified one), `.claude/`.
+  `packages/silk_intel/silk_intel/tests/` (byte-identical *at vendoring time*;
+  see the deviation note in `architecture.md`. Later monorepo commits made
+  additive changes there — I5 token assertions and I4 suppression tests — so the
+  tree is no longer byte-for-byte identical to Repo A, by design). Excluded:
+  `.git/`, `.github/` (Repo A's CI is superseded by the unified one),
+  `.claude/`.
 - Repo B `backend/` → `apps/api/`; `frontend/` → `apps/web/`; `infra/terraform/`
   → `infra/terraform/`; `docker-compose.yml` → adapted into
   `infra/docker-compose.dev.yml`; `.env.example` → root `.env.example`.

@@ -36,6 +36,28 @@ belongs to a **dedicated Phase-4 session** that removes the static frontend *and
 retires/ports its 30 guard tests together (the Streamlit/dev console stays as the
 internal tool). Until then `web/` and `netlify.toml` remain.
 
+## Deferred — retire `silk_platform` (KILL-list residue; locked out, see ADR-0004)
+
+The vendored engine ships `silk_platform/` — a legacy standalone console with
+its own cold-send queue that bypasses the I3 approval state machine. It is now
+**locked out of the product by a hard test**
+(`apps/api/tests/test_no_silk_platform_import.py`) and is not part of any
+deployed build. Actual deletion is deferred to the same Phase-4 session that
+retires the engine's static `web/` (both are load-bearing for vendored engine
+tests). See [ADR-0004](adr/0004-silk-platform-lockout.md).
+
+## Deferred — consolidate the funnel brief/report onto `build_view` (H-5, ADR-0003)
+
+The platform's funnel brief (`services/funnel_brief.py`) and JSON/HTML report
+(`services/report.py`) are platform-native rather than `build_view`-derived
+(only the Word export goes through the engine). Decision #7's non-negotiables
+are pinned by tests on the platform path; full consolidation is a dedicated
+future session. See [ADR-0003](adr/0003-canonical-report-path-h5.md). Related
+smaller items recorded there: the engine's legacy API still accepts a caller
+year (`api.py` `AnalyzeRequest.year`) — the product never exposes it; and the
+two transit-hub penalties are intentionally different magnitudes (engine fine
+ranking 0.25 vs Stage-1 coarse screen 0.5), each documented at its constant.
+
 ## Open — engine-side `silk_storage` → Postgres adapter (locked decision #3)
 
 Decision #3 ("storage unified on Postgres; write a thin adapter behind Repo A's

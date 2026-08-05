@@ -181,9 +181,13 @@ export function WorldFunnel({
         <div className="mt-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-gray-500">
-              {/* The real world count screened (funnel transparency), not the
-                  shortlist length; older runs without it fall back gracefully. */}
-              {t("screened", { count: analysis.total_screened ?? analysis.rankings.length })}
+              {/* Full funnel transparency (decision: "screened → shortlisted →
+                  top 5"): the real world count screened AND the shortlist size;
+                  older runs without the world count fall back gracefully. */}
+              {t("screened", {
+                count: analysis.total_screened ?? analysis.rankings.length,
+                shortlisted: analysis.rankings.length,
+              })}
             </p>
             {/* Stage 2 — budgeted enrichment re-ranks the shortlist to the top 5. */}
             <button

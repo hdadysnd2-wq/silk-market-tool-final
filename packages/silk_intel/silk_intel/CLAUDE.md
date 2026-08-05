@@ -163,6 +163,15 @@ Tests are hermetic and live in `tests/test_smoke.py` + `tests/test_wave*.py`. Re
 
 ## Storage
 
+> **Monorepo note (supersedes the next paragraph's framing):** the merged
+> product's locked decision #3 unifies storage on Postgres+Redis; the engine's
+> SQLite is a *documented interim state*, reclassified OPEN in the root
+> `docs/adr/0002-decision-3-storage-partially-implemented.md` and tracked in
+> `docs/BACKLOG.md`. The rule for casual changes is unchanged (don't bolt
+> Postgres on as a side effect), but "Postgres migration is deferred; don't
+> introduce it" is no longer the standing owner decision — a dedicated storage
+> session behind the `silk_storage` interface is the agreed path.
+
 SQLite only (`silk_storage.py`, default `data/silk.db`) — Postgres migration is an explicitly deferred owner decision; don't introduce it. Schema changes go through additive `ALTER TABLE` migration inside `init_db()` (existing rows untouched). `analyses` carries `outcome`/`outcome_date` (the cumulative track record) settable via `PATCH /analyses/{id}/outcome`. Never delete or modify existing data in `data/silk.db`.
 
 Persistence on Railway (persist-1…5): one env var `SILK_DATA_DIR=/data` routes all four stores (analyses DB, fact store `silk_store.db`, `usage.db`, request cache `cache/`) to the mounted volume; explicit per-store vars (`SILK_DB`/`SILK_STORE_DB`/`SILK_USAGE_DB`/`SILK_CACHE_DIR`) win individually, and `/health` exposes the resolved paths. The core agents and `market_imports_cached` are store-first: a store-served value keeps its ORIGINAL `retrieved_at` and carries «من المخزن» + the fetch date in its note — never present it as freshly live. Freshness windows (`silk_store.fresh_days`/`freshness`, `SILK_FRESH_*_DAYS`) drive stale-while-revalidate: stale hits are served immediately flagged `status="stale"` with a background re-fetch; `fetch_failed` ≠ `no_record` stays distinct. Periodic refresh is an in-process thread (`SILK_REFRESH_HOURS`, `silk_collectors.start_scheduler`) because a Railway volume mounts to exactly one service — don't move it to a separate cron service. Per-analysis store/cache/live counters (`silk_context.begin_data_counter`) surface as `result["data_economics"]`; counting must stay a no-op side channel.

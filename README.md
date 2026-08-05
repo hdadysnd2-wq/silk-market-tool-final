@@ -61,10 +61,11 @@ can't set (each service's root directory + config path). Full runbook:
 make test    # pandas guard + data contracts + engine suite + api (ruff+pytest) + web (lint+typecheck+build)
 ```
 
-One CI pipeline (`.github/workflows/ci.yml`) runs six jobs: `guard-pandas`,
-`etl` (offline transforms + the `packages/contracts` suite), `silk_intel`
-(engine hermetic suite), `api`, `web`, and `e2e` (Playwright against mocked
-APIs).
+The primary CI pipeline (`.github/workflows/ci.yml`) runs six jobs:
+`guard-pandas`, `etl` (offline transforms + the `packages/contracts` suite),
+`silk_intel` (engine hermetic suite), `api`, `web`, and `e2e` (Playwright
+against mocked APIs). A second workflow, `e2e-live-shape.yml`, runs the
+engine's release-gate lanes (real-server rungs 2–3 + PDF acceptance).
 
 ## Status
 

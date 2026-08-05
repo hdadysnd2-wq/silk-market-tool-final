@@ -99,6 +99,12 @@ def send_email(db: Session, email_id: uuid.UUID, provider: SendingProvider) -> E
             raise SendBlocked(f"Factory sending paused: {factory.paused_reason or 'manual'}")
         if campaign.status in (CampaignStatus.paused, CampaignStatus.auto_paused):
             raise SendBlocked(f"Campaign {campaign.status.value}: {campaign.paused_reason or ''}")
+        # SPF/DKIM/DMARC gate holds on the mailbox path too: Gmail/Graph sign
+        # their own transport, but cold mail lands on the FACTORY's domain
+        # reputation, and the master prompt makes DNS auth a precondition of any
+        # cold send — not only the Smartlead path.
+        if factory and not (factory.spf_ok and factory.dkim_ok and factory.dmarc_ok):
+            raise SendBlocked("SPF, DKIM and DMARC must all be verified before sending")
         gov = sender_accounts.can_send_from(db, account)
         if not gov.ok:
             raise SendBlocked(gov.reason or "sender account cannot send")

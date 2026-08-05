@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
 from app.api.deps import DbDep, get_owned_product
-from app.models import Contact, Product
+from app.models import Analysis, Contact, Product
 from app.schemas.buyer import BuyerMatchOut, BuyerOut, ContactOut, DiscoverRequest
 from app.services import lead_validity
 from app.services.buyer_discovery import buyers_for_product
@@ -30,12 +30,26 @@ def discover(
             status_code=status.HTTP_409_CONFLICT,
             detail="HS code must be confirmed before discovering buyers",
         )
+    # Decision #6 / I8 — a lead fetch is bound to a specific analysis, never a
+    # free-standing bulk pull. Discovery therefore requires an analysis for this
+    # product and stamps every match with its id.
+    analysis = db.scalar(
+        select(Analysis)
+        .where(Analysis.product_id == product.id)
+        .order_by(Analysis.created_at.desc())
+        .limit(1)
+    )
+    if analysis is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Run a market analysis first — lead discovery is bound to an analysis",
+        )
     markets = [m.upper() for m in payload.markets]
     # Enqueue one discovery job per market. In eager mode (tests / local worker
     # off) these run synchronously.
     for market in markets:
-        run_discovery.delay(str(product.id), market)
-    return {"detail": "Discovery started", "markets": markets}
+        run_discovery.delay(str(product.id), market, str(analysis.id))
+    return {"detail": "Discovery started", "markets": markets, "analysis_id": str(analysis.id)}
 
 
 @router.get("/products/{product_id}/buyers", response_model=list[BuyerMatchOut])
@@ -62,6 +76,7 @@ def list_buyers(
                 evidence=match.evidence,
                 lawful_basis=match.lawful_basis,
                 basis_note=match.basis_note,
+                analysis_id=match.analysis_id,
                 contacts=[ContactOut.model_validate(c) for c in contacts],
             )
         )

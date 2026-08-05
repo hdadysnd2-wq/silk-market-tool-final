@@ -48,6 +48,8 @@ class BuyerMatchOut(BaseModel):
     #: Lawful basis for direct marketing to this lead (I8), recorded at discovery.
     lawful_basis: str | None = None
     basis_note: str | None = None
+    #: The analysis this lead fetch served (decision #6 / I8 — analysis-bound).
+    analysis_id: uuid.UUID | None = None
     contacts: list[ContactOut] = []
 
 

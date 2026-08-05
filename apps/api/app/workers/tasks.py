@@ -21,7 +21,7 @@ log = get_logger(__name__)
 
 
 @celery_app.task(name="app.workers.tasks.run_discovery")
-def run_discovery(product_id: str, market_iso2: str) -> dict:
+def run_discovery(product_id: str, market_iso2: str, analysis_id: str | None = None) -> dict:
     from app.models import Product
     from app.services.api_budget import budget_scope
     from app.services.buyer_discovery import discover_buyers
@@ -40,7 +40,14 @@ def run_discovery(product_id: str, market_iso2: str) -> dict:
         # contextvar; does not cross the process boundary) so the competitor
         # snapshot's live Comtrade calls are capped and logged (locked decision #5).
         with budget_scope(label=f"discovery:{product_id}:{market_iso2}"):
-            summary = discover_buyers(db, product, market_iso2)
+            summary = discover_buyers(
+                db,
+                product,
+                market_iso2,
+                # Decision #6 / I8 — the analysis this fetch serves crosses the
+                # process boundary explicitly in the task payload, like deepen.
+                analysis_id=uuid.UUID(analysis_id) if analysis_id else None,
+            )
             if product.hs_code:
                 build_snapshot(db, product.hs_code, market_iso2)
         return summary

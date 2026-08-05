@@ -117,4 +117,7 @@ make etl     # offline bulk jobs (pandas/comtradeapicall live here only)
 CI (`.github/workflows/ci.yml`) runs six jobs: `guard-pandas`, `etl` (offline
 transforms + the `packages/contracts` suite), `silk_intel`, `api`, `web`, and
 `e2e` — the `make test` lanes plus the etl and Playwright suites that run only
-in CI.
+in CI. A second root workflow, `e2e-live-shape.yml`, carries the engine's
+release-gate lanes (real-server rungs 2–3 + PDF acceptance); the engine's own
+nested `.github/workflows/` files are inert (GitHub only executes root
+workflows) and are kept for provenance.

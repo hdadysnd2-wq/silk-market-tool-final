@@ -3,7 +3,6 @@
 import { useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { LocaleSwitcher } from "./LocaleSwitcher";
-import { TOKEN_COOKIE } from "@/lib/api";
 
 // The staff console is a separate shell from the factory app: internal team
 // members (factory_id NULL) never see the tenant nav, and vice-versa.
@@ -24,8 +23,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  function logout() {
-    document.cookie = `${TOKEN_COOKIE}=; path=/; max-age=0`;
+  async function logout() {
+    await fetch("/api/session/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
   }

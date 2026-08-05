@@ -9,7 +9,7 @@ from typing import Annotated
 
 import bcrypt
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -91,10 +91,18 @@ _CREDENTIALS_ERROR = HTTPException(
 )
 
 
+SESSION_COOKIE = "silk_token"
+
+
 def get_current_user(
+    request: Request,
     token: Annotated[str | None, Depends(oauth2_scheme)],
     db: Annotated[Session, Depends(get_db)],
 ) -> User:
+    # Prefer the Authorization: Bearer header (API clients, tests); fall back to
+    # the httpOnly session cookie the browser sends on same-origin /api/v1 calls
+    # (C2 — the token is never exposed to client JS).
+    token = token or request.cookies.get(SESSION_COOKIE)
     if not token:
         raise _CREDENTIALS_ERROR
     try:

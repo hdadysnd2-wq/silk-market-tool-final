@@ -36,7 +36,13 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     // The API is mocked at the network layer in every test, so the backend proxy
-    // target is never actually reached.
-    env: { PORT: String(PORT), API_PROXY_TARGET: "http://127.0.0.1:9" },
+    // target is never actually reached. SECRET_KEY must match the one fixtures.ts
+    // signs fakeToken() with, so the layouts' server-side JWT verification (C2)
+    // accepts the injected session cookie.
+    env: {
+      PORT: String(PORT),
+      API_PROXY_TARGET: "http://127.0.0.1:9",
+      SECRET_KEY: "e2e-secret-key-at-least-32-bytes-long-000000",
+    },
   },
 });

@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import type {
   BuyerMatch,
   Campaign,
@@ -9,13 +10,19 @@ import type {
 } from "@/lib/types";
 
 /**
- * A JWT-shaped token whose payload base64-decodes to a factory_user role. The
- * (app) layout only reads the role (no signature check), and every API call is
- * mocked, so this is enough to pass the auth gate in e2e.
+ * A properly HS256-signed JWT for e2e. The (app)/(admin) layouts now verify the
+ * signature server-side (C2), so the token must be signed with the same
+ * SECRET_KEY the Playwright web server runs with (see playwright.config.ts).
  */
 export function fakeToken(role = "factory_user"): string {
-  const payload = Buffer.from(JSON.stringify({ sub: "u1", role })).toString("base64");
-  return `header.${payload}.sig`;
+  const secret = process.env.SECRET_KEY ?? "e2e-secret-key-at-least-32-bytes-long-000000";
+  const b64url = (obj: unknown) =>
+    Buffer.from(JSON.stringify(obj)).toString("base64url");
+  const header = b64url({ alg: "HS256", typ: "JWT" });
+  const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 12;
+  const payload = b64url({ sub: "u1", role, exp });
+  const sig = createHmac("sha256", secret).update(`${header}.${payload}`).digest("base64url");
+  return `${header}.${payload}.${sig}`;
 }
 
 export const VERIFIED_ACCOUNT: SenderAccount = {

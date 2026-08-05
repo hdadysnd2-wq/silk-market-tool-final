@@ -6,6 +6,7 @@ on:
 
 # One pipeline for the whole monorepo:
 #   guard-pandas  — invariant I7 (pandas confined to etl/)
+#   harness       — Claude Code harness config presence check (tools/harness_verify.py)
 #   silk_intel    — vendored engine hermetic suite (packages/silk_intel)
 #   api           — apps/api ruff + migrations + pytest (Postgres + Redis)
 #   web           — apps/web lint + typecheck + build
@@ -22,6 +23,19 @@ jobs:
         with:
           python-version: "3.11"
       - run: python tools/check_no_pandas.py
+
+  harness:
+    name: Harness — config presence check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # Fails if any required CLAUDE.md / .claude/ / docs harness file is missing.
+      # Pure stdlib, no network or provider calls.
+      - run: python tools/harness_verify.py
 
   etl:
     name: ETL — offline transform tests

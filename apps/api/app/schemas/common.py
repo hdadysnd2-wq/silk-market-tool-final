@@ -65,6 +65,17 @@ class DnsCheckOut(BaseModel):
     notes: dict[str, str]
 
 
+class AdminOverviewOut(BaseModel):
+    """Cross-tenant snapshot for the staff console (aggregated over all factories)."""
+
+    factories: int
+    active_campaigns: int
+    pending_approvals: int
+    total_sent: int
+    bounce_rate: float
+    complaint_rate: float
+
+
 class MarketOut(BaseModel):
     iso2: str
     name_en: str

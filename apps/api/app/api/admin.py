@@ -25,11 +25,50 @@ from app.models import (
     SuppressionReason,
     User,
 )
-from app.schemas.common import AuditEntryOut, ErasureRequest, FactoryOut, MessageResponse
+from app.schemas.common import (
+    AdminOverviewOut,
+    AuditEntryOut,
+    ErasureRequest,
+    FactoryOut,
+    MessageResponse,
+)
 from app.security import require_staff
 from app.services import retention, suppression
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_staff)])
+
+
+@router.get("/overview", response_model=AdminOverviewOut)
+def overview(db: DbDep) -> AdminOverviewOut:
+    """Cross-tenant health snapshot for the staff console.
+
+    Rates are derived from the same per-campaign counters the factory dashboard
+    sums (sent/bounced/complained), so admin and tenant figures reconcile.
+    """
+    factories = db.scalar(select(func.count(Factory.id))) or 0
+    active_campaigns = (
+        db.scalar(select(func.count(Campaign.id)).where(Campaign.status == CampaignStatus.active))
+        or 0
+    )
+    pending_approvals = (
+        db.scalar(select(func.count(Email.id)).where(Email.status == EmailStatus.draft)) or 0
+    )
+    sent, bounced, complained = db.execute(
+        select(
+            func.coalesce(func.sum(Campaign.sent_count), 0),
+            func.coalesce(func.sum(Campaign.bounced_count), 0),
+            func.coalesce(func.sum(Campaign.complained_count), 0),
+        )
+    ).one()
+    sent = int(sent)
+    return AdminOverviewOut(
+        factories=int(factories),
+        active_campaigns=int(active_campaigns),
+        pending_approvals=int(pending_approvals),
+        total_sent=sent,
+        bounce_rate=round(int(bounced) / sent, 4) if sent else 0.0,
+        complaint_rate=round(int(complained) / sent, 4) if sent else 0.0,
+    )
 
 
 @router.get("/factories", response_model=list[FactoryOut])

@@ -11,6 +11,8 @@ Every account query is scoped by ``factory_id`` (tenant isolation) via
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse, Response
 
@@ -105,7 +107,9 @@ def callback(
 
     if error:
         log.info("oauth_callback_error", provider=provider, error=error)
-        return RedirectResponse(url=f"{base}?error={error}", status_code=302)
+        # `error` is attacker-controllable; URL-encode it so it can't inject extra
+        # query params into the frontend post-connect URL the SPA parses.
+        return RedirectResponse(url=f"{base}?error={quote(error, safe='')}", status_code=302)
     if not code or not state:
         return RedirectResponse(url=f"{base}?error=missing_code", status_code=302)
 
@@ -120,4 +124,6 @@ def callback(
         log.warning("oauth_connect_failed", provider=provider, error=str(exc))
         return RedirectResponse(url=f"{base}?error=connect_failed", status_code=302)
 
-    return RedirectResponse(url=f"{base}?connected=1&email={account.email}", status_code=302)
+    return RedirectResponse(
+        url=f"{base}?connected=1&email={quote(account.email, safe='')}", status_code=302
+    )

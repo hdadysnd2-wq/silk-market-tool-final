@@ -13,7 +13,8 @@
     "logout": "تسجيل الخروج",
     "connectEmail": "البريد",
     "profile": "الملف الشخصي",
-    "sendingEmail": "بريد الإرسال"
+    "sendingEmail": "بريد الإرسال",
+    "inbox": "الردود"
   },
   "auth": {
     "login": "تسجيل الدخول",
@@ -318,8 +319,7 @@
     "suppression": "قائمة الحظر",
     "audit": "سجل التدقيق",
     "dns": "DNS",
-    "empty": "—",
-    "comingSoon": "قريباً.",
+    "empty": "لا توجد سجلات بعد.",
     "statFactories": "المصانع",
     "statActiveCampaigns": "الحملات النشطة",
     "statPending": "الموافقات المعلّقة",
@@ -365,6 +365,25 @@
     "allFactories": "كل المصانع",
     "prev": "السابق",
     "next": "التالي",
-    "page": "صفحة {n}"
+    "page": "صفحة {n}",
+    "allStatuses": "كل الحالات",
+    "status_draft": "مسودة",
+    "status_active": "نشطة",
+    "status_paused": "موقوفة",
+    "status_auto_paused": "موقوفة تلقائياً",
+    "status_completed": "مكتملة",
+    "preparedByStaff": "أعدّها الفريق",
+    "pendingBadge": "{n} بانتظار الموافقة",
+    "totalEmails": "إجمالي الرسائل",
+    "replied": "الردود",
+    "bounced": "المرتدة",
+    "pausedReasonLabel": "سبب الإيقاف"
+  },
+  "inbox": {
+    "title": "الردود",
+    "subtitle": "كل ردود المشترين عبر جميع حملاتك، الأحدث أولاً.",
+    "repliedBadge": "تم الرد",
+    "empty": "لا توجد ردود بعد. عندما يرد مشترٍ على رسالتك ستظهر هنا.",
+    "openMailboxHint": "نص الرد موجود في صندوق بريد الإرسال المرتبط — افتحه للرد على المشتري."
   }
 }

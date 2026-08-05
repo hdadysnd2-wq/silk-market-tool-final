@@ -66,11 +66,24 @@ export default function AdminAuditPage() {
 
       <ul className="mt-4 space-y-1">
         {rows.map((e) => (
-          <li key={e.id} className="rounded-lg bg-white p-2 text-xs shadow-sm ring-1 ring-black/5">
-            <span className="font-medium text-gray-800">{e.action}</span>
-            <span className="ms-2 text-gray-400">{e.entity_type}</span>
-            <span className="ms-2 text-gray-400">{e.actor_label}</span>
-            <span className="ms-2 text-gray-300">{new Date(e.occurred_at).toLocaleString()}</span>
+          <li
+            key={e.id}
+            className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg bg-white p-2 text-xs shadow-sm ring-1 ring-black/5"
+          >
+            {/* flex + gap + dir isolation: these are LTR tokens (action slugs,
+                emails, dates) that would otherwise jumble inside the RTL row. */}
+            <span className="font-medium text-gray-800" dir="ltr">
+              {e.action}
+            </span>
+            <span className="text-gray-400" dir="ltr">
+              {e.entity_type}
+            </span>
+            <span className="text-gray-400" dir="ltr">
+              {e.actor_label}
+            </span>
+            <span className="text-gray-300" dir="ltr">
+              {new Date(e.occurred_at).toLocaleString()}
+            </span>
           </li>
         ))}
         {!loading && rows.length === 0 && <p className="text-sm text-gray-400">{t("empty")}</p>}

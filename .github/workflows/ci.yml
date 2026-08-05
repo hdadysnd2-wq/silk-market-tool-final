@@ -144,6 +144,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      # I10 — ar/en catalogs must stay key- and placeholder-identical.
+      - run: pnpm check:messages
       - run: pnpm build
 
   e2e:

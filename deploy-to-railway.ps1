@@ -238,15 +238,25 @@ try {
     }
 
     # --- 5) Databases --------------------------------------------------------
-    Write-Step '5 - Databases (Postgres + Redis)'
-    Write-Info 'Adding Postgres...'
-    Invoke-Native { railway add --database postgres }
-    if ($LASTEXITCODE -ne 0) { Write-Warn 'Postgres may already exist - continuing.' } else { Write-Ok 'Postgres added' }
-    Write-Warn 'IMPORTANT: the api migration runs CREATE EXTENSION vector, which the plain'
-    Write-Warn 'Postgres plugin does NOT ship. If the api later crashes with'
-    Write-Warn '  type "vector" does not exist'
-    Write-Warn 'replace this Postgres with a pgvector one (Railway pgvector template, or a'
-    Write-Warn 'service from the pgvector/pgvector image) and keep DATABASE_URL pointing at it.'
+    # Postgres comes from the pgvector image, NOT `railway add --database postgres`:
+    # the api's first migration runs CREATE EXTENSION vector, which Railway's stock
+    # Postgres does not ship — the api would crash-loop on first boot and login
+    # would never work. The image service exposes DATABASE_URL itself so the
+    # existing Postgres.DATABASE_URL references keep resolving.
+    Write-Step '5 - Databases (Postgres w/ pgvector + Redis)'
+    Write-Info 'Adding Postgres (pgvector/pgvector:pg16 - required by the api migrations)...'
+    $pgPassword = New-SecretKey
+    $pgUrl = 'postgresql://silk:' + $pgPassword + '@' + (RailwayRef 'RAILWAY_PRIVATE_DOMAIN') + ':5432/silk'
+    Invoke-Native { railway add --service Postgres --image pgvector/pgvector:pg16 `
+        --variables "POSTGRES_USER=silk" `
+        --variables "POSTGRES_PASSWORD=$pgPassword" `
+        --variables "POSTGRES_DB=silk" `
+        --variables "PGDATA=/var/lib/postgresql/data/pgdata" `
+        --variables "DATABASE_URL=$pgUrl" }
+    if ($LASTEXITCODE -ne 0) { Write-Warn 'Postgres may already exist - continuing.' } else { Write-Ok 'Postgres (pgvector) added' }
+    Write-Info 'Attaching a persistent volume to Postgres...'
+    Invoke-Native { railway volume add --service Postgres --mount-path /var/lib/postgresql/data }
+    if ($LASTEXITCODE -ne 0) { Write-Warn 'Volume attach did not succeed (may already exist) - continuing.' } else { Write-Ok 'Volume attached' }
     Write-Info 'Adding Redis...'
     Invoke-Native { railway add --database redis }
     if ($LASTEXITCODE -ne 0) { Write-Warn 'Redis may already exist - continuing.' } else { Write-Ok 'Redis added' }

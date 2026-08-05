@@ -13,7 +13,8 @@
     "logout": "Log out",
     "connectEmail": "Email",
     "profile": "Profile",
-    "sendingEmail": "Sending email"
+    "sendingEmail": "Sending email",
+    "inbox": "Replies"
   },
   "auth": {
     "login": "Log in",
@@ -318,8 +319,7 @@
     "suppression": "Suppression",
     "audit": "Audit",
     "dns": "DNS",
-    "empty": "—",
-    "comingSoon": "Coming soon.",
+    "empty": "No records yet.",
     "statFactories": "Factories",
     "statActiveCampaigns": "Active campaigns",
     "statPending": "Pending approvals",
@@ -365,6 +365,25 @@
     "allFactories": "All factories",
     "prev": "Previous",
     "next": "Next",
-    "page": "Page {n}"
+    "page": "Page {n}",
+    "allStatuses": "All statuses",
+    "status_draft": "Draft",
+    "status_active": "Active",
+    "status_paused": "Paused",
+    "status_auto_paused": "Auto-paused",
+    "status_completed": "Completed",
+    "preparedByStaff": "Prepared by staff",
+    "pendingBadge": "{n} pending approval",
+    "totalEmails": "Total emails",
+    "replied": "Replies",
+    "bounced": "Bounced",
+    "pausedReasonLabel": "Pause reason"
+  },
+  "inbox": {
+    "title": "Replies",
+    "subtitle": "Every buyer reply across all your campaigns, newest first.",
+    "repliedBadge": "Replied",
+    "empty": "No replies yet. When a buyer replies to your outreach it will show up here.",
+    "openMailboxHint": "The reply text lives in your connected sending mailbox — open it to answer the buyer."
   }
 }

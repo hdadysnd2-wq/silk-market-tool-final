@@ -7,8 +7,10 @@ from sqlalchemy import func, select
 
 from app.api.deps import DbDep, get_owned_campaign, get_owned_email, resolve_factory
 from app.models import (
+    Buyer,
     Campaign,
     CampaignStatus,
+    Contact,
     Email,
     EmailStatus,
     LIARecord,
@@ -22,6 +24,7 @@ from app.schemas.campaign import (
     DashboardStats,
     EmailEditRequest,
     EmailOut,
+    InboxItemOut,
     LIACreateRequest,
     OutcomeReportRequest,
     RejectRequest,
@@ -228,6 +231,39 @@ def activate_campaign(db: DbDep, campaign: Campaign = Depends(get_owned_campaign
         campaign.status = CampaignStatus.active
         db.commit()
     return _campaign_out(db, campaign)
+
+
+@router.get("/inbox", response_model=list[InboxItemOut])
+def inbox(db: DbDep, user: CurrentUser, limit: int = 100, offset: int = 0) -> list[InboxItemOut]:
+    """Unified replies inbox: every buyer reply across all this factory's
+    campaigns, newest first. Tenant-scoped through the campaign join."""
+    factory = resolve_factory(db, user)
+    query = (
+        select(Email, Campaign, Buyer, Contact)
+        .join(Campaign, Campaign.id == Email.campaign_id)
+        .join(Buyer, Buyer.id == Email.buyer_id)
+        .join(Contact, Contact.id == Email.contact_id)
+        .where(Campaign.factory_id == factory.id, Email.status == EmailStatus.replied)
+        .order_by(Email.replied_at.desc().nullslast())
+        .offset(max(offset, 0))
+        .limit(max(1, min(limit, 200)))
+    )
+    return [
+        InboxItemOut(
+            email_id=e.id,
+            campaign_id=c.id,
+            campaign_name=c.name,
+            market_iso2=c.market_iso2,
+            buyer_name=b.name,
+            contact_email=ct.email,
+            contact_name=ct.full_name,
+            subject=e.subject,
+            language=e.language,
+            sent_at=e.sent_at,
+            replied_at=e.replied_at,
+        )
+        for e, c, b, ct in db.execute(query).all()
+    ]
 
 
 @router.get("/dashboard", response_model=DashboardStats)

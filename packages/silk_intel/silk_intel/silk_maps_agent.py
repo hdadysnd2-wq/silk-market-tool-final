@@ -16,6 +16,7 @@ import os
 
 from silk_data_layer import DataPoint, _today
 from silk_agents import BaseAgent, AgentReport
+from silk_redact import redact_url
 
 log = logging.getLogger(__name__)
 
@@ -54,10 +55,11 @@ def find_places(query: str, region: str | None = None) -> list[DataPoint]:
         r.raise_for_status()
         payload = r.json()
     except Exception as e:  # noqa: BLE001 — never raise to caller
-        # مفتاح Google Maps يُمرَّر في استعلام URL؛ رسالة الاستثناء تضمّه
-        # ("...&key=<SECRET>") — نُنقّيه قبل التسجيل/الملاحظة. MapsAgent مجّاني
-        # (PAID=False) فملاحظته قد تُعرَض في تقرير العميل — تسريبُ المفتاح خطر.
-        err = str(e).replace(key, "***") if key else str(e)
+        # Google Maps يفرض المفتاح في استعلام URL (لا ترويسة)؛ رسالة الاستثناء
+        # تضمّه ("...&key=<SECRET>") — نبتر سلسلة الاستعلام كلها عبر redact_url
+        # قبل التسجيل/الملاحظة/سجلّ التشغيل (تنقيح مستقلّ عن القيمة). MapsAgent
+        # مجّاني (PAID=False) فملاحظته قد تُعرَض في تقرير العميل — التسريب خطر.
+        err = redact_url(f"{type(e).__name__}: {e}", secret=key)
         log.warning("Google Maps fetch failed (q=%r, region=%s): %s", q, region, err)
         try:  # عائلة C (Wave 1.5): إعلان الفشل للمشغّل.
             import silk_ops_log

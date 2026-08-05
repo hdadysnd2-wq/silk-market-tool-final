@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from app.api.deps import DbDep
 from app.models import utcnow
@@ -37,8 +37,19 @@ def register(payload: RegisterRequest, db: DbDep) -> TokenResponse:
     return TokenResponse(access_token=create_access_token(user.id, user.role))
 
 
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: DbDep) -> TokenResponse:
+def login(payload: LoginRequest, request: Request, db: DbDep) -> TokenResponse:
+    email = payload.email.lower().strip()
+    ip = _client_ip(request)
+    # Blunt online password-spraying: cap per IP and per account separately so
+    # neither one IP against many accounts nor many IPs against one account slips
+    # through (CODE_AUDIT CRITICAL-1 / login throttle notes).
+    rate_limit.check(f"login:ip:{ip}", limit=20, window_seconds=300)
+    rate_limit.check(f"login:acct:{email}", limit=8, window_seconds=300)
     user = auth_service.authenticate(db, email=payload.email, password=payload.password)
     user.last_login_at = utcnow()
     db.commit()
@@ -46,38 +57,53 @@ def login(payload: LoginRequest, db: DbDep) -> TokenResponse:
 
 
 @router.post("/otp/request")
-def request_otp(payload: OTPRequest, db: DbDep) -> dict:
+def request_otp(payload: OTPRequest, request: Request, db: DbDep) -> dict:
     from sqlalchemy import select
 
     from app.config import get_settings
     from app.models import User
 
-    user = db.scalar(select(User).where(User.email == payload.email.lower().strip()))
+    email = payload.email.lower().strip()
+    ip = _client_ip(request)
+    rate_limit.check(f"otp_request:ip:{ip}", limit=15, window_seconds=300)
+    rate_limit.check(f"otp_request:acct:{email}", limit=6, window_seconds=300)
+
+    user = db.scalar(select(User).where(User.email == email))
     # Don't reveal whether the address exists.
     if user is not None:
         code = auth_service.issue_otp(db, user)
         db.commit()
-        # Return the code in the response ONLY in local/dev so the flow is demoable
-        # without an email channel. NEVER in any other environment: an attacker who
-        # knows a victim's email could read the code and complete /otp/verify —
-        # full pre-auth account takeover.
-        if getattr(get_settings(), "environment", "local") == "local":
+        settings = get_settings()
+        # Return the plaintext code ONLY in local env AND behind the explicit
+        # SILK_DEV_EXPOSE_OTP flag. Anywhere else it's delivered out-of-band —
+        # returning it would let anyone who knows an email complete /otp/verify.
+        if getattr(settings, "environment", "local") == "local" and getattr(
+            settings, "silk_dev_expose_otp", False
+        ):
             return {"detail": "OTP issued", "dev_code": code}
     return {"detail": "OTP issued"}
 
 
 @router.post("/otp/verify", response_model=TokenResponse)
-def verify_otp(payload: OTPVerifyRequest, db: DbDep) -> TokenResponse:
+def verify_otp(payload: OTPVerifyRequest, request: Request, db: DbDep) -> TokenResponse:
     from sqlalchemy import select
 
     from app.models import User
 
-    user = db.scalar(select(User).where(User.email == payload.email.lower().strip()))
-    if user is None or not auth_service.verify_user_otp(db, user, payload.code):
+    email = payload.email.lower().strip()
+    ip = _client_ip(request)
+    rate_limit.check(f"otp_verify:ip:{ip}", limit=20, window_seconds=300)
+    rate_limit.check(f"otp_verify:acct:{email}", limit=12, window_seconds=300)
+
+    user = db.scalar(select(User).where(User.email == email))
+    ok = user is not None and auth_service.verify_user_otp(db, user, payload.code)
+    # Commit even on failure so the wrong-attempt counter persists across requests
+    # (get_db never auto-commits) — otherwise the lockout would never trip.
+    db.commit()
+    if not ok:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired code"
         )
-    db.commit()
     return TokenResponse(access_token=create_access_token(user.id, user.role))
 
 

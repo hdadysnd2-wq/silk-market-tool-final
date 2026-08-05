@@ -27,6 +27,12 @@ class Settings(BaseSettings):
 
     access_token_ttl_minutes: int = 60 * 12
     otp_ttl_minutes: int = 10
+    # OTP one-time codes are delivered out-of-band. The plaintext code is only
+    # ever returned in the HTTP response when BOTH the environment is local AND
+    # this flag is explicitly set (SILK_DEV_EXPOSE_OTP=1) — never in staging/prod.
+    silk_dev_expose_otp: bool = False
+    # Wrong-OTP attempts allowed before the code is locked (online brute-force cap).
+    otp_max_attempts: int = 5
 
     # PDPL data-minimisation: contacts older than this whose campaign work is
     # done have their personal data anonymised by the daily retention sweep.

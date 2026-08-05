@@ -13,6 +13,10 @@ const SOURCE_STYLES: Record<string, string> = {
   manual: "bg-gray-100 text-gray-600",
 };
 
+// Known provenance sources get a localized label; anything unexpected falls
+// back to the raw value rather than showing a missing-key string.
+const KNOWN_SOURCES = new Set(["customs", "comtrade", "enrichment", "maps", "manual"]);
+
 export function BuyerCard({ match }: { match: BuyerMatch }) {
   const t = useTranslations("buyers");
   const [expanded, setExpanded] = useState(false);
@@ -30,7 +34,7 @@ export function BuyerCard({ match }: { match: BuyerMatch }) {
             <span
               className={`rounded-full px-2 py-0.5 text-xs ${SOURCE_STYLES[buyer.source] ?? SOURCE_STYLES.manual}`}
             >
-              {t("source")}: {buyer.source}
+              {t("source")}: {KNOWN_SOURCES.has(buyer.source) ? t(`source_${buyer.source}`) : buyer.source}
             </span>
             {contacts.length > 0 && (
               <span

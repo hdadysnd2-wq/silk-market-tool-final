@@ -53,7 +53,12 @@ def test_login_wrong_password(client):
     assert resp.status_code == 401
 
 
-def test_otp_flow(client):
+def test_otp_flow(client, db):
+    from sqlalchemy import select
+
+    from app.models import User
+    from app.services import auth_service
+
     client.post(
         "/api/v1/auth/register",
         json={
@@ -63,8 +68,11 @@ def test_otp_flow(client):
             "factory_name_en": "F",
         },
     )
-    issued = client.post("/api/v1/auth/otp/request", json={"email": "otp@factory.com"})
-    code = issued.json()["dev_code"]
+    # The plaintext code is no longer returned in the response (CRITICAL-1); issue
+    # it via the service to obtain it, exactly as an out-of-band channel would.
+    user = db.scalar(select(User).where(User.email == "otp@factory.com"))
+    code = auth_service.issue_otp(db, user)
+    db.commit()
 
     ok = client.post("/api/v1/auth/otp/verify", json={"email": "otp@factory.com", "code": code})
     assert ok.status_code == 200

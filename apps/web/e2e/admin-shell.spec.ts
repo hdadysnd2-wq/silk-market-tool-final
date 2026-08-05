@@ -77,7 +77,7 @@ test("the admin nav routes to factories, suppression and audit pages", async ({ 
       { email: "blocked@buyer.example", reason: "hard_bounce", created_at: "2026-01-01T00:00:00Z" },
     ]),
   );
-  await page.route(/\/api\/v1\/admin\/audit$/, (route) =>
+  await page.route(/\/api\/v1\/admin\/audit(\?|$)/, (route) =>
     json(route, [
       {
         id: 1,

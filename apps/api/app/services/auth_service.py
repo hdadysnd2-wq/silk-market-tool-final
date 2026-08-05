@@ -85,6 +85,7 @@ def issue_otp(db: Session, user: User) -> str:
     ttl = get_settings().otp_ttl_minutes
     user.otp_code_hash = hash_otp(code)
     user.otp_expires_at = utcnow() + timedelta(minutes=ttl)
+    user.otp_attempts = 0  # fresh code — reset the brute-force counter
     db.flush()
     # Never log the code — anyone with log access could complete /otp/verify.
     # The caller returns it out-of-band (and only in local env, per the API).
@@ -93,13 +94,24 @@ def issue_otp(db: Session, user: User) -> str:
 
 
 def verify_user_otp(db: Session, user: User, code: str) -> bool:
+    """Verify a one-time code, counting wrong attempts and locking after the cap.
+
+    The caller MUST commit afterwards even on a False result so the incremented
+    attempt counter persists across requests — otherwise the lockout never trips.
+    """
     if user.otp_expires_at is None or user.otp_expires_at < utcnow():
         return False
+    # Locked: too many wrong attempts against this code. Requires a fresh issue.
+    if (user.otp_attempts or 0) >= get_settings().otp_max_attempts:
+        return False
     if not verify_otp(code, user.otp_code_hash):
+        user.otp_attempts = (user.otp_attempts or 0) + 1
+        db.flush()
         return False
     # Single-use: clear on success.
     user.otp_code_hash = None
     user.otp_expires_at = None
+    user.otp_attempts = 0
     user.last_login_at = utcnow()
     db.flush()
     return True

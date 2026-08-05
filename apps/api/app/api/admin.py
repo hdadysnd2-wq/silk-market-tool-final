@@ -295,12 +295,66 @@ def factory_overview(factory_id: uuid.UUID, db: DbDep) -> dict:
 
 
 @router.post("/factories/{factory_id}/deliverability/verify", response_model=FactoryOut)
-def mark_dns_verified(factory_id: uuid.UUID, db: DbDep) -> FactoryOut:
+def mark_dns_verified(
+    factory_id: uuid.UUID, db: DbDep, staff: User = Depends(require_staff)
+) -> FactoryOut:
     """Concierge helper: mark SPF/DKIM/DMARC verified after manual DNS setup."""
     factory = db.get(Factory, factory_id)
     if factory is None:
         raise HTTPException(status_code=404, detail="Factory not found")
     factory.spf_ok = factory.dkim_ok = factory.dmarc_ok = True
+    audit.record(
+        db,
+        action="factory.dns_verified_by_staff",
+        entity_type="factory",
+        entity_id=factory.id,
+        actor=staff,
+        factory_id=factory.id,
+    )
+    db.commit()
+    return FactoryOut.model_validate(factory)
+
+
+@router.post("/factories/{factory_id}/pause", response_model=FactoryOut)
+def pause_factory(
+    factory_id: uuid.UUID, reason: str, db: DbDep, staff: User = Depends(require_staff)
+) -> FactoryOut:
+    """Halt all sending for a tenant (concierge action). Audited."""
+    factory = db.get(Factory, factory_id)
+    if factory is None:
+        raise HTTPException(status_code=404, detail="Factory not found")
+    factory.sends_paused = True
+    factory.paused_reason = reason
+    audit.record(
+        db,
+        action="factory.paused",
+        entity_type="factory",
+        entity_id=factory.id,
+        actor=staff,
+        factory_id=factory.id,
+        payload={"reason": reason},
+    )
+    db.commit()
+    return FactoryOut.model_validate(factory)
+
+
+@router.post("/factories/{factory_id}/resume", response_model=FactoryOut)
+def resume_factory(
+    factory_id: uuid.UUID, db: DbDep, staff: User = Depends(require_staff)
+) -> FactoryOut:
+    factory = db.get(Factory, factory_id)
+    if factory is None:
+        raise HTTPException(status_code=404, detail="Factory not found")
+    factory.sends_paused = False
+    factory.paused_reason = None
+    audit.record(
+        db,
+        action="factory.resumed",
+        entity_type="factory",
+        entity_id=factory.id,
+        actor=staff,
+        factory_id=factory.id,
+    )
     db.commit()
     return FactoryOut.model_validate(factory)
 
@@ -372,13 +426,15 @@ def audit_log(
     db: DbDep,
     action: str | None = None,
     factory_id: uuid.UUID | None = None,
-    limit: int = 100,
+    limit: int = 50,
+    offset: int = 0,
 ) -> list[AuditEntryOut]:
-    query = select(AuditLog).order_by(AuditLog.id.desc()).limit(limit)
+    query = select(AuditLog).order_by(AuditLog.id.desc())
     if action:
         query = query.where(AuditLog.action == action)
     if factory_id:
         query = query.where(AuditLog.factory_id == factory_id)
+    query = query.offset(max(offset, 0)).limit(max(1, min(limit, 200)))
     rows = db.scalars(query).all()
     return [AuditEntryOut.model_validate(r) for r in rows]
 

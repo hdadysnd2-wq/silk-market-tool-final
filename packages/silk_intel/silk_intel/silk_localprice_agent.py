@@ -26,6 +26,7 @@ import os
 
 from silk_data_layer import DataPoint, _today
 from silk_agents import BaseAgent, AgentReport
+from silk_redact import redact_url
 
 log = logging.getLogger(__name__)
 
@@ -123,10 +124,11 @@ def retail_prices(query: str, market: str | None = None) -> list[DataPoint]:
         r.raise_for_status()
         payload = r.json()
     except Exception as e:  # noqa: BLE001 — never raise to caller
-        # المفتاح المدفوع يُمرَّر في استعلام URL، فرسالة الاستثناء تضمّه
-        # ("... for url: ...&api_key=<SECRET>") — نُنقّيه قبل التسجيل والملاحظة
-        # حتى لا يتسرّب لسجلّات الخادم أو لملاحظةٍ قد تظهر في تقرير العميل.
-        err = str(e).replace(key, "***") if key else str(e)
+        # SerpApi يفرض المفتاح في استعلام URL (لا ترويسة)، فرسالة الاستثناء تضمّه
+        # ("... for url: ...&api_key=<SECRET>") — نبتر سلسلة الاستعلام كلها عبر
+        # redact_url قبل التسجيل والملاحظة (تنقيح مستقلّ عن القيمة، لا .replace
+        # هشّ) حتى لا يتسرّب لسجلّات الخادم أو لملاحظةٍ قد تظهر في تقرير العميل.
+        err = redact_url(f"{type(e).__name__}: {e}", secret=key)
         log.warning("local price fetch failed (q=%r, market=%s): %s", q, market, err)
         return [DataPoint(None, "Local retail", 0.0,
                           f"local price fetch failed: {err}", _today())]

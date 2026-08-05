@@ -109,8 +109,10 @@ class MockSendingProvider:
                 httpx.post(url, content=raw, headers=headers, timeout=5.0)
             except httpx.HTTPError as exc:
                 # In tests / offline demos the API may not be reachable over HTTP;
-                # the send itself still succeeded.
-                log.info("mock_webhook_unreachable", error=str(exc), event=event["event"])
+                # the send itself still succeeded. NB: the kwarg must not be named
+                # ``event`` — that is structlog's positional message key, and the
+                # collision raises TypeError, crashing the caller on this path.
+                log.info("mock_webhook_unreachable", error=str(exc), event_type=event["event"])
                 return
 
 

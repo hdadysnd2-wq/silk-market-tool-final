@@ -301,5 +301,25 @@
     "passwordError": "تعذّر تغيير كلمة المرور.",
     "passwordMismatch": "كلمتا المرور الجديدتان غير متطابقتين.",
     "passwordTooShort": "يجب أن تتكوّن كلمة المرور الجديدة من 8 أحرف على الأقل."
+  },
+  "admin": {
+    "badge": "الإدارة",
+    "logout": "تسجيل الخروج",
+    "title": "نظرة عامة",
+    "overview": "نظرة عامة",
+    "factories": "المصانع",
+    "users": "المستخدمون",
+    "campaigns": "الحملات",
+    "suppression": "قائمة الحظر",
+    "audit": "سجل التدقيق",
+    "dns": "DNS",
+    "empty": "—",
+    "comingSoon": "قريباً.",
+    "statFactories": "المصانع",
+    "statActiveCampaigns": "الحملات النشطة",
+    "statPending": "الموافقات المعلّقة",
+    "statSent": "الرسائل المُرسَلة",
+    "statBounceRate": "معدل الارتداد",
+    "statComplaintRate": "معدل الشكاوى"
   }
 }

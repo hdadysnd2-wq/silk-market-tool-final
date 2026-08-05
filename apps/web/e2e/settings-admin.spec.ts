@@ -80,53 +80,5 @@ test("starting warm-up posts start_warmup and then hides the button", async ({ p
   await expect(page.getByRole("button", { name: "Start warm-up" })).toHaveCount(0);
 });
 
-test("the admin console switches between factories, suppression and audit tabs", async ({
-  page,
-  context,
-}) => {
-  await context.addCookies([{ name: "silk_token", value: fakeToken(), url: BASE }]);
-  await page.route(/\/api\/v1\//, (route) => json(route, []));
-  await page.route(/\/api\/v1\/admin\/factories$/, (route) =>
-    json(route, [
-      {
-        id: "fac-1",
-        name_en: "Dates Factory",
-        sector: "Food & Agriculture",
-        sending_domain: "mail.factory.example",
-        spf_ok: true,
-        dkim_ok: true,
-        dmarc_ok: true,
-      },
-    ]),
-  );
-  await page.route(/\/api\/v1\/admin\/suppression$/, (route) =>
-    json(route, [
-      { email: "blocked@buyer.example", reason: "hard_bounce", created_at: "2026-01-01T00:00:00Z" },
-    ]),
-  );
-  await page.route(/\/api\/v1\/admin\/audit$/, (route) =>
-    json(route, [
-      {
-        id: 1,
-        action: "email.approved",
-        entity_type: "email",
-        entity_id: "e1",
-        actor_label: "owner@factory.example",
-        occurred_at: "2026-01-01T00:00:00Z",
-      },
-    ]),
-  );
-
-  await page.goto("/en/admin");
-
-  // Factories is the default tab.
-  await expect(page.getByText("Dates Factory")).toBeVisible();
-
-  // Suppression tab lists blocked recipients.
-  await page.getByRole("button", { name: "suppression" }).click();
-  await expect(page.getByText("blocked@buyer.example")).toBeVisible();
-
-  // Audit tab lists the action log.
-  await page.getByRole("button", { name: "audit" }).click();
-  await expect(page.getByText("email.approved")).toBeVisible();
-});
+// The admin console moved to its own (admin) route group + AdminShell — see
+// admin-shell.spec.ts.

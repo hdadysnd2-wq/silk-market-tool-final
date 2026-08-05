@@ -140,7 +140,12 @@
     },
     "viewReport": "عرض التقرير",
     "connectEmailCta": "اربط بريدك للإرسال",
-    "senderRequired": "اربط صندوق بريد للإرسال وتحقّق منه قبل إنشاء الحملات."
+    "senderRequired": "اربط صندوق بريد للإرسال وتحقّق منه قبل إنشاء الحملات.",
+    "source_customs": "بيانات جمركية",
+    "source_comtrade": "كومتريد",
+    "source_enrichment": "إثراء",
+    "source_maps": "خرائط",
+    "source_manual": "يدوي"
   },
   "report": {
     "title": "تقرير ذكاء التصدير",
@@ -343,6 +348,23 @@
     "createError": "تعذّر إنشاء المستخدم.",
     "actionError": "فشل الإجراء. حاول مرة أخرى.",
     "noUsers": "لا يوجد مستخدمون مطابقون.",
-    "searchUsers": "ابحث بالبريد أو الاسم"
+    "searchUsers": "ابحث بالبريد أو الاسم",
+    "details": "التفاصيل",
+    "dnsVerified": "DNS مُوثّق",
+    "dnsUnverified": "DNS غير مُوثّق",
+    "pausedStatus": "موقوف",
+    "markDnsVerified": "توثيق DNS",
+    "pause": "إيقاف الإرسال",
+    "resume": "استئناف الإرسال",
+    "confirmMarkDns": "توثيق SPF/DKIM/DMARC لهذا المصنع؟",
+    "confirmResume": "استئناف الإرسال لهذا المصنع؟",
+    "pauseReasonPrompt": "سبب إيقاف إرسال هذا المصنع:",
+    "note": "ملاحظة",
+    "suppressAdd": "حظر",
+    "filterAction": "تصفية حسب الإجراء",
+    "allFactories": "كل المصانع",
+    "prev": "السابق",
+    "next": "التالي",
+    "page": "صفحة {n}"
   }
 }

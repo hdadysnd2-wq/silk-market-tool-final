@@ -140,7 +140,12 @@
     },
     "viewReport": "View report",
     "connectEmailCta": "Connect email to send",
-    "senderRequired": "Connect and verify a sender mailbox before creating campaigns."
+    "senderRequired": "Connect and verify a sender mailbox before creating campaigns.",
+    "source_customs": "Customs",
+    "source_comtrade": "Comtrade",
+    "source_enrichment": "Enrichment",
+    "source_maps": "Maps",
+    "source_manual": "Manual"
   },
   "report": {
     "title": "Export intelligence report",
@@ -343,6 +348,23 @@
     "createError": "Couldn't create the user.",
     "actionError": "The action failed. Try again.",
     "noUsers": "No users match.",
-    "searchUsers": "Search by email or name"
+    "searchUsers": "Search by email or name",
+    "details": "Details",
+    "dnsVerified": "DNS verified",
+    "dnsUnverified": "DNS unverified",
+    "pausedStatus": "Paused",
+    "markDnsVerified": "Mark DNS verified",
+    "pause": "Pause sending",
+    "resume": "Resume sending",
+    "confirmMarkDns": "Mark SPF/DKIM/DMARC as verified for this factory?",
+    "confirmResume": "Resume sending for this factory?",
+    "pauseReasonPrompt": "Reason for pausing this factory's sending:",
+    "note": "Note",
+    "suppressAdd": "Suppress",
+    "filterAction": "Filter by action",
+    "allFactories": "All factories",
+    "prev": "Previous",
+    "next": "Next",
+    "page": "Page {n}"
   }
 }

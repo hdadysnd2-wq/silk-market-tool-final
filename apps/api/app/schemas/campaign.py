@@ -89,6 +89,27 @@ class WebhookEvent(BaseModel):
     bounce_type: str | None = None
 
 
+class InboxItemOut(BaseModel):
+    """One replied conversation in the unified cross-campaign inbox.
+
+    The reply body itself lives in the factory's mailbox (the platform records
+    the event, never a copy of the buyer's message) — this row carries enough
+    context to find the thread: who replied, from which campaign, and when.
+    """
+
+    email_id: uuid.UUID
+    campaign_id: uuid.UUID
+    campaign_name: str
+    market_iso2: str
+    buyer_name: str
+    contact_email: str
+    contact_name: str | None
+    subject: str
+    language: str
+    sent_at: datetime | None
+    replied_at: datetime | None
+
+
 class DashboardStats(BaseModel):
     campaigns: int
     total_sent: int

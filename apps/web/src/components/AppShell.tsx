@@ -8,6 +8,7 @@ const NAV = [
   { href: "/dashboard", key: "dashboard" },
   { href: "/products", key: "products" },
   { href: "/campaigns", key: "campaigns" },
+  { href: "/inbox", key: "inbox" },
 ] as const;
 
 // Account + sending configuration, grouped under a "Settings" heading in the nav.

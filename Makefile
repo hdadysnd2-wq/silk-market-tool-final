@@ -46,8 +46,8 @@ test: guard-pandas test-contracts test-intel test-api test-web ## The local lane
 test-api: ## Backend (apps/api) ruff + pytest
 	cd apps/api && uv run ruff check . && uv run ruff format --check . && uv run pytest -q
 
-test-web: ## Frontend (apps/web) lint + typecheck + build
-	cd apps/web && pnpm lint && pnpm typecheck && pnpm build
+test-web: ## Frontend (apps/web) lint + typecheck + locale parity (I10) + build
+	cd apps/web && pnpm lint && pnpm typecheck && pnpm check:messages && pnpm build
 
 test-intel: ## Vendored engine hermetic suite (packages/silk_intel)
 	cd packages/silk_intel && uv run --no-project \

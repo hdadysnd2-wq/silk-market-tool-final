@@ -318,8 +318,7 @@
     "suppression": "Suppression",
     "audit": "Audit",
     "dns": "DNS",
-    "empty": "—",
-    "comingSoon": "Coming soon.",
+    "empty": "No records yet.",
     "statFactories": "Factories",
     "statActiveCampaigns": "Active campaigns",
     "statPending": "Pending approvals",
@@ -365,6 +364,18 @@
     "allFactories": "All factories",
     "prev": "Previous",
     "next": "Next",
-    "page": "Page {n}"
+    "page": "Page {n}",
+    "allStatuses": "All statuses",
+    "status_draft": "Draft",
+    "status_active": "Active",
+    "status_paused": "Paused",
+    "status_auto_paused": "Auto-paused",
+    "status_completed": "Completed",
+    "preparedByStaff": "Prepared by staff",
+    "pendingBadge": "{n} pending approval",
+    "totalEmails": "Total emails",
+    "replied": "Replies",
+    "bounced": "Bounced",
+    "pausedReasonLabel": "Pause reason"
   }
 }

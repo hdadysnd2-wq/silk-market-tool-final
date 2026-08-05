@@ -113,6 +113,28 @@ class AdminOverviewOut(BaseModel):
     complaint_rate: float
 
 
+class CampaignAdminOut(BaseModel):
+    """A campaign as the cross-tenant staff console sees it."""
+
+    id: uuid.UUID
+    name: str
+    factory_id: uuid.UUID
+    factory_name_en: str
+    factory_name_ar: str
+    market_iso2: str
+    status: str
+    paused_reason: str | None
+    prepared_by_staff: bool
+    total_emails: int
+    sent_count: int
+    opened_count: int
+    replied_count: int
+    bounced_count: int
+    complained_count: int
+    pending_approvals: int
+    created_at: datetime
+
+
 class MarketOut(BaseModel):
     iso2: str
     name_en: str

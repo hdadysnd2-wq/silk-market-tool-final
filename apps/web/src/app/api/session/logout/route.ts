@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-
-const SESSION_COOKIE = "silk_token";
+import { SESSION_COOKIE } from "@/lib/session";
 
 // Clears the httpOnly session cookie. POST-only so it can't be triggered by a
 // cross-site <img>/navigation.

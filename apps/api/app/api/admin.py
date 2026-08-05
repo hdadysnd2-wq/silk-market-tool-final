@@ -30,6 +30,7 @@ from app.models import (
 from app.schemas.common import (
     AdminOverviewOut,
     AuditEntryOut,
+    CampaignAdminOut,
     ErasureRequest,
     FactoryOut,
     MessageResponse,
@@ -359,24 +360,99 @@ def resume_factory(
     return FactoryOut.model_validate(factory)
 
 
+@router.get("/campaigns", response_model=list[CampaignAdminOut])
+def list_campaigns(
+    db: DbDep,
+    status: CampaignStatus | None = None,
+    factory_id: uuid.UUID | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[CampaignAdminOut]:
+    """Cross-tenant campaign oversight for the staff console.
+
+    Joins the owning factory and counts each campaign's draft (approval-pending)
+    emails so staff see where the human send-gate (I3) is waiting.
+    """
+    pending = (
+        select(Email.campaign_id, func.count(Email.id).label("pending"))
+        .where(Email.status == EmailStatus.draft)
+        .group_by(Email.campaign_id)
+        .subquery()
+    )
+    query = (
+        select(Campaign, Factory, func.coalesce(pending.c.pending, 0))
+        .join(Factory, Factory.id == Campaign.factory_id)
+        .outerjoin(pending, pending.c.campaign_id == Campaign.id)
+        .order_by(Campaign.created_at.desc())
+    )
+    if status is not None:
+        query = query.where(Campaign.status == status)
+    if factory_id is not None:
+        query = query.where(Campaign.factory_id == factory_id)
+    query = query.offset(max(offset, 0)).limit(max(1, min(limit, 200)))
+    return [
+        CampaignAdminOut(
+            id=c.id,
+            name=c.name,
+            factory_id=c.factory_id,
+            factory_name_en=f.name_en,
+            factory_name_ar=f.name_ar,
+            market_iso2=c.market_iso2,
+            status=c.status.value,
+            paused_reason=c.paused_reason,
+            prepared_by_staff=c.prepared_by_staff,
+            total_emails=c.total_emails,
+            sent_count=c.sent_count,
+            opened_count=c.opened_count,
+            replied_count=c.replied_count,
+            bounced_count=c.bounced_count,
+            complained_count=c.complained_count,
+            pending_approvals=int(n),
+            created_at=c.created_at,
+        )
+        for c, f, n in db.execute(query).all()
+    ]
+
+
 @router.post("/campaigns/{campaign_id}/pause", response_model=MessageResponse)
-def pause_campaign(campaign_id: uuid.UUID, reason: str, db: DbDep) -> MessageResponse:
+def pause_campaign(
+    campaign_id: uuid.UUID, reason: str, db: DbDep, staff: User = Depends(require_staff)
+) -> MessageResponse:
     campaign = db.get(Campaign, campaign_id)
     if campaign is None:
         raise HTTPException(status_code=404, detail="Campaign not found")
     campaign.status = CampaignStatus.paused
     campaign.paused_reason = reason
+    audit.record(
+        db,
+        action="campaign.paused_by_staff",
+        entity_type="campaign",
+        entity_id=campaign.id,
+        actor=staff,
+        factory_id=campaign.factory_id,
+        payload={"reason": reason},
+    )
     db.commit()
     return MessageResponse(detail="Campaign paused")
 
 
 @router.post("/campaigns/{campaign_id}/resume", response_model=MessageResponse)
-def resume_campaign(campaign_id: uuid.UUID, db: DbDep) -> MessageResponse:
+def resume_campaign(
+    campaign_id: uuid.UUID, db: DbDep, staff: User = Depends(require_staff)
+) -> MessageResponse:
     campaign = db.get(Campaign, campaign_id)
     if campaign is None:
         raise HTTPException(status_code=404, detail="Campaign not found")
     campaign.status = CampaignStatus.active
     campaign.paused_reason = None
+    audit.record(
+        db,
+        action="campaign.resumed_by_staff",
+        entity_type="campaign",
+        entity_id=campaign.id,
+        actor=staff,
+        factory_id=campaign.factory_id,
+    )
     db.commit()
     return MessageResponse(detail="Campaign resumed")
 

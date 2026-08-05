@@ -79,10 +79,11 @@ APIs).
   the engine-side `silk_storage` → Postgres adapter is still open (locked
   decision #3 is only partially done — tracked in
   [`docs/BACKLOG.md`](docs/BACKLOG.md)).
-- **Phase 2 — full pipeline on mocks + funnel Stage 1 + UX:** substantially
-  complete on mocks (image → HS-confirm → world screen → top 5 with transit
-  flags → competitors → leads → draft → 3-layer approval → tracked send). The
-  funnel's Stage 3 deep-dive is not yet wired.
+- **Phase 2 — full pipeline on mocks + funnel Stage 1 + UX:** complete on mocks
+  (image → HS-confirm → world screen → top 5 with transit flags → competitors →
+  leads → draft → 3-layer approval → tracked send). All three funnel stages are
+  wired: Stage 2 enrichment chains into the Stage 3 per-market deep-dive
+  (`run_stage2_enrich` → `run_stage3_deepdive`).
 - **Phase 3 — go live, one key at a time:** not started. Real provider adapters
   exist but are unproven against live APIs — see
   [`docs/PHASE3_ADAPTER_READINESS.md`](docs/PHASE3_ADAPTER_READINESS.md).

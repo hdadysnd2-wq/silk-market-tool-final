@@ -219,9 +219,25 @@ fi
 has_service() { printf '%s' "$EXISTING" | grep -q "\"name\"[[:space:]]*:[[:space:]]*\"$1\""; }
 
 # ---- 5) databases -----------------------------------------------------------
-step "5 · Databases (Postgres + Redis)"
+# Postgres is provisioned from the pgvector image, NOT `--database postgres`:
+# the api's very first migration runs `CREATE EXTENSION vector`, and Railway's
+# stock Postgres has no pgvector — the api would crash-loop on first boot and
+# login would never work. The image service exposes DATABASE_URL itself so the
+# existing ${{Postgres.DATABASE_URL}} references keep resolving.
+step "5 · Databases (Postgres w/ pgvector + Redis)"
 if has_service "Postgres"; then ok "Postgres already present — skipping"
-else info "adding Postgres…"; rw_soft add --database postgres; fi
+else
+  info "adding Postgres (pgvector/pgvector:pg16 — required by the api's migrations)…"
+  PG_PASSWORD=$(gen_secret)
+  rw_soft add --service Postgres --image pgvector/pgvector:pg16 \
+    --variables "POSTGRES_USER=silk" \
+    --variables "POSTGRES_PASSWORD=${PG_PASSWORD}" \
+    --variables "POSTGRES_DB=silk" \
+    --variables "PGDATA=/var/lib/postgresql/data/pgdata" \
+    --variables "DATABASE_URL=postgresql://silk:${PG_PASSWORD}@\${{RAILWAY_PRIVATE_DOMAIN}}:5432/silk"
+  info "attaching a persistent volume to Postgres…"
+  rw_soft volume add --service Postgres --mount-path /var/lib/postgresql/data
+fi
 if has_service "Redis"; then ok "Redis already present — skipping"
 else info "adding Redis…"; rw_soft add --database redis; fi
 

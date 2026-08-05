@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "check:messages": "node scripts/check-locale-parity.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {

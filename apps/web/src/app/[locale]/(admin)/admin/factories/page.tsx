@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { api, ApiError } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import type { Factory } from "@/lib/types";
@@ -14,6 +14,7 @@ interface FactoryOverview {
 
 export default function AdminFactoriesPage() {
   const t = useTranslations("admin");
+  const locale = useLocale();
   const { data, reload } = useApi<Factory[]>("/admin/factories");
   const [openId, setOpenId] = useState<string | null>(null);
   const [overview, setOverview] = useState<FactoryOverview | null>(null);
@@ -80,10 +81,16 @@ export default function AdminFactoriesPage() {
         {(data ?? []).map((f) => (
           <li key={f.id} className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-black/5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                <span className="font-medium text-gray-900">{f.name_en}</span>
-                <span className="ms-2 text-sm text-gray-400">{f.sector}</span>
-                <span className="ms-2 text-xs text-gray-400" dir="ltr">
+              {/* flex + gap (not inline margins): consecutive LTR spans inside an
+                  RTL row otherwise merge into one jumbled bidi run. */}
+              <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="font-medium text-gray-900" dir="auto">
+                  {locale === "ar" ? f.name_ar : f.name_en}
+                </span>
+                <span className="text-sm text-gray-400" dir="auto">
+                  {f.sector}
+                </span>
+                <span className="text-xs text-gray-400" dir="ltr">
                   {f.sending_domain}
                 </span>
               </div>

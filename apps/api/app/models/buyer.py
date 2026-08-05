@@ -99,6 +99,15 @@ class ProductBuyerMatch(UUIDMixin, TimestampMixin, Base):
     #: "directory_listing" (public listing, no import history → needs review).
     lawful_basis: Mapped[str | None] = mapped_column(String(40))
     basis_note: Mapped[str | None] = mapped_column(String(512))
+    #: Decision #6 / I8 — the analysis this lead fetch was bound to. Discovery is
+    #: only triggered in service of a specific analysis (no bulk pre-fetch); the
+    #: stamp makes that binding auditable. SET NULL keeps the match if the
+    #: analysis record is later erased; rows predating this column are NULL.
+    analysis_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("analyses.id", ondelete="SET NULL"),
+        index=True,
+    )
 
 
 class Contact(UUIDMixin, TimestampMixin, Base):

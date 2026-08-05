@@ -29,6 +29,11 @@ from app.services import engine
 #: multiplied by this factor (imports include re-exports, so raw volume overstates
 #: genuine domestic demand). The penalty is visible, not silent: the tag below is
 #: attached too, so the report can show *why* the market was demoted.
+#: NOTE: the engine's fine-grained ranker applies its own, milder 0.25 penalty
+#: (silk_market_ranker._TRANSIT_HUB_PENALTY). The difference is deliberate —
+#: Stage 1 is a coarse volume screen where inflated re-export volume dominates,
+#: so it discounts harder; the Stage-2/3 ranker weighs many non-volume signals
+#: and needs less correction. Documented in docs/BACKLOG.md (ADR-0003 section).
 TRANSIT_PENALTY = 0.5
 
 TRANSIT_HUB_TAG = "transit hub — imports include re-exports"

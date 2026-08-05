@@ -59,8 +59,18 @@ _SEARCH_TERMS = {
 }
 
 
-def discover_buyers(db: Session, product: Product, market_iso2: str) -> dict:
-    """Run the full pipeline; return a small summary for logging/telemetry."""
+def discover_buyers(
+    db: Session,
+    product: Product,
+    market_iso2: str,
+    analysis_id: uuid.UUID | None = None,
+) -> dict:
+    """Run the full pipeline; return a small summary for logging/telemetry.
+
+    ``analysis_id`` is the analysis this fetch serves (decision #6 / I8 — leads
+    are fetched in service of a specific analysis, never bulk pre-fetched); the
+    API route always supplies it, and every match row is stamped with it.
+    """
     if not product.hs_code:
         raise ValueError("Product must be classified before discovery")
     # I2 (defense-in-depth). Discovery fetches buyer PII and must run only on a
@@ -138,7 +148,7 @@ def discover_buyers(db: Session, product: Product, market_iso2: str) -> dict:
     for buyer in buyers:
         _enrich(db, buyer, settings_providers["enrichment"])
         _find_contacts(db, buyer, settings_providers["waterfall"])
-        _score(db, product, buyer, market_iso2)
+        _score(db, product, buyer, market_iso2, analysis_id=analysis_id)
         scored += 1
 
     db.flush()
@@ -254,7 +264,13 @@ def _find_contacts(db: Session, buyer: Buyer, waterfall) -> None:
     db.flush()
 
 
-def _score(db: Session, product: Product, buyer: Buyer, market_iso2: str) -> None:
+def _score(
+    db: Session,
+    product: Product,
+    buyer: Buyer,
+    market_iso2: str,
+    analysis_id: uuid.UUID | None = None,
+) -> None:
     shipments = db.scalars(select(Shipment).where(Shipment.buyer_id == buyer.id)).all()
 
     today = utcnow().date()
@@ -296,6 +312,10 @@ def _score(db: Session, product: Product, buyer: Buyer, market_iso2: str) -> Non
     # I8 — record the lawful basis for direct marketing to this lead, derived from
     # the evidence that established it (PDPL Art. 25 prior-interaction / GDPR).
     match.lawful_basis, match.basis_note = _lawful_basis(shipments, evidence)
+    # Decision #6 / I8 — stamp the analysis this fetch served (None only for
+    # direct service invocations outside the product flow, e.g. legacy rows).
+    if analysis_id is not None:
+        match.analysis_id = analysis_id
     db.flush()
 
 

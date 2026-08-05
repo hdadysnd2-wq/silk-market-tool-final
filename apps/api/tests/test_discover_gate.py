@@ -32,13 +32,19 @@ def test_discover_blocked_until_hs_confirmed(client, db, product, auth_headers):
     assert resp.status_code == 409  # I2 — no discovery on an unconfirmed HS code
 
 
-def test_discover_allowed_once_confirmed(client, product, auth_headers, monkeypatch):
+def test_discover_allowed_once_confirmed(client, db, product, auth_headers, monkeypatch):
     # The `product` fixture is HS-confirmed. Stub the task enqueue so the test
     # isolates the endpoint's gate from the background discovery pipeline/broker.
-    calls: list[tuple[str, str]] = []
+    from app.models import Analysis
+
+    analysis = Analysis(product_id=product.id, product_name=product.name_en, status="classified")
+    db.add(analysis)
+    db.commit()
+
+    calls: list[tuple[str, str, str]] = []
     monkeypatch.setattr(
         "app.api.buyers.run_discovery.delay",
-        lambda product_id, market: calls.append((product_id, market)),
+        lambda product_id, market, analysis_id: calls.append((product_id, market, analysis_id)),
     )
 
     resp = client.post(
@@ -48,7 +54,9 @@ def test_discover_allowed_once_confirmed(client, product, auth_headers, monkeypa
     )
     assert resp.status_code == 202, resp.text
     assert resp.json()["markets"] == ["IN", "DE"]
-    assert [market for _, market in calls] == ["IN", "DE"]  # one job per market
+    # Decision #6 / I8 — the enqueued jobs carry the analysis binding.
+    assert all(call[2] == str(analysis.id) for call in calls)
+    assert [market for _, market, _ in calls] == ["IN", "DE"]  # one job per market
 
 
 def test_service_layer_blocks_unconfirmed_hs(db, product):

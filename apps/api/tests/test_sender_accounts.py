@@ -456,3 +456,25 @@ def test_reply_from_unknown_address_is_ignored(db, factory, product, admin_user)
         provider_message_id="s1",
     )
     assert replies.handle_reply(db, account, stranger) is False
+
+
+def test_oauth_path_blocked_without_dns_auth(db, factory, product, admin_user):
+    """The SPF/DKIM/DMARC precondition holds on the mailbox path too — cold mail
+    lands on the factory domain's reputation regardless of transport."""
+    account = make_verified_account(db, factory)
+    buyer, contact = make_buyer_with_contact(db)
+    campaign = make_campaign(db, factory, product)
+    campaign.sender_account_id = account.id
+    db.commit()
+    email = make_draft_email(db, campaign, buyer, contact)
+    approval.approve(db, email, admin_user)
+    approval.queue(db, email, admin_user)
+    # DNS auth is lost AFTER queueing (e.g. a DMARC record removed) — the worker
+    # must re-check at send time, exactly like the late-suppression pattern.
+    factory.dmarc_ok = False
+    db.commit()
+
+    spy = MagicMock()
+    with pytest.raises(SendBlocked, match="SPF, DKIM and DMARC"):
+        send_email(db, email.id, spy)
+    spy.send.assert_not_called()

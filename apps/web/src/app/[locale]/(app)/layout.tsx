@@ -3,20 +3,7 @@ import { redirect } from "@/i18n/routing";
 import { getLocale } from "next-intl/server";
 import { AppShell } from "@/components/AppShell";
 import { TOKEN_COOKIE } from "@/lib/api";
-
-interface JwtPayload {
-  role?: string;
-}
-
-function decodeRole(token: string): string | null {
-  try {
-    const payload = token.split(".")[1];
-    const json = JSON.parse(Buffer.from(payload, "base64").toString("utf-8")) as JwtPayload;
-    return payload ? (json.role ?? null) : null;
-  } catch {
-    return null;
-  }
-}
+import { decodeRole, isStaffRole } from "@/lib/auth";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const token = (await cookies()).get(TOKEN_COOKIE)?.value;
@@ -24,6 +11,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!token) {
     redirect({ href: "/login", locale });
   }
-  const role = token ? decodeRole(token) : null;
-  return <AppShell isAdmin={role === "admin" || role === "analyst"}>{children}</AppShell>;
+  // Staff (factory_id NULL) have no tenant to scope to — the factory pages 400
+  // for them. Send them to the dedicated admin console instead of rendering
+  // blank tenant screens.
+  if (isStaffRole(decodeRole(token!))) {
+    redirect({ href: "/admin", locale });
+  }
+  return <AppShell>{children}</AppShell>;
 }

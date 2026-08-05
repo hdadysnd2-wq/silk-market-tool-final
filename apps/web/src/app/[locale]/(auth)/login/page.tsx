@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import { Link } from "@/i18n/routing";
 import { api, ApiError, TOKEN_COOKIE } from "@/lib/api";
+import { decodeRole, isStaffRole } from "@/lib/auth";
 
 interface TokenResponse {
   access_token: string;
@@ -27,7 +28,8 @@ export default function LoginPage() {
       // Secure over HTTPS (prod); omitted on http://localhost so dev login still works.
       const secure = window.location.protocol === "https:" ? "; Secure" : "";
       document.cookie = `${TOKEN_COOKIE}=${res.access_token}; path=/; max-age=43200; samesite=lax${secure}`;
-      router.push("/dashboard");
+      // Staff land in the concierge console; factory users in their dashboard.
+      router.push(isStaffRole(decodeRole(res.access_token)) ? "/admin" : "/dashboard");
       router.refresh();
     } catch (err) {
       if (err instanceof ApiError) {

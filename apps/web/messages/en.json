@@ -301,5 +301,25 @@
     "passwordError": "Could not change the password.",
     "passwordMismatch": "The new passwords don't match.",
     "passwordTooShort": "The new password must be at least 8 characters."
+  },
+  "admin": {
+    "badge": "Admin",
+    "logout": "Log out",
+    "title": "Overview",
+    "overview": "Overview",
+    "factories": "Factories",
+    "users": "Users",
+    "campaigns": "Campaigns",
+    "suppression": "Suppression",
+    "audit": "Audit",
+    "dns": "DNS",
+    "empty": "—",
+    "comingSoon": "Coming soon.",
+    "statFactories": "Factories",
+    "statActiveCampaigns": "Active campaigns",
+    "statPending": "Pending approvals",
+    "statSent": "Emails sent",
+    "statBounceRate": "Bounce rate",
+    "statComplaintRate": "Complaint rate"
   }
 }

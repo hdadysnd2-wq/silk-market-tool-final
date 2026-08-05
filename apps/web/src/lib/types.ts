@@ -415,6 +415,15 @@ export interface ProductReport {
   markets: ReportMarket[];
 }
 
+export interface AdminOverview {
+  factories: number;
+  active_campaigns: number;
+  pending_approvals: number;
+  total_sent: number;
+  bounce_rate: number;
+  complaint_rate: number;
+}
+
 export interface DashboardStats {
   campaigns: number;
   total_sent: number;

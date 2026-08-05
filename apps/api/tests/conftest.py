@@ -103,6 +103,17 @@ def db(_schema):
         session.close()
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limit():
+    # The in-process rate limiter keys on the (constant) TestClient IP, so its
+    # buckets would otherwise accumulate across tests and spuriously 429. Clear
+    # before each test for isolation.
+    from app.services import rate_limit
+
+    rate_limit.reset()
+    yield
+
+
 @pytest.fixture
 def client(db):
     return TestClient(app)

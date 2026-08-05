@@ -40,7 +40,7 @@ silk-market-tool-final/
 ├── docs/               # this file, VISION, EXECUTION_PLAN, MASTER_PROMPT, provenance
 ├── tools/              # check_no_pandas.py (I7 CI guard)
 ├── Makefile            # make dev / demo / test / lint / etl
-└── .github/workflows/ci.yml   # guard-pandas + silk_intel + api + web + e2e
+└── .github/workflows/ci.yml   # guard-pandas + etl/contracts + silk_intel + api + web + e2e
 ```
 
 ## Two deliberate deviations from the target diagram
@@ -109,10 +109,12 @@ therefore partially, not fully, implemented — formally reclassified as OPEN in
 ```bash
 make dev     # boot the whole stack offline on mocks, zero API keys
 make demo    # golden-path pipeline, prints each step
-make test    # pandas guard + engine suite + api (ruff+pytest) + web (lint+build)
+make test    # pandas guard + data contracts + engine suite + api (ruff+pytest) + web (lint+typecheck+build)
 make lint    # ruff + pandas guard + eslint
 make etl     # offline bulk jobs (pandas/comtradeapicall live here only)
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same five checks: `guard-pandas`,
-`silk_intel`, `api`, `web`, `e2e`.
+CI (`.github/workflows/ci.yml`) runs six jobs: `guard-pandas`, `etl` (offline
+transforms + the `packages/contracts` suite), `silk_intel`, `api`, `web`, and
+`e2e` — the `make test` lanes plus the etl and Playwright suites that run only
+in CI.

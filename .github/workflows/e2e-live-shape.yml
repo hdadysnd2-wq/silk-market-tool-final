@@ -21,7 +21,14 @@ name: e2e-live-shape
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+# Same policy as ci.yml: PR-branch pushes fire only the pull_request event, and
+# superseded runs are cancelled everywhere except main.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   e2e-live-shape:

@@ -13,7 +13,7 @@ duck-typed stand-ins for the engine ``DataPoint`` and the platform
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from contracts import DataContract, from_datapoint, from_provider_record, missing
 
@@ -61,9 +61,23 @@ def test_from_datapoint_falls_back_to_a_sources_attribute():
     class OldShape:
         value: object = 1
         confidence: float = 0.5
-        sources: tuple[str, ...] = field(default_factory=lambda: ("a", "b"))
+        sources: tuple[str, ...] = ("a", "b")
 
     assert from_datapoint(OldShape()).sources == ("a", "b")
+
+
+def test_from_datapoint_prefers_source_ids_over_a_sources_attribute():
+    """The HF1 regression shape: the pre-fix adapter read ``sources`` even when
+    the real ``source_ids`` field was present, silently dropping attribution."""
+
+    @dataclass
+    class BothShape:
+        value: object = 1
+        confidence: float = 0.5
+        source_ids: tuple[str, ...] = ("comtrade:784",)
+        sources: tuple[str, ...] = ("legacy:should-lose",)
+
+    assert from_datapoint(BothShape()).sources == ("comtrade:784",)
 
 
 def test_from_datapoint_no_attribution_is_empty_tuple():
@@ -109,13 +123,20 @@ def test_from_provider_record_uses_enum_value_and_isoformats_time():
     assert contract.source == "comtrade"  # never "SourceType.COMTRADE"
     assert contract.provider == "comtrade"
     assert contract.value == {"x": 1}
-    assert contract.fetched_at.startswith("2026-01-01")
+    assert contract.confidence == 0.9
+    assert not contract.is_missing
+    # Exact equality: ``str(datetime)`` yields "2026-01-01 00:00:00+00:00"
+    # (space-separated, not ISO-8601) and must not slip past this assert.
+    assert contract.fetched_at == "2026-01-01T00:00:00+00:00"
 
 
 def test_from_provider_record_no_payload_is_missing():
     contract = from_provider_record(FakeProviderRecord(data=None, confidence=0.9))
-    assert contract.is_missing
+    assert contract.value is None
+    # ``value is None`` already makes ``is_missing`` true, so this is the one
+    # assert proving the adapter zeroes a non-zero confidence on a missing payload.
     assert contract.confidence == 0.0
+    assert contract.is_missing
 
 
 def test_missing_envelope_is_the_canonical_no_data_state():
@@ -123,3 +144,13 @@ def test_missing_envelope_is_the_canonical_no_data_state():
     assert isinstance(m, DataContract)
     assert m.value is None and m.confidence == 0.0
     assert m.is_missing and m.status == "fetch_failed"
+    # I1: a missing envelope explains itself — attribution and reason survive.
+    assert m.source == "Comtrade"
+    assert m.provider == "comtrade"
+    assert m.note == "rate limited"
+
+
+def test_missing_status_keyword_overrides_the_default():
+    m = missing("Comtrade", "comtrade", "quota exhausted", status="rate_limited")
+    assert m.status == "rate_limited"
+    assert m.note == "quota exhausted"

@@ -290,11 +290,12 @@ try {
     # public domain (resolves because the api domain was generated above).
     # SECRET_KEY must match the api's: the Next.js server verifies the session JWT
     # (verifyToken -> SECRET_KEY). Without it every logged-in page fails
-    # verification and redirects back to /login (login loop).
+    # verification and redirects back to /login (login loop). Wired as a Railway
+    # reference to the api's key so the two can never drift.
     Add-RailwayService -Name 'web' -RepoSlug $Repo -BranchName $Branch -Variables @(
         'RAILWAY_DOCKERFILE_PATH=apps/web/Dockerfile',
         'NODE_ENV=production',
-        "SECRET_KEY=$secret",
+        ('SECRET_KEY=' + (RailwayRef 'api.SECRET_KEY')),
         ('API_PROXY_TARGET=https://' + (RailwayRef 'api.RAILWAY_PUBLIC_DOMAIN'))
     ) | Out-Null
     New-RailwayDomain -Name 'web' | Out-Null

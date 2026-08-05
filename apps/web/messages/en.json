@@ -69,7 +69,12 @@
     "findBuyers": "Find buyers",
     "createProduct": "Create product",
     "viewReport": "View report",
-    "close": "Close"
+    "close": "Close",
+    "cancel": "Cancel",
+    "createError": "Couldn't add the product: {detail}",
+    "createErrorUnknown": "please check your connection and try again",
+    "createSuccess": "Product added — classifying now.",
+    "priceRangeError": "The minimum price can't be greater than the maximum price."
   },
   "markets": {
     "title": "Select target markets",
@@ -206,7 +211,11 @@
     "verified": "Verified",
     "notVerified": "Not verified",
     "startWarmup": "Start warm-up",
-    "note": "SPF, DKIM and DMARC must all be verified before sending is activated."
+    "note": "SPF, DKIM and DMARC must all be verified before sending is activated.",
+    "runCheck": "Run check",
+    "checking": "Checking…",
+    "checkError": "The DNS check couldn't run. Try again.",
+    "checkHint": "Authentication status is verified by resolving your domain's DNS records — it can't be set manually."
   },
   "onboarding": {
     "title": "Factory profile",

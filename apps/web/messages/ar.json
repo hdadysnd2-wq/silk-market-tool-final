@@ -69,7 +69,12 @@
     "findBuyers": "ابحث عن مشترين",
     "createProduct": "إنشاء المنتج",
     "viewReport": "عرض التقرير",
-    "close": "إغلاق"
+    "close": "إغلاق",
+    "cancel": "إلغاء",
+    "createError": "تعذّرت إضافة المنتج: {detail}",
+    "createErrorUnknown": "تحقّق من اتصالك وحاول مرة أخرى",
+    "createSuccess": "تمت إضافة المنتج — جارٍ التصنيف الآن.",
+    "priceRangeError": "لا يمكن أن يكون السعر الأدنى أكبر من السعر الأعلى."
   },
   "markets": {
     "title": "اختر الأسواق المستهدفة",
@@ -206,7 +211,11 @@
     "verified": "موثّق",
     "notVerified": "غير موثّق",
     "startWarmup": "بدء التسخين",
-    "note": "يجب توثيق SPF وDKIM وDMARC قبل تفعيل الإرسال."
+    "note": "يجب توثيق SPF وDKIM وDMARC قبل تفعيل الإرسال.",
+    "runCheck": "تشغيل الفحص",
+    "checking": "جارٍ الفحص…",
+    "checkError": "تعذّر تشغيل فحص DNS. حاول مرة أخرى.",
+    "checkHint": "يتم التحقق من حالة المصادقة عبر قراءة سجلات DNS لنطاقك — لا يمكن ضبطها يدويًا."
   },
   "onboarding": {
     "title": "ملف المصنع",

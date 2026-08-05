@@ -271,11 +271,12 @@ add_service "beat"   $(backend_vars)
 
 # web — Next.js. API_PROXY_TARGET is read at BUILD time (Dockerfile ARG); Railway
 # passes service variables into the build, so setting it here is enough.
-# SECRET_KEY must be the SAME value the api signs tokens with: the Next.js server
-# verifies the session JWT (verifyToken → SECRET_KEY); without it every logged-in
-# page fails verification and bounces back to /login (login loop).
+# SECRET_KEY must match the api's: the Next.js server verifies the session JWT
+# (verifyToken → SECRET_KEY); without it every logged-in page fails verification
+# and bounces back to /login (login loop). Wired as a Railway reference to the
+# api's key so the two can never drift (and a rotation on api follows here).
 add_service "web" \
-  "SECRET_KEY=${SECRET_KEY}" \
+  "SECRET_KEY=\${{api.SECRET_KEY}}" \
   "API_PROXY_TARGET=https://\${{api.RAILWAY_PUBLIC_DOMAIN}}" \
   "NODE_ENV=production"
 

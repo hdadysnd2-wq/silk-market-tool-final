@@ -18,6 +18,10 @@ CRITICALs and most prior HIGHs are fixed and, in several cases, locked by tests.
 remaining risk has shifted from live-exploitable vulnerabilities to **release-process gaps**
 and **architectural fragmentation**:
 
+- **Login is broken out-of-the-box**: the web tier never receives `SECRET_KEY` in any run
+  config, so it can't verify the session it just minted and bounces every logged-in user back to
+  `/login` (login loop). One-line config fix, but it makes the whole authenticated app unreachable
+  as shipped (Finding H-0).
 - The project's own release gate (real-server + browser + PDF export, "rungs 2–3") **runs
   in no GitHub-triggered CI** — the workflows that would run it sit in a vendored path
   GitHub Actions never reads. Green CI does *not* prove the money/export path. (Prior
@@ -39,7 +43,7 @@ several of the prior audit's shipped bugs.
 | Severity | Count | Theme |
 |---|---|---|
 | Critical | 1 | release-gate suites unwired in CI |
-| High | 6 | root containers · pgvector deploy · Smartlead cold-send · missing invariant tests · 3-backend duplication · unauth readiness + rate-limit bypass |
+| High | 7 | **login loop (web missing `SECRET_KEY`)** · root containers · pgvector deploy · Smartlead cold-send · missing invariant tests · 3-backend duplication · unauth readiness + rate-limit bypass |
 | Medium | 11 | diagnostics paid-drain · CSP unsafe-inline · shared/weak secret default · login throttle · audit-log immutability · pagination limits · ephemeral storage · dockerignore · unpinned images · CI soft-skip/lint · token-in-body |
 | Low | ~16 | proxy IP · os.environ key write · key derivation · realpath · sleeps · unpinned dev deps · doc drift · telemetry blob · terraform skeleton · healthchecks · etc. |
 | Info | 3 | advisory-only root harness · keyless-agent URL notes · sample date churn |
@@ -108,6 +112,34 @@ gap is specifically the **real-server/browser/PDF** lane.
 
 ### HIGH
 
+#### H-0 — Login is broken end-to-end: the web service never receives `SECRET_KEY`, so every post-login page bounces back to `/login` (login loop)
+**Status:** new (functional blocker). **Confidence:** confirmed (traced across all three run configs).
+
+The Next.js `verifyToken` fails closed on a missing secret — `apps/web/src/lib/auth.ts:30-31`
+(`const secret = process.env.SECRET_KEY; if (!secret) return null;`) — and the authenticated
+layouts redirect on a null result: `apps/web/src/app/[locale]/(app)/layout.tsx:14-17` and the
+admin layout both `redirect("/login")` when `verifyToken` returns null. But **no run config gives
+the web service `SECRET_KEY`**:
+
+- `infra/docker-compose.dev.yml:99-100` — web `environment:` is only `API_PROXY_TARGET` (no
+  `env_file`, unlike api/worker/beat at `:55,72,87`).
+- `deploy-to-railway.sh:273-275` — web gets `API_PROXY_TARGET` + `NODE_ENV` only; `SECRET_KEY`
+  is set on api/worker/beat only (`:181,263-269`).
+- `deploy-to-railway.ps1:291-295` — web gets `API_PROXY_TARGET`/`NODE_ENV`/`RAILWAY_DOCKERFILE_PATH`
+  only; `SECRET_KEY` is set on the backend services only (`:262`).
+
+**Failure chain:** correct credentials → `/api/session/login` signs a valid token (apps/api) and
+sets the httpOnly cookie → client redirects to `/dashboard` → `(app)/layout.tsx` calls
+`verifyToken` → `process.env.SECRET_KEY` is undefined on the web server → returns null → redirect
+to `/login`. The user submits valid credentials, sees no error, and lands back on the login page —
+an infinite loop; the entire authenticated app is unreachable, in local `make dev` and on both
+deploy scripts. (This is the functional face of the web review's M-3 shared-secret item, elevated
+from hardening to a blocker because the web tier never receives the secret at all.)
+
+**Fix:** set `SECRET_KEY` on the web service to the **identical** value used for api/worker/beat in
+all three configs (api signs, web verifies, same HS256 secret). Optionally fail the web build/boot
+loudly when `SECRET_KEY` is unset, so this can't recur silently.
+
 #### H-1 — All container images run as root (prior HIGH-11, open)
 `packages/silk_intel/silk_intel/Dockerfile` (no `USER`; also bundles LibreOffice + apt
 toolchain that parses untrusted Arabic text via `soffice`), `apps/api/Dockerfile` (the image
@@ -165,6 +197,22 @@ engine does **not** propagate to `apps/api`'s report path. **Fix:** declare one 
 analysis + send path and make the others thin adapters over `silk_render.build_view`; or
 document the split and add contract tests pinning the shared shapes, and explicitly gate one
 send pipeline off in prod.
+
+**Master-Prompt conformance (base command vs UI).** `docs/MASTER_PROMPT.md` locks decision #2:
+the engine (`packages/silk_intel`) is the ONE brain, *consumed* by the product via direct Python
+imports. Reality is a partial match: `apps/api/app/services/engine.py` + `workers/tasks.py:76` do
+consume the engine for **HS resolve/confirm** (I2) — but market **ranking, the 3-stage world
+funnel, scoring, brief, and report are reimplemented** in `apps/api` (`world_funnel.py`,
+`ranking.py`, `scoring.py`, `funnel_brief.py`, `report.py`, `report_view.py`) instead of deriving
+from `silk_render.build_view`. So the engine's own `/analyze` base command (Repo A's ~38-market
+ranker + `build_view` reports, with its vanilla-JS UIs `web/index.html`/`platform.html`, on SQLite)
+and the shipped UI (the Master-Prompt 3-stage funnel over the `world_trade` table, on Postgres) are
+**not the same intelligence** — they can and do diverge (e.g. the H (prior HIGH-1) INCONCLUSIVE
+verdict fix landed in `silk_reports.py` but `apps/api/report.py` is a separate, un-inheriting path).
+Net: the UI matches the Master Prompt's *product* Definition of Done, but decision #2's *one-brain*
+intent is only partially honored, which is the concrete driver of this fragmentation risk. (The
+SQLite-vs-Postgres split is intentional per decision #3; the ranking/funnel/report duplication is
+not.)
 
 #### H-6 — Unauthenticated `/research/readiness` drives live Comtrade calls, and the rate limiter is fully bypassable
 **Confidence:** confirmed (two independent traces). `api.py:1941-1967` guards

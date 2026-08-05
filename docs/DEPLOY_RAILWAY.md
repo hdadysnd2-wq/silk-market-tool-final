@@ -206,6 +206,26 @@ railway logs --service api     # boot: migrations → seed → uvicorn on $PORT
 Then push a trivial commit to your production branch and confirm all four
 services redeploy from GitHub automatically.
 
+## First login on production (read this before trying the demo accounts)
+
+The demo accounts (`factory1@demo.silk` … `admin@demo.silk`, password
+`Demo1234!`) exist **only** when `ENVIRONMENT=local` — on production the seed
+deliberately skips them (C4: well-known passwords must never exist on a public
+URL). So on a fresh deployment:
+
+- **Factory users** sign up through the app's register page (`/ar/register`).
+- **The first admin** is created from a trusted operator shell — the public
+  register flow never creates staff:
+
+  ```bash
+  railway shell --service api          # or: railway run --service api bash
+  python -m app.seeds.create_admin you@example.com --name "Owner"
+  ```
+
+  A new email gets a generated high-entropy password printed once to your
+  terminal (change it after first login). An existing factory user is
+  *promoted* to admin instead (password unchanged). Idempotent, audited.
+
 ---
 
 ## Non-interactive / CI

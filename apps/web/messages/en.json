@@ -211,7 +211,11 @@
     "verified": "Verified",
     "notVerified": "Not verified",
     "startWarmup": "Start warm-up",
-    "note": "SPF, DKIM and DMARC must all be verified before sending is activated."
+    "note": "SPF, DKIM and DMARC must all be verified before sending is activated.",
+    "runCheck": "Run check",
+    "checking": "Checking…",
+    "checkError": "The DNS check couldn't run. Try again.",
+    "checkHint": "Authentication status is verified by resolving your domain's DNS records — it can't be set manually."
   },
   "onboarding": {
     "title": "Factory profile",

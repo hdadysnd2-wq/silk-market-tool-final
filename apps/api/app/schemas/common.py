@@ -48,12 +48,21 @@ class FactoryUpdate(BaseModel):
 
 
 class DeliverabilityUpdate(BaseModel):
+    # NOTE: spf_ok/dkim_ok/dmarc_ok are deliberately NOT here. Authentication
+    # status is not tenant-attestable — it is set only by the server-side DNS
+    # check (POST /factory/deliverability/check). See services/dns_check.py.
     sending_domain: str | None = None
-    spf_ok: bool | None = None
-    dkim_ok: bool | None = None
-    dmarc_ok: bool | None = None
     inbox_count: int | None = None
     start_warmup: bool | None = None
+
+
+class DnsCheckOut(BaseModel):
+    """Result of a deliverability DNS check, alongside the refreshed factory."""
+
+    spf_ok: bool
+    dkim_ok: bool
+    dmarc_ok: bool
+    notes: dict[str, str]
 
 
 class MarketOut(BaseModel):

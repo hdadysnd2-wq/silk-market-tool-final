@@ -5,34 +5,47 @@ const BASE = "http://localhost:3100";
 
 const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, json: body });
 
-test("verifying a DNS record posts the toggle to the deliverability endpoint", async ({
+test("running the DNS check posts to the check endpoint and reflects the result", async ({
   page,
   context,
 }) => {
   await context.addCookies([{ name: "silk_token", value: fakeToken(), url: BASE }]);
   await page.route(/\/api\/v1\//, (route) => json(route, []));
-  await page.route(/\/api\/v1\/factory$/, (route) => json(route, FACTORY));
 
-  let payload: unknown = null;
-  await page.route(/\/api\/v1\/factory\/deliverability$/, (route) => {
-    payload = route.request().postDataJSON();
-    return json(route, { ...FACTORY, spf_ok: true });
+  // The server verifies SPF/DKIM/DMARC; the tenant cannot self-attest them. Once
+  // the check runs, the factory GET reflects the resolved (verified) state.
+  let checked = false;
+  await page.route(/\/api\/v1\/factory$/, (route) => json(route, { ...FACTORY, spf_ok: checked }));
+  let posted = false;
+  await page.route(/\/api\/v1\/factory\/deliverability\/check$/, (route) => {
+    posted = true;
+    checked = true;
+    return json(route, {
+      spf_ok: true,
+      dkim_ok: false,
+      dmarc_ok: false,
+      notes: { spf: "SPF record found" },
+    });
   });
 
   await page.goto("/en/settings/deliverability");
 
-  // SPF starts unverified; its row button flips it on.
+  // Status is read-only now — no toggle button inside the row.
   const spfRow = page.getByRole("listitem").filter({ hasText: "SPF record" });
-  const toggle = spfRow.getByRole("button");
-  await expect(toggle).toHaveText("Not verified");
-  const [request] = await Promise.all([
+  // Exact match: "Verified" is a substring of "Not verified".
+  await expect(spfRow.getByText("Not verified", { exact: true })).toBeVisible();
+  await expect(spfRow.getByRole("button")).toHaveCount(0);
+
+  await Promise.all([
     page.waitForRequest(
-      (r) => r.url().endsWith("/api/v1/factory/deliverability") && r.method() === "PUT",
+      (r) =>
+        r.url().endsWith("/api/v1/factory/deliverability/check") && r.method() === "POST",
     ),
-    toggle.click(),
+    page.getByRole("button", { name: "Run check" }).click(),
   ]);
-  expect(request.postDataJSON()).toMatchObject({ spf_ok: true });
-  expect(payload).toMatchObject({ spf_ok: true });
+  expect(posted).toBe(true);
+  // After the check + reload, SPF now reads as verified.
+  await expect(spfRow.getByText("Verified", { exact: true })).toBeVisible();
 });
 
 test("starting warm-up posts start_warmup and then hides the button", async ({ page, context }) => {

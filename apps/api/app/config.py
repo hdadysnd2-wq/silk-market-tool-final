@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     smartlead_api_key: str = ""
     smartlead_webhook_secret: str = ""
 
+    # DKIM selectors probed by the deliverability DNS check (comma-separated).
+    # The record lives at "<selector>._domainkey.<domain>"; different providers
+    # publish under different selectors (Google → google, Microsoft →
+    # selector1/2, etc.), so we try a small set and pass if any resolves.
+    dkim_selectors: str = "default,google,selector1,selector2,s1,s2,k1,smartlead,dkim"
+
     sentry_dsn: str = ""
 
     # Per-tenant mailbox OAuth (multi-tenant email sending).

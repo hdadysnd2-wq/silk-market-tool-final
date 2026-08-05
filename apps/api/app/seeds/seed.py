@@ -9,8 +9,6 @@ factory. Running it twice is safe: every insert is guarded by an existence check
 
 from __future__ import annotations
 
-import os
-
 from sqlalchemy import func, select
 
 from app.config import get_settings
@@ -280,20 +278,31 @@ def seed_world_trade(db, base_year: int = 2023) -> None:
 
 
 def run() -> dict:
-    # Demo seed plants accounts (incl. an admin) with a well-known password.
-    # Refuse to run against a production database unless explicitly forced —
-    # a stray deploy/entrypoint or a mistaken run against a shared DB would
-    # otherwise be a full auth bypass.
-    if get_settings().environment == "production" and not os.getenv("SILK_ALLOW_PROD_SEED"):
-        raise RuntimeError(
-            "Refusing to run the demo seed in production (it creates accounts "
-            "with a shared, well-known password). Set SILK_ALLOW_PROD_SEED=1 "
-            "only if you truly intend to."
-        )
+    # The demo accounts (incl. an admin) share ONE well-known password, so
+    # planting them in any shared/staging/production database is a full auth
+    # bypass (HIGH-12) — and the API entrypoint runs this seed on every boot.
+    # Gate: demo users/factories/world-trade are created ONLY when the
+    # environment is "local"; every other environment seeds genuine reference
+    # data (HS codes, markets) and nothing else, logging loudly why. There is no
+    # override flag — a foot-gun that could re-enable demo accounts off "local"
+    # is exactly what this guard removes.
+    settings = get_settings()
+    demo_enabled = settings.environment == "local"
     with session_scope() as db:
-        seed_reference(db)
-        seed_users_and_factories(db)
-        seed_world_trade(db)
+        seed_reference(db)  # genuine reference data — safe in any environment
+        if demo_enabled:
+            seed_users_and_factories(db)
+            seed_world_trade(db)
+        else:
+            log.warning(
+                "seed_demo_skipped_non_local",
+                environment=settings.environment,
+                detail=(
+                    "demo users, factories, and demo world-trade are local-only "
+                    "(they share a well-known password); seeded reference data "
+                    "(HS codes, markets) only"
+                ),
+            )
         counts = {
             "hs_codes": db.scalar(select(func.count()).select_from(HSCode)),
             "markets": db.scalar(select(func.count()).select_from(Market)),
@@ -302,7 +311,12 @@ def run() -> dict:
             "products": db.scalar(select(func.count()).select_from(Product)),
             "world_trade": db.scalar(select(func.count()).select_from(WorldTrade)),
         }
-    log.info("seed_complete", **counts)
+    log.info(
+        "seed_complete",
+        environment=settings.environment,
+        demo_users_seeded=demo_enabled,
+        **counts,
+    )
     return counts
 
 
@@ -311,6 +325,15 @@ if __name__ == "__main__":
     print("Seed complete:")
     for key, value in result.items():
         print(f"  {key}: {value}")
-    print(f"\nDemo login password for all accounts: {DEMO_PASSWORD}")
-    print("  factory1@demo.silk … factory6@demo.silk (factory users)")
-    print("  admin@demo.silk, analyst@demo.silk (internal team)")
+    # Only 'local' plants the demo accounts, so only there do we print their
+    # shared password. Off 'local' the accounts don't exist — printing a
+    # credential would be both misleading and a needless secret to log.
+    if get_settings().environment == "local":
+        print(f"\nDemo login password for all accounts: {DEMO_PASSWORD}")
+        print("  factory1@demo.silk … factory6@demo.silk (factory users)")
+        print("  admin@demo.silk, analyst@demo.silk (internal team)")
+    else:
+        print(
+            f"\n[environment={get_settings().environment}] demo accounts NOT seeded "
+            "(local-only); reference data only."
+        )

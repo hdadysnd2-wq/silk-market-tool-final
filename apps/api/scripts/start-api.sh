@@ -17,11 +17,14 @@ if ! alembic upgrade head; then
   exit 1
 fi
 
-# Seed reference data + demo accounts on boot. The seed is idempotent (every
-# insert is existence-guarded), so it is safe to re-run on every deploy. Set
-# RUN_SEED=0 to skip it once you have real data you don't want re-seeded.
+# Seed reference data on boot. The seed is idempotent (every insert is
+# existence-guarded), so it is safe to re-run on every deploy. Demo accounts
+# (shared, well-known password) are planted ONLY when ENVIRONMENT=local — off
+# 'local' the seed populates reference data (HS codes, markets) and nothing
+# else. Set RUN_SEED=0 to skip it once you have real data you don't want
+# re-seeded.
 if [ "${RUN_SEED:-1}" = "1" ]; then
-  echo "[start-api] seeding reference + demo data (RUN_SEED=1)…"
+  echo "[start-api] seeding reference data (demo accounts only on ENVIRONMENT=local)…"
   python -m app.seeds.seed || echo "[start-api] seed step failed; continuing to start the API"
 fi
 

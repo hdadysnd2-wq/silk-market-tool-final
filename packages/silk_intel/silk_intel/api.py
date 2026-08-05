@@ -770,8 +770,17 @@ def create_app():
         """حدّ المعدّل — raise 429 when a client exceeds the window budget."""
         if _rl_max <= 0:
             return
-        ident = (request.headers.get("x-api-key")
-                 or (request.client.host if request.client else "anon"))
+        # الهوية: IP العميل افتراضاً. لا تثق بترويسة X-API-Key كمفتاح دلو إلا
+        # بعد أن تُطابق المفتاح المتوقَّع — وإلا دوّرها المهاجم ليصنع دلواً
+        # جديداً كل طلب فيتجاوز الحدّ على المسارات العامّة (H-6).
+        # Identity: client IP by default. Only trust X-API-Key as a bucket key
+        # AFTER it matches the expected key, else an attacker rotates the header
+        # to mint a fresh bucket per request and bypass the limit on public routes.
+        ident = request.client.host if request.client else "anon"
+        got = request.headers.get("x-api-key")
+        expected = _api_key_expected()
+        if got and expected and hmac.compare_digest(got, expected):
+            ident = got
         win = int(time.time()) // _rl_window
         with _rl_lock:
             w, c = _rl_hits.get(ident, (win, 0))

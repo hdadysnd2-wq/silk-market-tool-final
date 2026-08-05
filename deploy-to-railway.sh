@@ -178,8 +178,9 @@ fi
 ok "repo   : $REPO"
 ok "branch : $BRANCH"
 
-# A SECRET_KEY shared by api/worker/beat (signs tokens + derives the mailbox
-# token-encryption key — it MUST be identical across the three).
+# A SECRET_KEY shared by api/worker/beat/web (api signs tokens + derives the
+# mailbox token-encryption key; web verifies the session JWT — it MUST be
+# identical across all four).
 gen_secret() {
   if command -v openssl >/dev/null 2>&1; then openssl rand -hex 32
   elif command -v python3 >/dev/null 2>&1; then python3 -c 'import secrets;print(secrets.token_hex(32))'
@@ -270,7 +271,11 @@ add_service "beat"   $(backend_vars)
 
 # web — Next.js. API_PROXY_TARGET is read at BUILD time (Dockerfile ARG); Railway
 # passes service variables into the build, so setting it here is enough.
+# SECRET_KEY must be the SAME value the api signs tokens with: the Next.js server
+# verifies the session JWT (verifyToken → SECRET_KEY); without it every logged-in
+# page fails verification and bounces back to /login (login loop).
 add_service "web" \
+  "SECRET_KEY=${SECRET_KEY}" \
   "API_PROXY_TARGET=https://\${{api.RAILWAY_PUBLIC_DOMAIN}}" \
   "NODE_ENV=production"
 
@@ -304,8 +309,9 @@ these in the Railway dashboard (Project → each service → Settings):${RESET}
      • STORAGE_BACKEND=local is wiped on redeploy. Attach a Volume at
        /app/storage on the ${BOLD}api${RESET} service (and worker, if it writes
        uploads), or set STORAGE_BACKEND=s3 with real S3/R2 credentials.
-     • A SECRET_KEY was generated and set on api/worker/beat (identical across
-       the three, as required). Rotate it in the dashboard for production.
+     • A SECRET_KEY was generated and set on api/worker/beat/web (identical
+       across all four, as required — web verifies the session JWT). Rotate it
+       in the dashboard for production.
 
 Every push to ${BOLD}${REPO}@${BRANCH}${RESET} now auto-deploys all four services.
 Full runbook: ${BOLD}docs/DEPLOY_RAILWAY.md${RESET}

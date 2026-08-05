@@ -96,6 +96,10 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     command: pnpm start -p 3000
+    # The Next.js server VERIFIES the session JWT (verifyToken → SECRET_KEY);
+    # it must share the identical secret the api signs with, or every logged-in
+    # page fails verification and redirects back to /login (login loop).
+    env_file: [.env]
     environment:
       API_PROXY_TARGET: http://api:8000
     ports: ["3000:3000"]

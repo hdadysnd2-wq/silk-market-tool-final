@@ -27,6 +27,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app
 
+# Non-root runtime (least privilege — HIGH-11). This image bundles LibreOffice
+# (soffice), which parses untrusted report text, so confining the process to a
+# non-root uid is the key mitigation for that RCE surface. Writable runtime
+# paths are /app and the data dir (SILK_DATA_DIR, default /app/data: the SQLite
+# stores, cache/, traces/). If SILK_DATA_DIR points at a mounted volume, that
+# volume must be writable by uid 10001 (see docs/DEPLOY_RAILWAY.md).
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser \
+    && mkdir -p /app/data \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 # Railway يمرّر PORT وقت التشغيل؛ محليًا يسقط إلى 8000.

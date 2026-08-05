@@ -1,0 +1,107 @@
+# Test rungs 2-3 as a required CI job (e2e-live-shape).
+#
+# GitHub Actions only runs workflows in the REPO-ROOT .github/workflows/. The
+# engine ships an identical workflow under packages/silk_intel/silk_intel/.github/,
+# but that nested path is never executed — so rungs 2-3 (real server + real
+# browser export) ran in NO triggered CI. This root copy wires them back in.
+#
+# It runs:
+#   • Rung 2 — a real uvicorn server on SQLite seeded with the canonical legal
+#     shape, hit over real HTTP (tests/test_rung2_real_server.py).
+#   • Rung 3 — headless chromium clicking the actual UI: dashboard → sidebar →
+#     report → Word/Markdown/PDF export → progress box (tests/test_rung3_*).
+#   • The Wave-2 visual PDF-acceptance locks (SILK_PDF_ACCEPTANCE=1), which skip
+#     in the hermetic job because it ships no LibreOffice/pymupdf/fonts.
+#
+# Branch protection (owner sets this in GitHub): make the "e2e-live-shape" check
+# required on main. Any PR touching web/index.html or an export/report path must
+# stay red until this flow is green.
+
+name: e2e-live-shape
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  e2e-live-shape:
+    runs-on: ubuntu-latest
+    # Installs LibreOffice + chromium and boots a real server; normally ~3-5 min.
+    # A 30-min cap kills a hang without failing a slow install.
+    timeout-minutes: 30
+    defaults:
+      run:
+        # The engine (requirements.txt, tests/, tools/) lives here; every `run`
+        # step executes from this directory, mirroring the vendored workflow.
+        working-directory: packages/silk_intel/silk_intel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # PDF converter (LibreOffice/soffice) + Arabic-shaped font: rung 3 clicks
+      # the "Export report (PDF)" button and asserts the %PDF signature; without
+      # these the server 503s and the check fails. Same dependency the deploy
+      # image ships (Dockerfile).
+      - name: Install LibreOffice + Arabic fonts (PDF converter)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libreoffice-writer fonts-hosny-amiri fontconfig poppler-utils
+          # §7: official family IBM Plex Sans Arabic (OFL) from google/fonts —
+          # Regular+Bold+SemiBold. Without Plex, LibreOffice substitutes silently.
+          sudo mkdir -p /usr/share/fonts/truetype/ibmplex
+          for w in Regular Bold SemiBold; do
+            sudo curl -fsSL -o "/usr/share/fonts/truetype/ibmplex/IBMPlexSansArabic-$w.ttf" \
+              "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsansarabic/IBMPlexSansArabic-$w.ttf"
+          done
+          fc-cache -f
+
+      # pymupdf is a hard dependency for the e2e geometry measurer (§4 groups
+      # lines on y via fitz) — no silent pdftotext fallback.
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt pytest httpx pymupdf
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # playwright installed globally so require resolves it via NODE_PATH (like
+      # the managed env). Version pinned to what was tried live (1.56.1).
+      - name: Install Playwright + chromium
+        run: |
+          npm install -g playwright@1.56.1
+          npx --yes playwright@1.56.1 install --with-deps chromium
+
+      - name: Run rungs 2-3 (real server + real browser)
+        env:
+          SILK_RUN_E2E: "1"
+        run: python -m pytest tests/test_rung2_real_server.py tests/test_rung3_playwright_e2e.py -q
+
+      # Loud assertion: the Arabic-shaped font is present — fail high if absent,
+      # else the PDF renders tofu and the visual lock passes falsely.
+      - name: Assert IBM Plex Sans Arabic is present (loud — no silent substitution)
+        run: |
+          fc-list | grep -iE "plex sans arabic|ibmplexsansarabic" \
+            || { echo "::error::IBM Plex Sans Arabic not installed"; exit 1; }
+
+      # Geometry-measurer calibration: print the 2x2 matrix (A=jc=start correct,
+      # B=jc=right flipped) both ways + a LibreOffice copy. Diagnostic only.
+      - name: RTL measurer calibration (diagnostic 2x2 matrix)
+        run: python3 tools/rtl_calibration.py
+
+      # Fold E + conditions 2/4 (Wave 2): the visual lock through the production
+      # path (render_client_pdf) + leak sweep on the bare text + geometry test
+      # (§4, RTL alignment) on the stripped PDF — needs soffice+pdftotext (here,
+      # not in the hermetic job). SILK_PDF_ACCEPTANCE=1 forces the geometry test
+      # to execute rather than skip.
+      - name: Run Wave 2 visual PDF lock (fold E) + geometry + leak sweep
+        env:
+          SILK_PDF_ACCEPTANCE: "1"
+        run: |
+          python -m pytest tests/test_wave2_first_pdf_cluster.py \
+            tests/test_report_output_overhaul.py \
+            tests/test_wave3_typography.py -q

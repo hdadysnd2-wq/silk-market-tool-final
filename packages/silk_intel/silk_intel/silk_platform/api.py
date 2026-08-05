@@ -733,6 +733,7 @@ def mount(app) -> bool:
     @app.get(_PREFIX + "/funnels")
     def list_funnels_ep(request: Request, limit: int = 50):
         ctx = _require(request, Role.FACTORY)
+        limit = _as_int(limit, "limit", minimum=1, maximum=200, default=50)
         conn = _open()
         try:
             # القراءة لا تُبوَّب بالطبقة: حسابٌ خُفِّض بعد إنشاء أقماعه يجب أن
@@ -1143,6 +1144,7 @@ def mount(app) -> bool:
         ctx = _ctx(request)
         if ctx.is_silk_analyst:
             raise HTTPException(status_code=403, detail="analysts see aggregates only")
+        limit = _as_int(limit, "limit", minimum=1, maximum=200, default=20)
         conn = _open()
         try:
             # النطاق دائماً حساب المنادي — أي account_id في الاستعلام يُتجاهَل.
@@ -1160,6 +1162,7 @@ def mount(app) -> bool:
         على الفعل، لا توسيع النطاق. Search adds a filter, never widens scope.
         """
         ctx = _require(request, Role.FACTORY)
+        limit = _as_int(limit, "limit", minimum=1, maximum=200, default=50)
         conn = _open()
         try:  # own account only — cannot see other accounts' logs
             rows = audit.search(conn, account_id=ctx.account_id, action=action,
@@ -1480,6 +1483,7 @@ def mount(app) -> bool:
     def admin_audit(request: Request, limit: int = 50,
                     account_id: int | None = None, action: str | None = None):
         ctx = _require(request, Role.SILK_ADMIN)
+        limit = _as_int(limit, "limit", minimum=1, maximum=500, default=50)
         conn = _open()
         try:  # global search (admin only)
             rows = audit.search(conn, account_id=account_id, action=action, limit=limit)

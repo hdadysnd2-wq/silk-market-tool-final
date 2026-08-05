@@ -50,6 +50,50 @@ several of the prior audit's shipped bugs.
 
 ---
 
+## 1.5 Remediation applied in this follow-up
+
+A batch of the safely-fixable, hermetically-verifiable findings was fixed on this
+branch (the rest are deferred with reasons below). **Evidence:** engine hermetic
+suite `python -m pytest tests/` → **exit 0** (2545 tests, 21 e2e/live/PDF-gated
+skips, 0 failures); platform subset 282 passed; security subset
+(`test_wave0_security`/`test_wave7_security_p0`/`test_ops_observability`) 35 passed;
+`tools/check_no_pandas.py` (I7) OK; `tools/harness_verify.py` OK; `apps/api/app/config.py`
+ruff-clean and the new validator's behavior directly verified.
+
+**Applied:**
+- **H-0** — `SECRET_KEY` wired to the web service in `infra/docker-compose.dev.yml`,
+  `deploy-to-railway.sh`, and `deploy-to-railway.ps1` (fixes the login loop).
+- **H-1** — non-root `USER` added to `apps/api/Dockerfile`, `apps/web/Dockerfile`,
+  and the engine `Dockerfile` (build as root, run as uid 10001 / `node`).
+- **M-8** — a repo-root `.dockerignore` (the correct location: both app images build
+  with `context: .`, so an `apps/*/.dockerignore` would be ignored).
+- **M-5** — `migrations/platform/005_audit_log_immutable.sql` adds the append-only
+  BEFORE UPDATE/DELETE triggers (audit.record is insert-only, so no behavior change).
+- **M-6** — the four unvalidated platform `limit` params now go through
+  `_as_int(..., minimum=1, maximum=N)`.
+- **C-1** — `.github/workflows/e2e-live-shape.yml` ported to the repo root so rungs
+  2–3 + PDF-acceptance actually run (owner must still mark it a required check on main).
+- **H-6** — the rate limiter buckets on client IP and only trusts `X-API-Key` as a
+  bucket key after it matches the expected key (no more header-rotation bypass).
+- **M-3** — `apps/api` fails closed on the built-in dev `secret_key` when
+  `environment != local`.
+
+**Deferred (with reason):**
+- **M-1** (`/diagnostics` 503 bypass) — deliberately by-design and documented in-code
+  (it is the "which key works before SILK_API_KEY is set" tool); the stated mitigation
+  is `SILK_PAID_DAILY_CAP`. Owner decision — not changed.
+- **M-11** (login token in body) — `web/platform.html` is a Bearer-token SPA that reads
+  `out.token` and `tests/platform_helpers.py` depends on it; removing it needs a
+  cookie-auth redesign of the console.
+- **H-5** (three-backend consolidation), **H-2** (Railway pgvector provisioning),
+  **H-3** (Smartlead verified send-gate), the missing **I3/I4/I10 invariant tests**,
+  **M-2** (CSP nonce), **M-9** (image digest pins) — owner-gated (settled-decision /
+  money-path) or not verifiable while the Actions runners are down.
+- **F10** (keyless-agent URL notes) — INFO; deferred.
+- **Not run locally:** the `apps/api` full pytest suite (needs Postgres, unavailable in
+  this environment) and the `apps/web` build — both are covered by root CI once the
+  Actions runners recover.
+
 ## 2. Status of the 2026-08-04 audit items
 
 | Prior item | Status | Evidence |

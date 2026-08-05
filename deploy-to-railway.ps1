@@ -288,9 +288,13 @@ try {
 
     # web - Next.js. API_PROXY_TARGET is read at BUILD time; it points at the api
     # public domain (resolves because the api domain was generated above).
+    # SECRET_KEY must match the api's: the Next.js server verifies the session JWT
+    # (verifyToken -> SECRET_KEY). Without it every logged-in page fails
+    # verification and redirects back to /login (login loop).
     Add-RailwayService -Name 'web' -RepoSlug $Repo -BranchName $Branch -Variables @(
         'RAILWAY_DOCKERFILE_PATH=apps/web/Dockerfile',
         'NODE_ENV=production',
+        "SECRET_KEY=$secret",
         ('API_PROXY_TARGET=https://' + (RailwayRef 'api.RAILWAY_PUBLIC_DOMAIN'))
     ) | Out-Null
     New-RailwayDomain -Name 'web' | Out-Null

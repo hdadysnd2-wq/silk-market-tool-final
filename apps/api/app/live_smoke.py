@@ -88,6 +88,24 @@ def _check_comtrade(s: Settings) -> CheckResult:
         return CheckResult("comtrade (funnel)", FAIL, _truncate(exc))
 
 
+def _check_localprice(s: Settings) -> CheckResult:
+    # Observed-price live path (audit blocker #6). The engine's paid LocalPriceAgent
+    # reads LOCALPRICE_API_KEY and runs only inside the deepen scope, so the check
+    # opens deepen and searches by a product NAME (an HS6 code is not a shopping
+    # query). No write, no send — just an auth/shape probe.
+    if not s.localprice_api_key:
+        return CheckResult("localprice (observed prices)", SKIP, "no LOCALPRICE_API_KEY")
+    try:
+        from app.providers.pricing.localprice import LocalPriceProvider
+        from app.services import engine
+
+        with engine.deepen_scope(True):
+            recs = LocalPriceProvider().observed_prices("392010", "AE", product_name="stretch film")
+        return CheckResult("localprice (observed prices)", PASS, f"{len(recs)} listing(s)")
+    except Exception as exc:  # noqa: BLE001
+        return CheckResult("localprice (observed prices)", FAIL, _truncate(exc))
+
+
 def _check_enrichment(s: Settings) -> CheckResult:
     if not s.coresignal_api_key:
         return CheckResult("coresignal (enrichment)", SKIP, "no CORESIGNAL_API_KEY")
@@ -186,6 +204,7 @@ def _check_mailbox_oauth(s: Settings) -> CheckResult:
 _CHECKS = (
     _check_anthropic,
     _check_comtrade,
+    _check_localprice,
     _check_enrichment,
     _check_maps,
     _check_apollo,

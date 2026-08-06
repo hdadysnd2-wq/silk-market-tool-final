@@ -70,6 +70,17 @@ class Settings(BaseSettings):
     zerobounce_api_key: str = ""
     smartlead_api_key: str = ""
     smartlead_webhook_secret: str = ""
+    # Fail-closed gate on the Smartlead cold-send slot.
+    #
+    # Setting SMARTLEAD_API_KEY alone flips the slot live, but the adapter's
+    # one-click List-Unsubscribe (RFC 8058) headers are emitted by the Smartlead
+    # *campaign sequence template*, from the custom fields the adapter sends —
+    # a console step no offline test can prove. Until an operator has configured
+    # that template and confirmed it (see docs/PHASE3_ADAPTER_READINESS.md), the
+    # registry hands out a gate that refuses every send instead of the live
+    # adapter, so an unproven cold-send path can never put mail on the wire
+    # without its legally required unsubscribe headers (I4).
+    smartlead_sequence_verified: bool = False
 
     # DKIM selectors probed by the deliverability DNS check (comma-separated).
     # The record lives at "<selector>._domainkey.<domain>"; different providers

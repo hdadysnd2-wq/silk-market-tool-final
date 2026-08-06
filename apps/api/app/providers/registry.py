@@ -162,6 +162,14 @@ def get_email_waterfall(settings: Settings | None = None) -> EmailFindingWaterfa
 def get_sending_provider(settings: Settings | None = None) -> SendingProvider:
     settings = settings or get_settings()
     if settings.smartlead_api_key:
+        # The cold-send slot is the one place where "key present → go live" is
+        # not enough: the one-click List-Unsubscribe headers come from the
+        # Smartlead campaign sequence template, an unobservable console step.
+        # Without the operator's explicit confirmation the slot fails closed.
+        if not settings.smartlead_sequence_verified:
+            from app.providers.sending.gated import GatedSendingProvider
+
+            return GatedSendingProvider("smartlead")
         from app.providers.sending.smartlead import SmartleadSendingProvider
 
         return SmartleadSendingProvider(settings.smartlead_api_key)

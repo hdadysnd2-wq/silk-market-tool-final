@@ -31,8 +31,20 @@ def test_main_exits_zero_offline(capsys):
 
 def test_smartlead_send_is_never_smoke_tested():
     # The sending path must never be auto-exercised (a real cold email). Even with
-    # a key present it stays SKIP with a manual-pilot note.
-    settings = get_settings().model_copy(update={"smartlead_api_key": "x"})
+    # a key present AND the sequence verified it stays SKIP with a manual-pilot note.
+    settings = get_settings().model_copy(
+        update={"smartlead_api_key": "x", "smartlead_sequence_verified": True}
+    )
     result = live_smoke._check_smartlead(settings)
     assert result.status == live_smoke.SKIP
     assert "NOT smoke-tested" in result.detail
+
+
+def test_smartlead_reports_the_gated_state_with_its_unblock_step():
+    # Key set but sequence unverified: the slot is fail-closed, and the smoke
+    # report says so plus names the env var that unblocks it.
+    settings = get_settings().model_copy(update={"smartlead_api_key": "x"})
+    result = live_smoke._check_smartlead(settings)
+    assert result.status == live_smoke.SKIP
+    assert "GATED" in result.detail
+    assert "SMARTLEAD_SEQUENCE_VERIFIED" in result.detail

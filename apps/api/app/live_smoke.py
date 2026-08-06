@@ -148,10 +148,21 @@ def _check_smartlead(s: Settings) -> CheckResult:
     # only; the send path is proven by a supervised pilot, not this script.
     if not s.smartlead_api_key:
         return CheckResult("smartlead (cold send)", SKIP, "no SMARTLEAD_API_KEY")
+    if not s.smartlead_sequence_verified:
+        # Configured but fail-closed: the registry hands out the gate, so no
+        # send can leave. Report it as a SKIP with the exact unblock step —
+        # not a FAIL, because a gated slot is the intended safe state.
+        return CheckResult(
+            "smartlead (cold send)",
+            SKIP,
+            "configured but GATED — wire the sequence template's List-Unsubscribe "
+            "headers, then set SMARTLEAD_SEQUENCE_VERIFIED=1",
+        )
     return CheckResult(
         "smartlead (cold send)",
         SKIP,
-        "configured — send NOT smoke-tested (real email); prove via a supervised pilot",
+        "configured + sequence verified — send NOT smoke-tested (real email); "
+        "prove via a supervised pilot",
     )
 
 

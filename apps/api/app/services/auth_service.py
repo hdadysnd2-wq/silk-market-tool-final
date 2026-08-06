@@ -18,6 +18,7 @@ from app.security import (
     verify_otp,
     verify_password,
 )
+from app.services.users import normalize_email
 
 log = get_logger(__name__)
 
@@ -39,7 +40,7 @@ def register_factory_user(
     locale: str = "ar",
 ) -> tuple[User, Factory]:
     """Create a factory tenant and its first (owner) user."""
-    email = email.lower().strip()
+    email = normalize_email(email)
     if db.scalar(select(User).where(User.email == email)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
@@ -62,7 +63,7 @@ def register_factory_user(
 
 
 def authenticate(db: Session, *, email: str, password: str) -> User:
-    user = db.scalar(select(User).where(User.email == email.lower().strip()))
+    user = db.scalar(select(User).where(User.email == normalize_email(email)))
     # Always run a bcrypt verification, even when the user is missing, so the
     # miss path and the wrong-password path take the same time (no enumeration).
     password_ok = verify_password(password, user.password_hash if user else _DUMMY_PASSWORD_HASH)

@@ -208,23 +208,32 @@ services redeploy from GitHub automatically.
 
 ## First login on production (read this before trying the demo accounts)
 
-The demo accounts (`factory1@demo.silk` … `admin@demo.silk`, password
-`Demo1234!`) exist **only** when `ENVIRONMENT=local` — on production the seed
-deliberately skips them (C4: well-known passwords must never exist on a public
-URL). So on a fresh deployment:
+The demo accounts (`factory1@demo.silk` … `admin@demo.silk`; the password is
+in `apps/api/app/seeds/seed.py`) exist **only** when `ENVIRONMENT=local` — on
+production the seed deliberately skips them (C4: well-known passwords must
+never exist on a public URL). So on a fresh deployment:
 
 - **Factory users** sign up through the app's register page (`/ar/register`).
-- **The first admin** is created from a trusted operator shell — the public
-  register flow never creates staff:
+- **The first admin** is created from a shell **inside the running API
+  container** — the public register flow never creates staff. Note that
+  `railway shell`/`railway run` execute on your local machine (where the
+  private `DATABASE_URL` does not resolve); use `railway ssh`, and `cd` first
+  because Railway starts commands from the repo root:
 
   ```bash
-  railway shell --service api          # or: railway run --service api bash
+  railway ssh --service api            # a shell inside the deployed container
+  cd /app/apps/api
   python -m app.seeds.create_admin you@example.com --name "Owner"
   ```
 
-  A new email gets a generated high-entropy password printed once to your
-  terminal (change it after first login). An existing factory user is
-  *promoted* to admin instead (password unchanged). Idempotent, audited.
+  The command prompts for the new admin password (hidden — it is never
+  printed, logged, or stored in plaintext); for non-interactive shells set
+  `SILK_BOOTSTRAP_ADMIN_PASSWORD` instead. A new email is created as an active
+  admin. An existing factory user is *promoted* to admin: the password you
+  supply replaces their old one and their factory link is detached (previous
+  role and factory are recorded in the audit log). A deactivated account is
+  refused — reactivate it from the admin console instead. Re-running for an
+  active admin is a no-op that writes nothing.
 
 ---
 

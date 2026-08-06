@@ -235,6 +235,13 @@ never exist on a public URL). So on a fresh deployment:
   refused — reactivate it from the admin console instead. Re-running for an
   active admin is a no-op that writes nothing.
 
+- **Known gap — staff created from the admin console.** Console-created staff
+  get an unusable credential by design and gain access via the OTP/reset flow,
+  but production has **no delivery channel for OTP codes** yet (codes are only
+  surfaced in the HTTP response on `local` with `SILK_DEV_EXPOSE_OTP=1`; there
+  is no transactional email sender). Until one is wired, create additional
+  admins with the bootstrap command above, not the console.
+
 ---
 
 ## Non-interactive / CI

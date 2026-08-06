@@ -8,7 +8,7 @@
 
 COMPOSE := docker compose -f infra/docker-compose.dev.yml --project-directory .
 
-.PHONY: help dev up down migrate seed demo test test-api test-web test-intel \
+.PHONY: help dev up down migrate seed demo create-admin test test-api test-web test-intel \
         test-contracts lint lint-api lint-web guard-pandas etl logs api-shell env
 
 help: ## Show this help
@@ -34,10 +34,14 @@ seed: ## Seed reference data, demo users, and pilot sectors (idempotent)
 	$(COMPOSE) exec api python -m app.seeds.seed
 
 dev: up migrate seed ## One-shot: up + migrate + seed (offline, no keys)
-	@echo "Stack up, migrated, seeded. Log in at http://localhost:3000 with factory1@demo.silk / Demo1234!"
+	@echo "Stack up, migrated, seeded. Log in at http://localhost:3000 with factory1@demo.silk"
+	@echo "(demo password: DEMO_PASSWORD in apps/api/app/seeds/seed.py)"
 
 demo: ## Run the golden-path demo end to end and print each step
 	$(COMPOSE) exec api python -m app.seeds.demo_golden_path
+
+create-admin: ## Create/promote the first platform admin (make create-admin EMAIL=you@example.com [NAME="Owner"]); prompts for the password
+	$(COMPOSE) exec api python -m app.seeds.create_admin $(EMAIL) $(if $(NAME),--name "$(NAME)")
 
 # ---- tests -----------------------------------------------------------------
 

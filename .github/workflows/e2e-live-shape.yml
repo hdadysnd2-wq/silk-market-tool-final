@@ -31,8 +31,31 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # Actions minutes are metered; this is the most expensive lane (LibreOffice +
+  # fonts + chromium every run) and only the vendored engine can change its
+  # outcome. PR runs are gated on engine changes via a job — not workflow-level
+  # `paths:` — so the check still reports (skipped satisfies branch protection,
+  # a never-triggered required check would block the PR). Main runs everything.
+  changes:
+    name: Detect engine changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      engine: ${{ steps.filter.outputs.engine }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            engine:
+              - "packages/silk_intel/**"
+              - ".github/workflows/e2e-live-shape.yml"
+
   e2e-live-shape:
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.engine == 'true' || github.ref == 'refs/heads/main'
     # Installs LibreOffice + chromium and boots a real server; normally ~3-5 min.
     # A 30-min cap kills a hang without failing a slow install.
     timeout-minutes: 30

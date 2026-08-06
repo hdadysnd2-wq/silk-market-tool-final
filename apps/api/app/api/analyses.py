@@ -11,6 +11,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 
 from app.api.deps import DbDep, get_owned_product
 from app.models import Analysis, CountryRanking, Product
@@ -34,12 +35,11 @@ def _ranking_out(r: CountryRanking) -> CountryRankingOut:
 
 
 def _to_out(db: DbDep, analysis: Analysis) -> AnalysisOut:
-    rankings = (
-        db.query(CountryRanking)
-        .filter(CountryRanking.analysis_id == analysis.id)
+    rankings = db.scalars(
+        select(CountryRanking)
+        .where(CountryRanking.analysis_id == analysis.id)
         .order_by(CountryRanking.rank)
-        .all()
-    )
+    ).all()
     out = AnalysisOut.model_validate(analysis)
     out.rankings = [_ranking_out(r) for r in rankings]
     return out

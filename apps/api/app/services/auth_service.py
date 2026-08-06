@@ -18,7 +18,7 @@ from app.security import (
     verify_otp,
     verify_password,
 )
-from app.services.users import normalize_email
+from app.services.users import create_user, normalize_email
 
 log = get_logger(__name__)
 
@@ -48,16 +48,15 @@ def register_factory_user(
     db.add(factory)
     db.flush()
 
-    user = User(
+    user = create_user(
+        db,
         email=email,
-        password_hash=hash_password(password),
         full_name=full_name,
         role=UserRole.factory_user,
         factory_id=factory.id,
         locale=locale,
+        password_hash=hash_password(password),
     )
-    db.add(user)
-    db.flush()
     log.info("factory_registered", user_id=str(user.id), factory_id=str(factory.id))
     return user, factory
 

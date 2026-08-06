@@ -325,11 +325,11 @@ if __name__ == "__main__":
     print("Seed complete:")
     for key, value in result.items():
         print(f"  {key}: {value}")
-    # Only 'local' plants the demo accounts, so only there do we print their
-    # shared password. Off 'local' the accounts don't exist — printing a
-    # credential would be both misleading and a needless secret to log.
+    # Only 'local' plants the demo accounts, so only there do we mention them.
+    # The shared password itself is never printed (repo rule: never print
+    # secrets) — it lives as DEMO_PASSWORD at the top of this file.
     if get_settings().environment == "local":
-        print(f"\nDemo login password for all accounts: {DEMO_PASSWORD}")
+        print("\nDemo accounts (shared password: DEMO_PASSWORD in app/seeds/seed.py):")
         print("  factory1@demo.silk … factory6@demo.silk (factory users)")
         print("  admin@demo.silk, analyst@demo.silk (internal team)")
     else:

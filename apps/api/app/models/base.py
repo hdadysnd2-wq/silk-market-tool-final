@@ -57,6 +57,10 @@ class EmailStatus(str, enum.Enum):
     approved = "approved"
     rejected = "rejected"
     queued = "queued"
+    #: Claimed for egress: the row was committed to this state BEFORE the provider
+    #: call, so a worker crash / broker redelivery finds it here (not ``queued``)
+    #: and refuses to re-send. A reaper resolves rows stuck here.
+    sending = "sending"
     sent = "sent"
     opened = "opened"
     replied = "replied"
@@ -68,8 +72,11 @@ class EmailStatus(str, enum.Enum):
 
 #: Statuses that mean "this message left the building" — reaching any of them
 #: requires a recorded human approval, enforced by a DB CHECK constraint.
+#: ``sending`` is included: it is the pre-egress claim and only ever follows
+#: ``queued``, so it too must carry a recorded approver.
 SENT_FAMILY_STATUSES = (
     EmailStatus.queued,
+    EmailStatus.sending,
     EmailStatus.sent,
     EmailStatus.opened,
     EmailStatus.replied,

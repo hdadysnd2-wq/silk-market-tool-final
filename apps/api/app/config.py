@@ -43,6 +43,20 @@ class Settings(BaseSettings):
     # Storage
     storage_backend: str = "local"  # "local" | "s3"
     storage_local_dir: str = "./storage"
+    # Multi-container deploys (api + worker as separate services) MUST use object
+    # storage: a local file:// image written by the api is invisible to the
+    # worker. Set this to 1 on such deploys so a misconfigured local backend fails
+    # loudly at startup instead of silently classifying every product text-only.
+    require_object_storage: bool = False
+
+    # Number of trusted reverse proxies in front of the API (e.g. the Railway
+    # edge = 1). When > 0, the real client IP is read from X-Forwarded-For by
+    # counting this many hops from the right (spoof-resistant: extra left-hand
+    # entries a client injects are ignored). 0 (the default) trusts only the
+    # direct peer — correct for local/CI, but behind a proxy every client shares
+    # the proxy's IP, which collapses the per-IP auth throttles into one global
+    # bucket (an unauthenticated login-lockout DoS). Set to 1 on Railway.
+    trusted_proxy_count: int = 0
     s3_endpoint_url: str = "http://localhost:9000"
     s3_bucket: str = "silk-products"
     s3_access_key: str = "minioadmin"
@@ -60,10 +74,11 @@ class Settings(BaseSettings):
     market_enrichment_live: bool = False
     # Observed-price layer (paid, deepen-gated). Blank keeps the deterministic
     # MockPriceProvider so CI/offline stays green; a value selects the LIVE
-    # LocalPriceProvider, which routes through the engine's paid LocalPriceAgent.
-    # This field is only the registry's switch signal — the engine agent reads its
-    # own vendor key from the environment; the adapter never passes it.
-    serper_api_key: str = ""
+    # LocalPriceProvider. This MUST be the same key the engine's LocalPriceAgent
+    # reads from the environment (``LOCALPRICE_API_KEY``) — selecting the live
+    # adapter on a different key would pick a provider that then finds no key and
+    # returns nothing (the pre-fix SERPER_API_KEY bug).
+    localprice_api_key: str = ""
     coresignal_api_key: str = ""
     outscraper_api_key: str = ""
     apollo_api_key: str = ""
@@ -122,6 +137,24 @@ class Settings(BaseSettings):
     sender_default_daily_limit: int = 50
     # How far back the reply-detection beat looks when polling a mailbox.
     reply_poll_lookback_minutes: int = 120
+    # A send claimed for egress (status ``sending``) but not resolved within this
+    # many seconds is treated as interrupted and reaped (never auto-retried).
+    send_claim_stale_seconds: int = 900
+    # Celery broker visibility timeout — must exceed the longest task so Redis
+    # does not redeliver a still-running task. Kept well above send/pipeline work.
+    broker_visibility_timeout_seconds: int = 3600
+    # An analysis left in a non-terminal status longer than this (no worker
+    # progress) is reconciled to ``failed`` so the funnel never stalls silently.
+    analysis_stuck_minutes: int = 30
+    # world_trade (Stage-1 screening data) coverage refresh: a confirmed HS6 whose
+    # rows are older than this is re-synced from UN Comtrade by the scheduled sweep.
+    # The per-HS6 live sync is fail-closed on a real COMTRADE key (offline demos
+    # never pretend to have live coverage).
+    world_trade_refresh_days: int = 30
+    # Hard/soft ceilings on any single Celery task, so a hung vendor/LLM call
+    # cannot occupy a worker slot forever.
+    task_soft_time_limit_seconds: int = 600
+    task_time_limit_seconds: int = 660
 
     # Deliverability guardrails
     max_emails_per_inbox_per_day: int = 50

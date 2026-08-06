@@ -30,8 +30,14 @@ class MockPriceProvider:
         self._seed = seed
 
     def observed_prices(
-        self, hs_code: str, market_iso2: str, limit: int = 10
+        self,
+        hs_code: str,
+        market_iso2: str,
+        limit: int = 10,
+        product_name: str | None = None,
     ) -> list[ProviderRecord[ObservedPrice]]:
+        # Seeded on (hs_code, market) for reproducible demos; product_name is
+        # accepted for protocol parity (the live adapter searches by it).
         rng = rng_for(hs_code, market_iso2, salt=self._seed)
         count = min(3 + rng.randint(0, 2), limit, len(_COMPETITORS))
         market = market_iso2.upper()

@@ -31,6 +31,14 @@ class LocalStorage:
     def url_for(self, key: str) -> str:
         return f"file://{(self._base / key).resolve()}"
 
+    def get_bytes(self, key: str) -> bytes | None:
+        """Read an object's bytes by key, or None if absent. Never raises."""
+        path = self._base / key
+        try:
+            return path.read_bytes()
+        except OSError:
+            return None
+
 
 class S3Storage:
     backend = "s3"
@@ -66,14 +74,29 @@ class S3Storage:
             "get_object", Params={"Bucket": self._bucket, "Key": key}, ExpiresIn=3600
         )
 
+    def get_bytes(self, key: str) -> bytes | None:
+        """Read an object's bytes by key, or None if absent. Never raises."""
+        try:
+            resp = self._client.get_object(Bucket=self._bucket, Key=key)
+            return resp["Body"].read()
+        except Exception as exc:  # noqa: BLE001 — a missing/unreadable object is a gap
+            log.warning("s3_get_failed", key=key, error=str(exc))
+            return None
+
 
 def get_storage(settings: Settings | None = None):
     settings = settings or get_settings()
     if settings.storage_backend == "s3":
-        try:
-            return S3Storage(settings)
-        except Exception as exc:  # pragma: no cover - fall back if MinIO absent
-            log.warning("s3_unavailable_using_local", error=str(exc))
+        # No silent fallback to local: a misconfigured object store on a
+        # multi-container deploy would otherwise write images to a disk the worker
+        # cannot read (the image would be stored but never analyzed). Fail loudly.
+        return S3Storage(settings)
+    if settings.require_object_storage:
+        raise RuntimeError(
+            "STORAGE_BACKEND=local but REQUIRE_OBJECT_STORAGE=1: a multi-container "
+            "deploy must use object storage (s3), or the worker cannot read images "
+            "the api wrote. Configure STORAGE_BACKEND=s3 with S3/MinIO credentials."
+        )
     return LocalStorage(settings.storage_local_dir)
 
 

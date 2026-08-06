@@ -38,7 +38,13 @@ def fetch_prices_for_market(db: Session, product: Product, market_iso2: str) -> 
             "count": 0,
         }
 
-    records = get_price_provider().observed_prices(product.hs_code, market_iso2)
+    # Pass the product NAME to the live shopping-search adapter — an HS6 code is
+    # not a usable shopping query. Prefer the English name, fall back to Arabic.
+    records = get_price_provider().observed_prices(
+        product.hs_code,
+        market_iso2,
+        product_name=product.name_en or product.name_ar,
+    )
     prices = [
         {
             "competitor": r.data.competitor,

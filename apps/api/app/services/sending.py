@@ -132,10 +132,27 @@ def send_email(db: Session, email_id: uuid.UUID, provider: SendingProvider) -> E
         log.info("send_blocked_suppressed", email_id=str(email.id))
         return email
 
-    # --- All checks passed: hand to the provider -----------------------------
+    # --- Phase 1: claim the row for egress, and COMMIT before sending --------
+    # This is the double-send guard. The row is moved to ``sending`` and the
+    # claim is committed *before* the provider call, so if the worker dies (OOM,
+    # SIGKILL) or the broker redelivers the task, the re-run finds status
+    # ``sending`` — not ``queued`` — and the re-check above raises SendBlocked
+    # instead of sending a second copy. Deliberately at-most-once: a crash after
+    # the provider accepted but before Phase 2 leaves a stale ``sending`` row for
+    # the reaper (services never silently re-send a message that may have gone).
     message = _build_message(email, contact, factory, campaign, account)
+    email.status = EmailStatus.sending
+    email.claimed_at = utcnow()
+    db.commit()
+
+    # --- Phase 2: hand to the provider ---------------------------------------
     result = provider.send(message)
     if not result.accepted:
+        # A rejected message definitively did not go out, so it is safe to return
+        # it to the queue for retry (unlike a mid-flight crash).
+        email.status = EmailStatus.queued
+        email.claimed_at = None
+        db.commit()
         raise SendBlocked(result.error or "provider rejected the message")
 
     email.status = EmailStatus.sent
@@ -199,6 +216,68 @@ def _build_message(
         campaign_ref=str(campaign.id),
         message_ref=str(email.id),
     )
+
+
+def reap_stale_sends(db: Session, stale_seconds: int) -> int:
+    """Resolve sends stuck in ``sending`` past ``stale_seconds``. Returns count.
+
+    A row is left in ``sending`` only when a worker died (OOM/SIGKILL) between
+    claiming it and recording the outcome. We cannot know whether the provider
+    accepted it, so — to preserve the never-double-send guarantee — we do NOT
+    requeue: the row is moved to a terminal ``cancelled`` with an explicit
+    reason, an audit entry, and an operator notification so the interrupted send
+    is visible rather than a silent lost sale.
+    """
+    from datetime import timedelta
+
+    from app.services import notifications
+
+    cutoff = utcnow() - timedelta(seconds=stale_seconds)
+    stuck = db.scalars(
+        select(Email).where(
+            Email.status == EmailStatus.sending,
+            Email.claimed_at.is_not(None),
+            Email.claimed_at < cutoff,
+        )
+    ).all()
+    reaped = 0
+    for email in stuck:
+        email.status = EmailStatus.cancelled
+        email.blocked_reason = (
+            "send interrupted mid-flight (worker lost); not retried to avoid a "
+            "possible double-send — needs manual review"
+        )
+        campaign = db.get(Campaign, email.campaign_id)
+        factory_id = None
+        if campaign:
+            factory_id = campaign.factory_id
+        audit.record(
+            db,
+            action="send_claim_reaped",
+            entity_type="email",
+            entity_id=email.id,
+            actor_label="system",
+            factory_id=factory_id,
+            payload={"claimed_at": email.claimed_at.isoformat() if email.claimed_at else None},
+        )
+        if factory_id:
+            notifications.notify(
+                db,
+                factory_id=factory_id,
+                kind="send_interrupted",
+                title="A send was interrupted",
+                body=(
+                    "An approved email's send was interrupted mid-flight and was "
+                    "not retried automatically to avoid a duplicate. Please review."
+                ),
+                entity_type="email",
+                entity_id=email.id,
+            )
+        reaped += 1
+    if reaped:
+        db.flush()
+        log.warning("send_claims_reaped", count=reaped)
+    return reaped
 
 
 def record_engagement(

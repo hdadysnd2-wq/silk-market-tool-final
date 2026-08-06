@@ -276,7 +276,8 @@ try {
         ('APP_BASE_URL=https://' + (RailwayRef 'web.RAILWAY_PUBLIC_DOMAIN')),
         ('CORS_ORIGINS=https://' + (RailwayRef 'web.RAILWAY_PUBLIC_DOMAIN')),
         'STORAGE_BACKEND=local',
-        'COMTRADE_OFFLINE=1'
+        'COMTRADE_OFFLINE=1',
+        'TRUSTED_PROXY_COUNT=1'
     )
 
     # api - public HTTP; runs migrations + seed on boot (RUN_SEED handled by start-api.sh).

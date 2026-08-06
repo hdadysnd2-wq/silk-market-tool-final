@@ -60,7 +60,7 @@ def test_maps_priced_listing_and_drops_none_finding(monkeypatch):
 
     monkeypatch.setattr(LocalPriceAgent, "run", _run)
 
-    records = LocalPriceProvider().observed_prices("040690", "AE")
+    records = LocalPriceProvider().observed_prices("040690", "AE", product_name="Medjool Dates")
 
     # The None finding is dropped — only the observed listing maps through (I1).
     assert len(records) == 1
@@ -75,9 +75,21 @@ def test_maps_priced_listing_and_drops_none_finding(monkeypatch):
     assert rec.source is SourceType.ENRICHMENT
     assert rec.provider_name == "localprice_serper"
     assert rec.confidence == 0.6
-    # The interface passes the HS6 as the engine's free-text search query.
-    assert captured["query"] == "040690"
+    # The engine is searched by the PRODUCT NAME (a shopping query), not the HS6.
+    assert captured["query"] == "Medjool Dates"
     assert captured["market"] == "AE"
+
+
+def test_query_falls_back_to_hs_code_without_a_name(monkeypatch):
+    captured: dict = {}
+
+    def _run(self, task, instruction=""):
+        captured.update(task)
+        return _stub_report([DataPoint(None, "Local retail", 0.0, "no query")])
+
+    monkeypatch.setattr(LocalPriceAgent, "run", _run)
+    LocalPriceProvider().observed_prices("040690", "AE")
+    assert captured["query"] == "040690"  # last-resort fallback
 
 
 def test_no_key_none_finding_is_declared_gap(monkeypatch):
@@ -117,12 +129,13 @@ def test_records_are_capped_at_limit(monkeypatch):
     assert len(LocalPriceProvider().observed_prices("040690", "AE", limit=2)) == 2
 
 
-def test_registry_switches_on_serper_key():
+def test_registry_switches_on_localprice_key():
     # Offline default (no key) → deterministic mock keeps CI green.
-    assert isinstance(get_price_provider(Settings(serper_api_key="")), MockPriceProvider)
-    # Key present → the LIVE adapter is selected.
+    assert isinstance(get_price_provider(Settings(localprice_api_key="")), MockPriceProvider)
+    # Key present → the LIVE adapter is selected. This is the SAME key the engine
+    # agent reads (LOCALPRICE_API_KEY), so the live path can actually fetch.
     assert isinstance(
-        get_price_provider(Settings(serper_api_key="test-serper-key")), LocalPriceProvider
+        get_price_provider(Settings(localprice_api_key="test-localprice-key")), LocalPriceProvider
     )
 
 
@@ -133,7 +146,7 @@ def test_live_adapter_never_runs_outside_deepen(db, factory, product, monkeypatc
 
     calls: list[tuple[str, str]] = []
 
-    def _spy(self, hs_code, market_iso2, limit=10):
+    def _spy(self, hs_code, market_iso2, limit=10, product_name=None):
         calls.append((hs_code, market_iso2))
         return []
 
@@ -142,7 +155,7 @@ def test_live_adapter_never_runs_outside_deepen(db, factory, product, monkeypatc
     monkeypatch.setattr(
         observed_prices,
         "get_price_provider",
-        lambda *a, **k: get_price_provider(Settings(serper_api_key="test-serper-key")),
+        lambda *a, **k: get_price_provider(Settings(localprice_api_key="test-localprice-key")),
     )
 
     result = observed_prices.fetch_prices_for_market(db, product, "IN")

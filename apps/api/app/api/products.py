@@ -10,7 +10,7 @@ from app.models import HSCode, Product
 from app.models.product import Product as ProductModel
 from app.schemas.product import HSCodeOut, HSConfirmRequest, ProductAccepted, ProductOut
 from app.security import CurrentUser
-from app.services import hs_classifier
+from app.services import engine, hs_classifier
 from app.services.storage import get_storage, new_image_key
 from app.workers.tasks import process_product_intake
 
@@ -70,6 +70,7 @@ async def create_product(
     cost_per_unit_val = _coerce_optional_price(cost_per_unit, "cost_per_unit")
 
     image_url = None
+    image_key = None
     if image is not None:
         # Bounded read: pull at most MAX+1 bytes so an oversized upload is rejected
         # without buffering the whole body.
@@ -87,6 +88,7 @@ async def create_product(
             else "application/octet-stream"
         )
         image_url = storage.put(key, data, ctype)
+        image_key = key  # the worker fetches bytes by this key, not the URL
 
     product = Product(
         factory_id=factory.id,
@@ -95,6 +97,7 @@ async def create_product(
         description_ar=description_ar,
         description_en=description_en,
         image_url=image_url,
+        image_key=image_key,
         price_min=price_min_val,
         price_max=price_max_val,
         cost_per_unit=cost_per_unit_val,
@@ -152,11 +155,30 @@ def confirm_hs(
     user: CurrentUser,
     product: ProductModel = Depends(get_owned_product),
 ) -> ProductOut:
+    """Confirm the product's HS6 (the single writer of ``hs_code``, invariant I2).
+
+    Accepts any structurally valid HS6 — not only the small seeded catalogue — so
+    the manual-entry fallback works when the classifier failed to propose a match.
+    A code absent from the local catalogue is backfilled from the engine's WCO
+    reference (official description, real sourced data), then confirmed.
+    """
     if db.get(HSCode, payload.hs_code) is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unknown HS code {payload.hs_code}",
+        is_valid, description = engine.hs6_reference(payload.hs_code)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid HS6 code {payload.hs_code}",
+            )
+        db.add(
+            HSCode(
+                code=payload.hs_code,
+                level=6,
+                parent_code=payload.hs_code[:4],
+                description_en=description or f"HS {payload.hs_code}",
+                description_ar=description or f"رمز {payload.hs_code}",
+            )
         )
+        db.flush()
     hs_classifier.confirm_hs_code(db, product, payload.hs_code, user.id)
     db.commit()
     return ProductOut.model_validate(product)

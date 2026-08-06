@@ -8,6 +8,7 @@ narrow: ``Mail.Send`` to send, ``Mail.Read`` for reply detection, plus
 from __future__ import annotations
 
 import contextlib
+import re
 from datetime import UTC, datetime
 from urllib.parse import urlencode
 
@@ -162,7 +163,11 @@ class MicrosoftGraphProvider:
                     headers=self._auth(creds),
                     params={
                         "$filter": f"receivedDateTime ge {iso}",
-                        "$select": "from,toRecipients,subject,receivedDateTime,internetMessageId",
+                        # bodyPreview carries the failed address on Exchange NDRs.
+                        "$select": (
+                            "from,toRecipients,subject,receivedDateTime,"
+                            "internetMessageId,bodyPreview"
+                        ),
                         "$top": 50,
                     },
                 )
@@ -199,4 +204,30 @@ class MicrosoftGraphProvider:
             received_at=received,
             provider_message_id=msg.get("internetMessageId", msg.get("id", "")),
             in_reply_to=None,
+            failed_recipient=_ndr_failed_recipient(sender, msg.get("bodyPreview")),
         )
+
+
+_ADDR_RE = re.compile(r"[\w.+\-]+@[\w\-]+\.[\w.\-]+")
+_NDR_LOCALPARTS = ("postmaster", "mailer-daemon", "microsoftexchange")
+
+
+def _ndr_failed_recipient(sender: str, body_preview: str | None) -> str | None:
+    """Extract the failed recipient from an Exchange non-delivery report.
+
+    Graph exposes no NDR message-class in a metadata list query, so we detect the
+    report by its machine sender and read the failed address out of ``bodyPreview``
+    ("Your message to <addr> couldn't be delivered."). Returns ``None`` for
+    ordinary mail — the reply/bounce split then treats it as a human reply.
+    """
+    local = sender.split("@", 1)[0].strip().lower()
+    if not any(local.startswith(p) for p in _NDR_LOCALPARTS):
+        return None
+    if not body_preview:
+        return None
+    for match in _ADDR_RE.finditer(body_preview):
+        addr = match.group(0).lower()
+        # Skip the NDR sender's own address if it appears in the preview text.
+        if addr != sender.lower():
+            return addr
+    return None

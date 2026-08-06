@@ -76,7 +76,16 @@
     "createError": "Couldn't add the product: {detail}",
     "createErrorUnknown": "please check your connection and try again",
     "createSuccess": "Product added — classifying now.",
-    "priceRangeError": "The minimum price can't be greater than the maximum price."
+    "priceRangeError": "The minimum price can't be greater than the maximum price.",
+    "hsFailedTitle": "We couldn't confirm an HS code automatically",
+    "hsFailedBody": "No suggestion was confident enough. Search for the right code below, or enter a known 6-digit HS code.",
+    "hsRetry": "Retry classification",
+    "hsRetryError": "Couldn't restart classification — please try again.",
+    "hsConfirmError": "Couldn't confirm that code — please try again.",
+    "hsManualTitle": "Enter the code manually",
+    "hsSearch": "Search",
+    "hsSearchPlaceholder": "Search HS codes by keyword",
+    "hsManualPlaceholder": "6-digit HS code"
   },
   "markets": {
     "title": "Select target markets",

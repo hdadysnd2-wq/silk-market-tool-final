@@ -29,6 +29,34 @@ def test_main_exits_zero_offline(capsys):
     assert "skipped" in out
 
 
+def test_localprice_check_present_and_skips_without_key():
+    # The observed-price live path (audit blocker #6) is covered by the harness.
+    settings = get_settings().model_copy(update={"localprice_api_key": ""})
+    result = live_smoke._check_localprice(settings)
+    assert result.status == live_smoke.SKIP
+    assert "LOCALPRICE_API_KEY" in result.detail
+
+
+def test_live_smoke_workflow_is_wired_with_exact_secret_names():
+    # The audit's finding: the harness was wired to NO workflow. Lock the
+    # workflow_dispatch lane and its exact env-var names (they must match the
+    # settings the code reads, or the secrets never reach a live check).
+    from pathlib import Path
+
+    wf = Path(__file__).resolve().parents[3] / ".github" / "workflows" / "live-smoke.yml"
+    text = wf.read_text()
+    assert "workflow_dispatch:" in text
+    for var in (
+        "ANTHROPIC_API_KEY",
+        "COMTRADE_API_KEY",
+        "LOCALPRICE_API_KEY",
+        "SMARTLEAD_API_KEY",
+        "GOOGLE_OAUTH_CLIENT_ID",
+        "MICROSOFT_OAUTH_CLIENT_ID",
+    ):
+        assert f"{var}: ${{{{ secrets.{var} }}}}" in text, var
+
+
 def test_smartlead_send_is_never_smoke_tested():
     # The sending path must never be auto-exercised (a real cold email). Even with
     # a key present AND the sequence verified it stays SKIP with a manual-pilot note.

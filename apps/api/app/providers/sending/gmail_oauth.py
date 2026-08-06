@@ -153,7 +153,15 @@ class GmailOAuthProvider:
                         headers=self._auth(creds),
                         params={
                             "format": "metadata",
-                            "metadataHeaders": ["From", "To", "Subject", "In-Reply-To", "Date"],
+                            "metadataHeaders": [
+                                "From",
+                                "To",
+                                "Subject",
+                                "In-Reply-To",
+                                "Date",
+                                # Gmail stamps the failed address here on bounce NDRs.
+                                "X-Failed-Recipients",
+                            ],
                         },
                     )
                     if detail.status_code >= 400:
@@ -199,6 +207,8 @@ class GmailOAuthProvider:
         if headers.get("date"):
             with contextlib.suppress(TypeError, ValueError):
                 received = parsedate_to_datetime(headers["date"])
+        failed = headers.get("x-failed-recipients")
+        failed_recipient = parseaddr(failed)[1].lower() or None if failed else None
         return ReplyMessage(
             from_email=parseaddr(from_hdr)[1].lower(),
             to_email=parseaddr(headers.get("to", ""))[1] or None,
@@ -206,4 +216,5 @@ class GmailOAuthProvider:
             received_at=received,
             provider_message_id=payload.get("id", ""),
             in_reply_to=headers.get("in-reply-to"),
+            failed_recipient=failed_recipient,
         )

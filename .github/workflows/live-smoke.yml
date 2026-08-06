@@ -1,0 +1,71 @@
+# Manual live-smoke gate — prove each vendor adapter against its REAL API.
+#
+# GitHub Actions only runs workflows in the repo-root .github/workflows/. The
+# product's live-smoke harness (apps/api/app/live_smoke.py) was wired to NO
+# workflow, so the live vendor paths (Comtrade funnel, observed prices, Anthropic
+# vision, mailbox OAuth, cold send) were only ever proven by hand. This lane runs
+# that harness on demand with the real keys mirrored from CI secrets.
+#
+# Fail-closed (the PR #83 pattern): every check SKIPs when its key is absent and
+# the run still exits 0, so it is safe to trigger with a partial secret set. The
+# harness NEVER sends a cold email or writes to a database — the Smartlead and
+# mailbox-send paths are reported as GATED/MANUAL and must be proven by a
+# supervised pilot, not automation. Exit is non-zero only if a *configured*
+# provider's live probe FAILED.
+#
+# Trigger: Actions tab → "live-smoke" → Run workflow. Set the secrets below in
+# the repo/org CI secrets, using the EXACT names (they map 1:1 to the settings
+# the code reads, case-insensitive). Any not set simply SKIP.
+
+name: live-smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      json:
+        description: "Emit machine-readable JSON output"
+        type: boolean
+        default: false
+
+jobs:
+  live-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      # Selects live paths (offline fixtures off) for the data providers.
+      COMTRADE_OFFLINE: "0"
+      # --- Vendor keys mirrored 1:1 from CI secrets (exact names) -------------
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      COMTRADE_API_KEY: ${{ secrets.COMTRADE_API_KEY }}
+      LOCALPRICE_API_KEY: ${{ secrets.LOCALPRICE_API_KEY }}
+      LOCALPRICE_API_URL: ${{ secrets.LOCALPRICE_API_URL }}
+      CORESIGNAL_API_KEY: ${{ secrets.CORESIGNAL_API_KEY }}
+      OUTSCRAPER_API_KEY: ${{ secrets.OUTSCRAPER_API_KEY }}
+      APOLLO_API_KEY: ${{ secrets.APOLLO_API_KEY }}
+      ZEROBOUNCE_API_KEY: ${{ secrets.ZEROBOUNCE_API_KEY }}
+      SMARTLEAD_API_KEY: ${{ secrets.SMARTLEAD_API_KEY }}
+      SMARTLEAD_SEQUENCE_VERIFIED: ${{ secrets.SMARTLEAD_SEQUENCE_VERIFIED }}
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      MICROSOFT_OAUTH_CLIENT_ID: ${{ secrets.MICROSOFT_OAUTH_CLIENT_ID }}
+      MICROSOFT_OAUTH_CLIENT_SECRET: ${{ secrets.MICROSOFT_OAUTH_CLIENT_SECRET }}
+      # The harness needs a settings object; a throwaway secret is fine (no DB use).
+      SECRET_KEY: ci-live-smoke-secret-key-at-least-32-bytes
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - name: Sync dependencies
+        run: uv sync --extra dev
+      - name: Run live-smoke (fail-closed; never sends)
+        run: |
+          if [ "${{ inputs.json }}" = "true" ]; then
+            uv run python -m app.live_smoke --json
+          else
+            uv run python -m app.live_smoke
+          fi

@@ -44,6 +44,12 @@ jobs:
           filters: |
             api:
               - "apps/api/**"
+              # apps/api has editable path-deps on these and imports engine
+              # modules in-process (locked decision #2), so a change to either
+              # must re-run the API suite — otherwise the integration seam the
+              # monorepo exists for is only tested after merge, on main.
+              - "packages/silk_intel/**"
+              - "packages/contracts/**"
               - ".github/workflows/ci.yml"
             web:
               - "apps/web/**"

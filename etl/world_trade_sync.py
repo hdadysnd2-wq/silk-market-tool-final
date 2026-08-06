@@ -203,9 +203,18 @@ def _fetch_world_imports(
     them). A year whose fetch fails contributes no value (a declared gap, I1) —
     never a fabricated figure.
 
-    ⚠️ Live-verification step: the exact ``comtradeapicall`` entry point and the
-    returned column names must be confirmed against the live API before first use
-    (see etl/README.md). Kept deliberately small and defensive.
+    Wiring: the product triggers this via ``app.workers.tasks.sync_world_trade``
+    (fail-closed on a real ``COMTRADE_API_KEY``) — on demand when an analysis hits
+    an HS6 with no coverage, and on a daily scheduled sweep for confirmed HS6
+    codes. The world funnel now fails loudly on missing coverage instead of
+    returning a silent empty shortlist.
+
+    ⚠️ One-time operator live-verification (cannot be done offline): the exact
+    ``comtradeapicall`` entry point (``getFinalData``) and the returned column
+    names (``reporterISO`` / ``primaryValue`` / ``qty``) must be confirmed against
+    the live API on the first real run with the Railway ``COMTRADE_API_KEY`` — the
+    fail-closed guard keeps every offline/CI path from ever calling it. Kept
+    deliberately small and defensive.
     """
     import comtradeapicall  # (lazy, etl-only — I7)
     import pandas as pd  # (lazy, etl-only — I7)

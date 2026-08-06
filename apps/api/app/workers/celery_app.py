@@ -34,7 +34,18 @@ celery_app.conf.update(
     timezone="UTC",
     task_track_started=True,
     task_acks_late=True,
+    # A task whose worker process is killed (OOM/SIGKILL) is redelivered rather
+    # than silently acked-and-lost; safe because the send path claims its row
+    # before egress (services.sending) and pipeline tasks are idempotent/retried.
+    task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
+    # Keep Redis from redelivering a still-running task before it finishes.
+    broker_transport_options={
+        "visibility_timeout": settings.broker_visibility_timeout_seconds,
+    },
+    # A hung vendor/LLM call must not hold a prefetch-1 worker slot forever.
+    task_soft_time_limit=settings.task_soft_time_limit_seconds,
+    task_time_limit=settings.task_time_limit_seconds,
     task_always_eager=_EAGER,
     task_eager_propagates=_EAGER,
 )
@@ -63,6 +74,18 @@ celery_app.conf.beat_schedule = {
     "poll-replies": {
         "task": "app.workers.tasks.poll_replies",
         "schedule": crontab(minute="*/15"),
+    },
+    "reap-stale-sends": {
+        "task": "app.workers.tasks.reap_stale_sends",
+        "schedule": crontab(minute="*/10"),
+    },
+    "reconcile-stuck-analyses": {
+        "task": "app.workers.tasks.reconcile_stuck_analyses",
+        "schedule": crontab(minute="*/15"),
+    },
+    "refresh-world-trade-daily": {
+        "task": "app.workers.tasks.refresh_world_trade",
+        "schedule": crontab(hour=2, minute=0),
     },
     "pdpl-retention-daily": {
         "task": "app.workers.tasks.run_pdpl_retention",

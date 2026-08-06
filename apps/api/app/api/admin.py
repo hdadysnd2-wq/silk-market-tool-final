@@ -40,6 +40,7 @@ from app.schemas.common import (
 )
 from app.security import hash_password, require_roles, require_staff
 from app.services import audit, auth_service, retention, suppression
+from app.services import users as users_service
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_staff)])
 
@@ -131,11 +132,12 @@ def create_user(
     db: DbDep,
     actor: User = Depends(require_admin),
 ) -> UserAdminOut:
-    email = payload.email.lower().strip()
+    email = users_service.normalize_email(payload.email)
     if db.scalar(select(User).where(User.email == email)) is not None:
         raise HTTPException(status_code=409, detail="Email already in use")
     factory_id = _factory_for_role(db, payload.role, payload.factory_id)
-    user = User(
+    user = users_service.create_user(
+        db,
         email=email,
         full_name=payload.full_name,
         role=payload.role,
@@ -144,17 +146,7 @@ def create_user(
         # Unusable credential — the user gains access via the OTP/reset flow.
         # No password is ever accepted from or returned to the caller.
         password_hash=hash_password(secrets.token_urlsafe(32)),
-        is_active=True,
-    )
-    db.add(user)
-    db.flush()
-    audit.record(
-        db,
-        action="user.created",
-        entity_type="user",
-        entity_id=user.id,
         actor=actor,
-        payload={"email": email, "role": payload.role.value},
     )
     db.commit()
     return UserAdminOut.model_validate(user)

@@ -18,6 +18,7 @@ from app.schemas.auth import (
 )
 from app.security import CurrentUser, create_access_token, hash_password, verify_password
 from app.services import audit, auth_service, rate_limit
+from app.services.users import normalize_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -43,7 +44,7 @@ def _client_ip(request: Request) -> str:
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, request: Request, db: DbDep) -> TokenResponse:
-    email = payload.email.lower().strip()
+    email = normalize_email(payload.email)
     ip = _client_ip(request)
     # Blunt online password-spraying: cap per IP and per account separately so
     # neither one IP against many accounts nor many IPs against one account slips
@@ -63,7 +64,7 @@ def request_otp(payload: OTPRequest, request: Request, db: DbDep) -> dict:
     from app.config import get_settings
     from app.models import User
 
-    email = payload.email.lower().strip()
+    email = normalize_email(payload.email)
     ip = _client_ip(request)
     rate_limit.check(f"otp_request:ip:{ip}", limit=15, window_seconds=300)
     rate_limit.check(f"otp_request:acct:{email}", limit=6, window_seconds=300)
@@ -90,7 +91,7 @@ def verify_otp(payload: OTPVerifyRequest, request: Request, db: DbDep) -> TokenR
 
     from app.models import User
 
-    email = payload.email.lower().strip()
+    email = normalize_email(payload.email)
     ip = _client_ip(request)
     rate_limit.check(f"otp_verify:ip:{ip}", limit=20, window_seconds=300)
     rate_limit.check(f"otp_verify:acct:{email}", limit=12, window_seconds=300)

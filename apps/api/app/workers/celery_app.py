@@ -43,6 +43,9 @@ celery_app.conf.update(
     broker_transport_options={
         "visibility_timeout": settings.broker_visibility_timeout_seconds,
     },
+    # A hung vendor/LLM call must not hold a prefetch-1 worker slot forever.
+    task_soft_time_limit=settings.task_soft_time_limit_seconds,
+    task_time_limit=settings.task_time_limit_seconds,
     task_always_eager=_EAGER,
     task_eager_propagates=_EAGER,
 )
@@ -75,6 +78,10 @@ celery_app.conf.beat_schedule = {
     "reap-stale-sends": {
         "task": "app.workers.tasks.reap_stale_sends",
         "schedule": crontab(minute="*/10"),
+    },
+    "reconcile-stuck-analyses": {
+        "task": "app.workers.tasks.reconcile_stuck_analyses",
+        "schedule": crontab(minute="*/15"),
     },
     "pdpl-retention-daily": {
         "task": "app.workers.tasks.run_pdpl_retention",

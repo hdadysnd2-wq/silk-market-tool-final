@@ -59,6 +59,9 @@ class AnalysisOut(BaseModel):
     product_name: str
     status: str
     deepen: bool
+    #: Why a pipeline stage failed (only set when ``status`` is ``failed``) so the
+    #: UI can show a terminal state and offer a re-run instead of polling forever.
+    failure_reason: str | None = None
     created_at: datetime
     #: Markets screened worldwide in Stage 1 — the real world count behind the
     #: funnel ("screened N → shortlisted M → top 5"). None for older runs.

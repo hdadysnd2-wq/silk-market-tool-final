@@ -128,6 +128,13 @@ class Settings(BaseSettings):
     # Celery broker visibility timeout — must exceed the longest task so Redis
     # does not redeliver a still-running task. Kept well above send/pipeline work.
     broker_visibility_timeout_seconds: int = 3600
+    # An analysis left in a non-terminal status longer than this (no worker
+    # progress) is reconciled to ``failed`` so the funnel never stalls silently.
+    analysis_stuck_minutes: int = 30
+    # Hard/soft ceilings on any single Celery task, so a hung vendor/LLM call
+    # cannot occupy a worker slot forever.
+    task_soft_time_limit_seconds: int = 600
+    task_time_limit_seconds: int = 660
 
     # Deliverability guardrails
     max_emails_per_inbox_per_day: int = 50

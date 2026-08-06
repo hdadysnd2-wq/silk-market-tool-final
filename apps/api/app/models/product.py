@@ -59,6 +59,9 @@ class Product(UUIDMixin, TimestampMixin, Base):
     classification_status: Mapped[str] = mapped_column(
         String(24), default="pending", nullable=False
     )  # pending | classified | failed
+    #: Human-readable reason the intake pipeline failed (set on the terminal
+    #: ``failed`` status so the UI can explain, and offer retry / manual entry).
+    failure_reason: Mapped[str | None] = mapped_column(String(500))
 
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
 

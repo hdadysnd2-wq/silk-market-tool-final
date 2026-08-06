@@ -34,7 +34,10 @@ class Analysis(UUIDMixin, TimestampMixin, Base):
     product_name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(
         String(24), default="pending", nullable=False
-    )  # pending | classified | failed
+    )  # pending | classified | ranked | enriched | deepened | failed
+    #: Human-readable reason a pipeline stage failed (set with the terminal
+    #: ``failed`` status so the operator/UI sees why instead of a silent stall).
+    failure_reason: Mapped[str | None] = mapped_column(String(500))
     #: Whether this run activated the paid /deepen scope (I5). Recorded for audit.
     deepen: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     #: Total markets screened worldwide in Stage 1 (funnel transparency): lets the

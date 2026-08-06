@@ -57,7 +57,16 @@ export interface Product {
   hs_candidates: HSCandidate[] | null;
   hs_confirmed_by_user: boolean;
   classification_status: string;
+  failure_reason: string | null;
   created_at: string;
+}
+
+export interface HSCodeResult {
+  code: string;
+  level: number;
+  description_en: string;
+  description_ar: string;
+  sector: string | null;
 }
 
 // Async 202 envelope for product create/classify: the pipeline step was accepted

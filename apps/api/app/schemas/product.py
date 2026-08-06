@@ -32,6 +32,9 @@ class ProductOut(BaseModel):
     hs_candidates: list[HSCandidate] | None
     hs_confirmed_by_user: bool
     classification_status: str
+    #: Why classification failed (only set when ``classification_status`` is
+    #: ``failed``) — lets the UI explain and offer retry / manual HS entry.
+    failure_reason: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

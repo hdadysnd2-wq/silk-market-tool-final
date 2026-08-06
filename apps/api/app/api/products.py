@@ -10,7 +10,7 @@ from app.models import HSCode, Product
 from app.models.product import Product as ProductModel
 from app.schemas.product import HSCodeOut, HSConfirmRequest, ProductAccepted, ProductOut
 from app.security import CurrentUser
-from app.services import hs_classifier
+from app.services import engine, hs_classifier
 from app.services.storage import get_storage, new_image_key
 from app.workers.tasks import process_product_intake
 
@@ -149,11 +149,30 @@ def confirm_hs(
     user: CurrentUser,
     product: ProductModel = Depends(get_owned_product),
 ) -> ProductOut:
+    """Confirm the product's HS6 (the single writer of ``hs_code``, invariant I2).
+
+    Accepts any structurally valid HS6 — not only the small seeded catalogue — so
+    the manual-entry fallback works when the classifier failed to propose a match.
+    A code absent from the local catalogue is backfilled from the engine's WCO
+    reference (official description, real sourced data), then confirmed.
+    """
     if db.get(HSCode, payload.hs_code) is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unknown HS code {payload.hs_code}",
+        is_valid, description = engine.hs6_reference(payload.hs_code)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid HS6 code {payload.hs_code}",
+            )
+        db.add(
+            HSCode(
+                code=payload.hs_code,
+                level=6,
+                parent_code=payload.hs_code[:4],
+                description_en=description or f"HS {payload.hs_code}",
+                description_ar=description or f"رمز {payload.hs_code}",
+            )
         )
+        db.flush()
     hs_classifier.confirm_hs_code(db, product, payload.hs_code, user.id)
     db.commit()
     return ProductOut.model_validate(product)

@@ -10,14 +10,82 @@ from __future__ import annotations
 
 import uuid
 
+import httpx
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError, OperationalError
 
-from app.db import session_scope
+from app.db import SessionLocal, session_scope
 from app.logging import get_logger
 from app.providers.registry import get_llm_provider, get_sending_provider
 from app.workers.celery_app import celery_app
 
 log = get_logger(__name__)
+
+#: Errors worth retrying with backoff — transient infrastructure/vendor faults
+#: (network blips, timeouts, 429/5xx, dropped DB connections). Everything else is
+#: treated as a permanent failure and marked failed immediately (no retry storm).
+_TRANSIENT_EXC = (
+    httpx.TimeoutException,
+    httpx.TransportError,
+    httpx.HTTPStatusError,
+    OperationalError,
+    DBAPIError,
+    ConnectionError,
+    TimeoutError,
+)
+#: Retry policy for the pipeline tasks.
+_MAX_RETRIES = 3
+_RETRY_BACKOFF = 5  # seconds, doubled each attempt (5s, 10s, 20s)
+
+
+def _is_transient(exc: Exception) -> bool:
+    if isinstance(exc, httpx.HTTPStatusError):
+        # Only 429 + 5xx are transient; a 4xx (bad request/auth) will not fix
+        # itself on retry.
+        return exc.response.status_code == 429 or exc.response.status_code >= 500
+    return isinstance(exc, _TRANSIENT_EXC)
+
+
+def _mark_product_failed(product_id: str, reason: str) -> None:
+    """Persist a terminal failure on a product in its own short transaction."""
+    from app.models import Product
+
+    with session_scope() as db:
+        product = db.get(Product, uuid.UUID(product_id))
+        if product is not None:
+            product.classification_status = "failed"
+            product.failure_reason = reason[:500]
+
+
+def _mark_analysis_failed(analysis_id: str, reason: str) -> None:
+    """Persist a terminal failure on an analysis in its own short transaction."""
+    from app.models import Analysis
+
+    with session_scope() as db:
+        analysis = db.get(Analysis, uuid.UUID(analysis_id))
+        if analysis is not None:
+            analysis.status = "failed"
+            analysis.failure_reason = reason[:500]
+
+
+def _handle_pipeline_failure(task, analysis_id: str, stage: str, exc: Exception):
+    """Retry a transient analysis-stage fault, else mark it failed and re-raise.
+
+    Shared by the three world-funnel stage tasks. ``session_scope`` has already
+    rolled back the failed transaction; this opens a fresh one only to record the
+    terminal state, so the failure is always persisted and visible.
+    """
+    if _is_transient(exc) and task.request.retries < _MAX_RETRIES:
+        log.warning(
+            f"{stage}_retry",
+            analysis_id=analysis_id,
+            attempt=task.request.retries + 1,
+            error=str(exc),
+        )
+        raise task.retry(exc=exc, countdown=_RETRY_BACKOFF * (2**task.request.retries))
+    log.error(f"{stage}_failed", analysis_id=analysis_id, error=str(exc))
+    _mark_analysis_failed(analysis_id, f"{stage}: {type(exc).__name__}: {exc}")
+    raise exc
 
 
 @celery_app.task(name="app.workers.tasks.run_discovery")
@@ -103,8 +171,12 @@ def run_hs_analysis(product_id: str, deepen: bool = False) -> dict:
         }
 
 
-@celery_app.task(name="app.workers.tasks.process_product_intake")
-def process_product_intake(product_id: str, deepen: bool = False) -> dict:
+@celery_app.task(
+    bind=True,
+    name="app.workers.tasks.process_product_intake",
+    max_retries=_MAX_RETRIES,
+)
+def process_product_intake(self, product_id: str, deepen: bool = False) -> dict:
     """Pipeline steps 1-2 for one product: vision → HS proposal → embedding (I5).
 
     Mirrors the old inline body of ``products.create_product`` exactly, but in the
@@ -115,10 +187,14 @@ def process_product_intake(product_id: str, deepen: bool = False) -> dict:
     (I2 — proposal only, ``product.hs_code`` is never set here), and the product
     embedding is computed exactly as the inline route did. Opens its own session
     and commits on success.
+
+    On a transient vendor/DB fault it retries with backoff; on a permanent fault
+    (or once retries are exhausted) it records a terminal ``failed`` status with a
+    reason so the UI reaches a terminal state instead of polling ``pending``
+    forever — and the user can retry or enter an HS code manually.
     """
     import uuid as _uuid
 
-    from app.db import SessionLocal
     from app.models import Product
     from app.providers.registry import get_embedding_provider, get_llm_provider
     from app.services import engine, hs_classifier, product_vision
@@ -141,12 +217,27 @@ def process_product_intake(product_id: str, deepen: bool = False) -> dict:
             "classification_status": product.classification_status,
             "deepen": deepen,
         }
+    except Exception as exc:
+        db.rollback()
+        if _is_transient(exc) and self.request.retries < _MAX_RETRIES:
+            log.warning(
+                "product_intake_retry",
+                product_id=product_id,
+                attempt=self.request.retries + 1,
+                error=str(exc),
+            )
+            raise self.retry(exc=exc, countdown=_RETRY_BACKOFF * (2**self.request.retries)) from exc
+        log.error("product_intake_failed", product_id=product_id, error=str(exc))
+        _mark_product_failed(product_id, f"{type(exc).__name__}: {exc}")
+        raise
     finally:
         db.close()
 
 
-@celery_app.task(name="app.workers.tasks.run_world_ranking")
-def run_world_ranking(analysis_id: str, hs6: str, top_n: int = 20, deepen: bool = False) -> dict:
+@celery_app.task(bind=True, name="app.workers.tasks.run_world_ranking", max_retries=_MAX_RETRIES)
+def run_world_ranking(
+    self, analysis_id: str, hs6: str, top_n: int = 20, deepen: bool = False
+) -> dict:
     """Screen the world for a confirmed HS6 and persist the country shortlist.
 
     Stage 1 of the world funnel: reads the precomputed ``world_trade`` table and
@@ -155,6 +246,9 @@ def run_world_ranking(analysis_id: str, hs6: str, top_n: int = 20, deepen: bool 
     passes it explicitly; this task never re-classifies. The ``/deepen`` scope is
     re-established from the explicit ``deepen`` payload flag (I5) so any budgeted
     paid enrichment folded into the screen is gated in-process.
+
+    Retries transient faults with backoff; on permanent failure marks the
+    analysis ``failed`` (with a reason) so it never stalls in a non-terminal state.
     """
     import uuid as _uuid
 
@@ -163,29 +257,33 @@ def run_world_ranking(analysis_id: str, hs6: str, top_n: int = 20, deepen: bool 
     from app.services.api_budget import budget_scope
     from app.services.ranking import rank_and_persist
 
-    with session_scope() as db:
-        analysis = db.get(Analysis, _uuid.UUID(analysis_id))
-        if analysis is None:
-            return {"error": "analysis not found"}
-        # Stage 1 is a local SQL screen (no live calls), but the same scope caps
-        # the budgeted live enrichment that Stages 2-3 add on top (decision #5),
-        # and the deepen scope (I5) gates the paid engine agents behind /deepen.
-        with engine.deepen_scope(deepen), budget_scope(label=f"ranking:{analysis_id}:{hs6}"):
-            rankings = rank_and_persist(db, analysis, hs6, top_n=top_n)
-            if analysis.status in ("pending", "classified"):
-                analysis.status = "ranked"
-        db.flush()
-        return {
-            "analysis_id": analysis_id,
-            "hs6": hs6,
-            "ranked": len(rankings),
-            "top5": [r.importer_iso3 for r in rankings[:5]],
-            "deepen": deepen,
-        }
+    try:
+        with session_scope() as db:
+            analysis = db.get(Analysis, _uuid.UUID(analysis_id))
+            if analysis is None:
+                return {"error": "analysis not found"}
+            # Stage 1 is a local SQL screen (no live calls), but the same scope
+            # caps the budgeted live enrichment Stages 2-3 add on top (decision
+            # #5), and the deepen scope (I5) gates paid engine agents behind
+            # /deepen.
+            with engine.deepen_scope(deepen), budget_scope(label=f"ranking:{analysis_id}:{hs6}"):
+                rankings = rank_and_persist(db, analysis, hs6, top_n=top_n)
+                if analysis.status in ("pending", "classified"):
+                    analysis.status = "ranked"
+            db.flush()
+            return {
+                "analysis_id": analysis_id,
+                "hs6": hs6,
+                "ranked": len(rankings),
+                "top5": [r.importer_iso3 for r in rankings[:5]],
+                "deepen": deepen,
+            }
+    except Exception as exc:
+        return _handle_pipeline_failure(self, analysis_id, "world_ranking", exc)
 
 
-@celery_app.task(name="app.workers.tasks.run_stage2_enrich")
-def run_stage2_enrich(analysis_id: str, hs6: str, deepen: bool = False) -> dict:
+@celery_app.task(bind=True, name="app.workers.tasks.run_stage2_enrich", max_retries=_MAX_RETRIES)
+def run_stage2_enrich(self, analysis_id: str, hs6: str, deepen: bool = False) -> dict:
     """Funnel Stage 2 in the worker: budgeted enrichment of the shortlist → top 5.
 
     Mirrors ``analyses.enrich_analysis``'s old inline body. The ``/deepen`` scope
@@ -193,11 +291,11 @@ def run_stage2_enrich(analysis_id: str, hs6: str, deepen: bool = False) -> dict:
     the per-analysis API budget (decision #5) is re-opened in-process; inside both
     scopes ``enrich_shortlist`` enriches the persisted Stage-1 shortlist and
     re-ranks it, and the analysis is marked ``enriched``. Opens its own session
-    and commits on success.
+    and commits on success. Retries transient faults; marks ``failed`` on a
+    permanent one.
     """
     import uuid as _uuid
 
-    from app.db import SessionLocal
     from app.models import Analysis
     from app.services import engine
     from app.services.api_budget import budget_scope
@@ -223,12 +321,15 @@ def run_stage2_enrich(analysis_id: str, hs6: str, deepen: bool = False) -> dict:
             "status": analysis.status,
             "deepen": deepen,
         }
+    except Exception as exc:
+        db.rollback()
+        return _handle_pipeline_failure(self, analysis_id, "stage2_enrich", exc)
     finally:
         db.close()
 
 
-@celery_app.task(name="app.workers.tasks.run_stage3_deepdive")
-def run_stage3_deepdive(analysis_id: str, hs6: str, deepen: bool = False) -> dict:
+@celery_app.task(bind=True, name="app.workers.tasks.run_stage3_deepdive", max_retries=_MAX_RETRIES)
+def run_stage3_deepdive(self, analysis_id: str, hs6: str, deepen: bool = False) -> dict:
     """Funnel Stage 3 in the worker: FREE per-market deep-dive of the top-5.
 
     Mirrors ``run_stage2_enrich``'s scope discipline. The ``/deepen`` scope is
@@ -238,11 +339,11 @@ def run_stage3_deepdive(analysis_id: str, hs6: str, deepen: bool = False) -> dic
     in-process. Inside both scopes ``deepdive_shortlist`` deep-dives the persisted
     Stage-2 finalists with the engine's free offline layers (competitors,
     requirements, correlation threads) and the analysis reaches the terminal
-    ``deepened`` status. Opens its own session and commits on success.
+    ``deepened`` status. Opens its own session and commits on success. Retries
+    transient faults; marks ``failed`` on a permanent one.
     """
     import uuid as _uuid
 
-    from app.db import SessionLocal
     from app.models import Analysis, Product
     from app.services import engine
     from app.services.api_budget import budget_scope
@@ -264,6 +365,9 @@ def run_stage3_deepdive(analysis_id: str, hs6: str, deepen: bool = False) -> dic
             "status": analysis.status,
             "deepen": deepen,
         }
+    except Exception as exc:
+        db.rollback()
+        return _handle_pipeline_failure(self, analysis_id, "stage3_deepdive", exc)
     finally:
         db.close()
 
@@ -490,6 +594,44 @@ def reap_stale_sends() -> dict:
     with session_scope() as db:
         reaped = _reap(db, settings.send_claim_stale_seconds)
     return {"reaped": reaped}
+
+
+@celery_app.task(name="app.workers.tasks.reconcile_stuck_analyses")
+def reconcile_stuck_analyses() -> dict:
+    """Fail analyses stuck in a non-terminal status past the staleness window.
+
+    A worker lost to OOM/SIGKILL (or a task that died before marking failure)
+    leaves the analysis in ``pending``/``ranked``/``enriched`` forever. This sweep
+    moves such rows to ``failed`` with a reason so the UI shows a terminal state
+    and the user can re-run — instead of an invisible, permanently broken funnel.
+    """
+    from datetime import timedelta
+
+    from app.config import get_settings
+    from app.models import Analysis, utcnow
+
+    settings = get_settings()
+    cutoff = utcnow() - timedelta(minutes=settings.analysis_stuck_minutes)
+    non_terminal = ("pending", "classified", "ranked", "enriched")
+    failed = 0
+    with session_scope() as db:
+        stuck = db.scalars(
+            select(Analysis).where(
+                Analysis.status.in_(non_terminal),
+                Analysis.updated_at < cutoff,
+            )
+        ).all()
+        for analysis in stuck:
+            prev = analysis.status
+            analysis.status = "failed"
+            analysis.failure_reason = (
+                f"stalled in '{prev}' for over "
+                f"{settings.analysis_stuck_minutes} min (worker lost); please re-run"
+            )
+            failed += 1
+    if failed:
+        log.warning("stuck_analyses_reconciled", count=failed)
+    return {"failed": failed}
 
 
 @celery_app.task(name="app.workers.tasks.advance_warmup")

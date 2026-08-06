@@ -80,6 +80,29 @@ def stage1_screen_score(
     )
 
 
+def hs6_reference(hs6: str) -> tuple[bool, str | None]:
+    """Validate a manually entered HS6 against the engine's WCO reference.
+
+    Returns ``(is_valid, official_description_or_None)``. ``is_valid`` is a purely
+    structural check (six digits + a real WCO chapter that is not domain-excluded)
+    delegated to the engine — so a genuine code missing from the platform's small
+    seed catalogue is still accepted. The description, when present, is the
+    official WCO reference text (real, sourced data — not fabricated, I1); it is
+    ``None`` when the code is valid but outside the reference sample.
+    """
+    import silk_hs_resolver
+
+    code = (hs6 or "").strip()
+    if len(code) != 6 or not code.isdigit():
+        return False, None
+    if not silk_hs_resolver.chapter_valid(code):
+        return False, None
+    if silk_hs_resolver.exclusion_note(code) is not None:
+        return False, None
+    description = silk_hs_resolver.official_description(code) or None
+    return True, description
+
+
 @contextlib.contextmanager
 def deepen_scope(deepen: bool) -> Iterator[None]:
     """Re-establish the engine's ``/deepen`` context inside a worker (I5).

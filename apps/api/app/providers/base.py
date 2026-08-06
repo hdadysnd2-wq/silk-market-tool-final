@@ -273,7 +273,13 @@ class MailboxIdentity:
 
 @dataclass(frozen=True)
 class ReplyMessage:
-    """An inbound reply detected in a connected mailbox (read scope)."""
+    """An inbound message detected in a connected mailbox (read scope).
+
+    This also carries delivery-failure notifications (NDRs / bounces): when the
+    message is a non-delivery report, ``failed_recipient`` holds the address that
+    could not be delivered to (parsed from ``X-Failed-Recipients`` / the report),
+    and the reply/bounce split is decided in ``services.replies``.
+    """
 
     from_email: str
     to_email: str | None
@@ -281,6 +287,8 @@ class ReplyMessage:
     received_at: datetime
     provider_message_id: str
     in_reply_to: str | None = None
+    #: Set only for delivery-failure notifications — the address that bounced.
+    failed_recipient: str | None = None
 
 
 @dataclass(frozen=True)

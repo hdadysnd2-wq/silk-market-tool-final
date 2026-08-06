@@ -475,6 +475,23 @@ def poll_replies() -> dict:
     return {"mailboxes_polled": polled, "replies_matched": matched}
 
 
+@celery_app.task(name="app.workers.tasks.reap_stale_sends")
+def reap_stale_sends() -> dict:
+    """Resolve email sends stuck mid-flight after a worker was lost.
+
+    See ``services.sending.reap_stale_sends`` — interrupted claims are moved to a
+    terminal state (never auto-retried) so a possibly-delivered message is not
+    sent twice, and the factory is notified so it is not an invisible lost sale.
+    """
+    from app.config import get_settings
+    from app.services.sending import reap_stale_sends as _reap
+
+    settings = get_settings()
+    with session_scope() as db:
+        reaped = _reap(db, settings.send_claim_stale_seconds)
+    return {"reaped": reaped}
+
+
 @celery_app.task(name="app.workers.tasks.advance_warmup")
 def advance_warmup() -> dict:
     from app.config import get_settings

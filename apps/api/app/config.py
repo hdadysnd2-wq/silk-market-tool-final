@@ -122,6 +122,12 @@ class Settings(BaseSettings):
     sender_default_daily_limit: int = 50
     # How far back the reply-detection beat looks when polling a mailbox.
     reply_poll_lookback_minutes: int = 120
+    # A send claimed for egress (status ``sending``) but not resolved within this
+    # many seconds is treated as interrupted and reaped (never auto-retried).
+    send_claim_stale_seconds: int = 900
+    # Celery broker visibility timeout — must exceed the longest task so Redis
+    # does not redeliver a still-running task. Kept well above send/pipeline work.
+    broker_visibility_timeout_seconds: int = 3600
 
     # Deliverability guardrails
     max_emails_per_inbox_per_day: int = 50

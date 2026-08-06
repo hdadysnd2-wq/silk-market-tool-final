@@ -97,6 +97,9 @@ class Email(UUIDMixin, TimestampMixin, Base):
     edited_by_user: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     queued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: When the send worker claimed this row for egress (status → ``sending``).
+    #: A stale claim is how the reaper finds sends interrupted mid-flight.
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     replied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -39,6 +39,26 @@ def register(payload: RegisterRequest, db: DbDep) -> TokenResponse:
 
 
 def _client_ip(request: Request) -> str:
+    """Resolve the real client IP, honoring trusted reverse proxies.
+
+    Behind a proxy (``TRUSTED_PROXY_COUNT`` > 0) the direct peer is the proxy, so
+    ``request.client.host`` is the SAME for every user — collapsing the per-IP
+    auth throttles into one global bucket (20 junk logins would lock everyone
+    out). We instead read ``X-Forwarded-For`` and take the entry the outermost
+    trusted proxy observed, counting ``trusted_proxy_count`` hops from the RIGHT.
+    Counting from the right is spoof-resistant: a client can prepend fake entries,
+    but the proxy always appends the address it actually saw, so those fakes are
+    never selected. With 0 trusted proxies (local/CI) we trust only the peer.
+    """
+    from app.config import get_settings
+
+    n = get_settings().trusted_proxy_count
+    if n > 0:
+        xff = request.headers.get("x-forwarded-for")
+        if xff:
+            parts = [p.strip() for p in xff.split(",") if p.strip()]
+            if len(parts) >= n:
+                return parts[-n]
     return request.client.host if request.client else "unknown"
 
 

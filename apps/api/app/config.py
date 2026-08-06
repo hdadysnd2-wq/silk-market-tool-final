@@ -48,6 +48,15 @@ class Settings(BaseSettings):
     # worker. Set this to 1 on such deploys so a misconfigured local backend fails
     # loudly at startup instead of silently classifying every product text-only.
     require_object_storage: bool = False
+
+    # Number of trusted reverse proxies in front of the API (e.g. the Railway
+    # edge = 1). When > 0, the real client IP is read from X-Forwarded-For by
+    # counting this many hops from the right (spoof-resistant: extra left-hand
+    # entries a client injects are ignored). 0 (the default) trusts only the
+    # direct peer — correct for local/CI, but behind a proxy every client shares
+    # the proxy's IP, which collapses the per-IP auth throttles into one global
+    # bucket (an unauthenticated login-lockout DoS). Set to 1 on Railway.
+    trusted_proxy_count: int = 0
     s3_endpoint_url: str = "http://localhost:9000"
     s3_bucket: str = "silk-products"
     s3_access_key: str = "minioadmin"

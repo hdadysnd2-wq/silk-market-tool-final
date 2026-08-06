@@ -66,3 +66,31 @@ def test_create_product_endpoint_returns_attributes(client, auth_headers, db, fa
     body = client.get(f"/api/v1/products/{accepted['product']['id']}", headers=auth_headers).json()
     assert body["attributes"]  # the vision pass populated attributes
     assert body["description_en"]  # and filled a description
+
+
+def test_vision_failure_does_not_block_hs_classification(client, auth_headers, monkeypatch):
+    # A live LLM error (bad ANTHROPIC_MODEL, timeout, 4xx/5xx) in the vision step
+    # must NOT crash intake or leave the product un-classified: HS is name-based
+    # (the engine resolver, no LLM), so it must still be proposed.
+    from app.services import product_vision
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("Anthropic error: model not found")
+
+    monkeypatch.setattr(product_vision, "describe_product", boom)
+
+    res = client.post(
+        "/api/v1/products",
+        headers=auth_headers,
+        data={"name_ar": "عسل السدر", "name_en": "Sidr Honey", "classify": "true"},
+    )
+    # The POST does not 500 (the task no longer propagates the vision crash)…
+    assert res.status_code == 202, res.text
+    product_id = res.json()["product"]["id"]
+
+    body = client.get(f"/api/v1/products/{product_id}", headers=auth_headers).json()
+    # …and HS classification still ran to completion despite vision failing.
+    assert body["classification_status"] == "classified"
+    assert body["hs_candidates"]  # name-based candidates were proposed
+    # Vision was skipped, so its enrichment is simply absent — a declared gap.
+    assert not body["attributes"]

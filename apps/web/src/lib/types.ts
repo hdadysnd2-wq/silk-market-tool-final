@@ -223,6 +223,10 @@ export interface MarginThread {
   hs_code: string | null;
   market_iso2: string;
   factory_offer: number | null;
+  /** Real factory-declared per-unit cost when on file (else null) — the margin basis when present. */
+  cost_per_unit: number | null;
+  /** Which basis the margins used: "actual_cost", "offer_estimate", or null (neither on file). */
+  margin_basis: "actual_cost" | "offer_estimate" | null;
   factory_currency: string | null;
   median_observed_price: number | null;
   median_margin_pct: number | null;

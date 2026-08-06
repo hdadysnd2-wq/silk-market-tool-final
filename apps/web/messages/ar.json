@@ -58,6 +58,7 @@
     "descriptionEn": "الوصف",
     "priceMin": "أقل سعر",
     "priceMax": "أعلى سعر",
+    "costPerUnit": "تكلفة الوحدة",
     "image": "صورة المنتج",
     "hsCode": "الرمز الجمركي (HS)",
     "hsSuggestions": "الرموز الجمركية المقترحة",
@@ -93,7 +94,9 @@
     "factoryOffer": "عرضك",
     "medianObserved": "وسيط سعر السوق",
     "medianMargin": "وسيط الهامش",
-    "marginLabel": "هامش"
+    "marginLabel": "هامش",
+    "basisActual": "مقابل التكلفة الفعلية",
+    "basisEstimate": "مقابل سعر العرض التقديري"
   },
   "funnel": {
     "title": "قمع الأسواق العالمية",

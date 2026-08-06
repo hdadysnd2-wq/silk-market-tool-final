@@ -4,21 +4,22 @@ Items consciously deferred during the governance-first consolidation onto `main`
 Each is a future short-lived-branch increment, sequenced after the pre-go-live
 gate items. Recording them here so nothing unique is silently dropped.
 
-## From closed PR #39 — real per-unit cost input (`Product.cost_per_unit`)
+## ✅ DONE — real per-unit cost input (`Product.cost_per_unit`) (from closed PR #39)
 
-`main` computes competitor margins as **estimated gross headroom** (observed
-competitor price vs. a modeled cost). PR #39 (closed as a superseded margin
-variant — it duplicated `services/margin.py` and collided with the `0009`
-migration) carried one distinct idea worth keeping: a **real factory-supplied
-`Product.cost_per_unit`** so the margin thread can show an *actual* margin, not an
-estimate.
+`main` previously computed competitor margins only as **estimated gross headroom**
+(observed competitor price vs. the offer-price midpoint). PR #39 (closed as a
+superseded margin variant — it duplicated `services/margin.py` and collided with
+the `0009` migration) carried one distinct idea worth keeping: a **real
+factory-supplied `Product.cost_per_unit`** so the margin thread can show an
+*actual* margin, not an estimate.
 
-- **Scope when picked up:** add a nullable `cost_per_unit` column to `Product`
-  (its own migration on top of `main`'s current head — no `0009` collision), let
-  the product form capture it, and have `services/margin.py` prefer the real cost
-  when present and fall back to the estimate otherwise (still returning the
-  unified contract envelope, I1). One classifier / one margin service — do **not**
-  re-introduce a second `margins.py`.
+- **Delivered:** nullable `cost_per_unit` column on `Product` (migration `0015`,
+  on top of `0014` — no `0009` collision); captured by the product create form
+  (API multipart + the web upload dialog); `services/margin.py` now prefers the
+  real cost when present and falls back to the offer estimate otherwise, reporting
+  which via `margin_basis` (`actual_cost` / `offer_estimate` / `null`) and spelling
+  it out in the limits (still the unified declared-gap envelope, I1). One margin
+  service — no second `margins.py`.
 
 ## Deferred — retire the engine's static `web/` + `netlify.toml` (KILL-after-P2)
 

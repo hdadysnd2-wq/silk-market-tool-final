@@ -95,6 +95,12 @@ class MarginThreadOut(BaseModel):
     hs_code: str | None
     market_iso2: str
     factory_offer: float | None
+    #: Real factory-declared per-unit cost when on file (else None). When present
+    #: it — not the offer — is the margin basis.
+    cost_per_unit: float | None = None
+    #: Which basis the margins were computed against: "actual_cost" (real cost on
+    #: file), "offer_estimate" (offer midpoint), or None (neither — a declared gap).
+    margin_basis: str | None = None
     factory_currency: str | None
     median_observed_price: float | None
     median_margin_pct: float | None

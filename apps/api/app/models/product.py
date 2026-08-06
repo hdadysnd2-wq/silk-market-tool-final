@@ -48,6 +48,10 @@ class Product(UUIDMixin, TimestampMixin, Base):
     image_url: Mapped[str | None] = mapped_column(String(512))
     price_min: Mapped[float | None] = mapped_column(Numeric(14, 2))
     price_max: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    #: Real factory-declared per-unit production cost, in ``currency``. When set,
+    #: the margin thread computes an actual gross margin against it; when null it
+    #: falls back to the offer-price estimate (see services/margin.py).
+    cost_per_unit: Mapped[float | None] = mapped_column(Numeric(14, 2))
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
 
     hs_code: Mapped[str | None] = mapped_column(

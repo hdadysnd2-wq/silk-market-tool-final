@@ -58,6 +58,7 @@
     "descriptionEn": "Description",
     "priceMin": "Min price",
     "priceMax": "Max price",
+    "costPerUnit": "Cost per unit",
     "image": "Product image",
     "hsCode": "HS code",
     "hsSuggestions": "Suggested HS codes",
@@ -93,7 +94,9 @@
     "factoryOffer": "Your offer",
     "medianObserved": "Median market price",
     "medianMargin": "Median margin",
-    "marginLabel": "margin"
+    "marginLabel": "margin",
+    "basisActual": "vs actual cost",
+    "basisEstimate": "vs offer estimate"
   },
   "funnel": {
     "title": "World market funnel",

@@ -155,6 +155,7 @@ function UploadDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
           <Input name="price_min" label={t("priceMin")} type="number" />
           <Input name="price_max" label={t("priceMax")} type="number" />
         </div>
+        <Input name="cost_per_unit" label={t("costPerUnit")} type="number" />
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-gray-700">{t("image")}</span>
           <input

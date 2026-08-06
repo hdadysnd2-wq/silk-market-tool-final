@@ -340,7 +340,11 @@ class PriceProvider(Protocol):
     name: str
 
     def observed_prices(
-        self, hs_code: str, market_iso2: str, limit: int = 10
+        self,
+        hs_code: str,
+        market_iso2: str,
+        limit: int = 10,
+        product_name: str | None = None,
     ) -> list[ProviderRecord[ObservedPrice]]: ...
 
 

@@ -60,10 +60,11 @@ class Settings(BaseSettings):
     market_enrichment_live: bool = False
     # Observed-price layer (paid, deepen-gated). Blank keeps the deterministic
     # MockPriceProvider so CI/offline stays green; a value selects the LIVE
-    # LocalPriceProvider, which routes through the engine's paid LocalPriceAgent.
-    # This field is only the registry's switch signal — the engine agent reads its
-    # own vendor key from the environment; the adapter never passes it.
-    serper_api_key: str = ""
+    # LocalPriceProvider. This MUST be the same key the engine's LocalPriceAgent
+    # reads from the environment (``LOCALPRICE_API_KEY``) — selecting the live
+    # adapter on a different key would pick a provider that then finds no key and
+    # returns nothing (the pre-fix SERPER_API_KEY bug).
+    localprice_api_key: str = ""
     coresignal_api_key: str = ""
     outscraper_api_key: str = ""
     apollo_api_key: str = ""

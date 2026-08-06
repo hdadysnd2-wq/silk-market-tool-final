@@ -70,15 +70,18 @@ def get_comtrade_provider(settings: Settings | None = None):
 def get_price_provider(settings: Settings | None = None) -> PriceProvider:
     """The observed-price layer (paid in production, deepen-gated per I5).
 
-    A vendor key (``SERPER_API_KEY``) selects the LIVE ``LocalPriceProvider``, which
-    routes through the engine's paid ``LocalPriceAgent`` so provenance and the
+    The vendor key (``LOCALPRICE_API_KEY``) selects the LIVE ``LocalPriceProvider``,
+    which routes through the engine's paid ``LocalPriceAgent`` so provenance and the
     paid/deepen guard are inherited (it only ever runs inside the deepen scope, I5;
-    it never fabricates a price, I1). Offline (the default) the deterministic mock
-    stands in so the deepen path runs end to end without keys — keeping CI
-    offline-green.
+    it never fabricates a price, I1). This is the SAME key the engine agent reads
+    from the environment, so selecting the live adapter guarantees the agent can
+    actually fetch (the pre-fix bug switched on SERPER_API_KEY while the agent read
+    LOCALPRICE_API_KEY, so the live path returned nothing). Offline (the default)
+    the deterministic mock stands in so the deepen path runs end to end without
+    keys — keeping CI offline-green.
     """
     settings = settings or get_settings()
-    if settings.serper_api_key:
+    if settings.localprice_api_key:
         from app.providers.pricing.localprice import LocalPriceProvider
 
         return LocalPriceProvider()

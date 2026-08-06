@@ -131,6 +131,11 @@ class Settings(BaseSettings):
     # An analysis left in a non-terminal status longer than this (no worker
     # progress) is reconciled to ``failed`` so the funnel never stalls silently.
     analysis_stuck_minutes: int = 30
+    # world_trade (Stage-1 screening data) coverage refresh: a confirmed HS6 whose
+    # rows are older than this is re-synced from UN Comtrade by the scheduled sweep.
+    # The per-HS6 live sync is fail-closed on a real COMTRADE key (offline demos
+    # never pretend to have live coverage).
+    world_trade_refresh_days: int = 30
     # Hard/soft ceilings on any single Celery task, so a hung vendor/LLM call
     # cannot occupy a worker slot forever.
     task_soft_time_limit_seconds: int = 600

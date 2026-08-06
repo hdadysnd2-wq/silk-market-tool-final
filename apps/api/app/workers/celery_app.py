@@ -83,6 +83,10 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.tasks.reconcile_stuck_analyses",
         "schedule": crontab(minute="*/15"),
     },
+    "refresh-world-trade-daily": {
+        "task": "app.workers.tasks.refresh_world_trade",
+        "schedule": crontab(hour=2, minute=0),
+    },
     "pdpl-retention-daily": {
         "task": "app.workers.tasks.run_pdpl_retention",
         "schedule": crontab(hour=1, minute=30),

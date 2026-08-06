@@ -88,8 +88,32 @@ class Stage1Result:
         }
 
 
+#: Substring marking a ``world_trade`` row as demo-seed data (see seeds/seed.py).
+_DEMO_SOURCE_MARK = "demo seed"
+
+
 def _latest_year(db: Session, hs6: str) -> int | None:
     return db.scalar(select(func.max(WorldTrade.year)).where(WorldTrade.hs6 == hs6))
+
+
+def coverage_state(db: Session, hs6: str) -> str:
+    """Classify the ``world_trade`` coverage for ``hs6``: none | demo | live.
+
+    ``none``  — no rows at all (the screen would silently produce an empty funnel).
+    ``demo``  — rows exist but every one is demo-seed data (not real trade data).
+    ``live``  — at least one row came from a real sync.
+
+    The world funnel uses this to fail loudly on ``none`` and to flag a ``demo``
+    result, instead of presenting demo/absent data as a genuine world screen.
+    """
+    sources = db.scalars(
+        select(func.distinct(WorldTrade.source)).where(WorldTrade.hs6 == hs6)
+    ).all()
+    if not sources:
+        return "none"
+    if all(_DEMO_SOURCE_MARK in (s or "") for s in sources):
+        return "demo"
+    return "live"
 
 
 def screen_world(db: Session, hs6: str, top_n: int = 20) -> Stage1Result:

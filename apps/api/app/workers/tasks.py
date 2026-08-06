@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError, OperationalError
 
 from app.db import SessionLocal, session_scope
@@ -253,7 +253,7 @@ def run_world_ranking(
     import uuid as _uuid
 
     from app.models import Analysis
-    from app.services import engine
+    from app.services import engine, world_funnel
     from app.services.api_budget import budget_scope
     from app.services.ranking import rank_and_persist
 
@@ -262,6 +262,21 @@ def run_world_ranking(
             analysis = db.get(Analysis, _uuid.UUID(analysis_id))
             if analysis is None:
                 return {"error": "analysis not found"}
+            # Fail loudly on missing coverage: an empty world_trade for this HS6
+            # would otherwise produce a silent empty funnel presented as a real
+            # world screen. Mark the analysis failed with an actionable reason and
+            # request a coverage sync so a retry has data.
+            coverage = world_funnel.coverage_state(db, hs6)
+            if coverage == "none":
+                analysis.status = "failed"
+                analysis.failure_reason = (
+                    f"No world-trade data for HS {hs6}. A coverage sync has been "
+                    "requested — please retry in a few minutes."
+                )
+                db.flush()
+                sync_world_trade.delay(hs6)
+                log.warning("world_ranking_no_coverage", analysis_id=analysis_id, hs6=hs6)
+                return {"analysis_id": analysis_id, "hs6": hs6, "coverage": "none", "ranked": 0}
             # Stage 1 is a local SQL screen (no live calls), but the same scope
             # caps the budgeted live enrichment Stages 2-3 add on top (decision
             # #5), and the deepen scope (I5) gates paid engine agents behind
@@ -271,9 +286,15 @@ def run_world_ranking(
                 if analysis.status in ("pending", "classified"):
                     analysis.status = "ranked"
             db.flush()
+            if coverage == "demo":
+                # Real screen structure, demo data underneath — request a live sync
+                # so the next run upgrades it; the caller sees coverage=='demo'.
+                sync_world_trade.delay(hs6)
+                log.warning("world_ranking_demo_coverage", analysis_id=analysis_id, hs6=hs6)
             return {
                 "analysis_id": analysis_id,
                 "hs6": hs6,
+                "coverage": coverage,
                 "ranked": len(rankings),
                 "top5": [r.importer_iso3 for r in rankings[:5]],
                 "deepen": deepen,
@@ -577,6 +598,79 @@ def poll_replies() -> dict:
             matched += replies.poll_account(db, account, provider, creds, since)
             polled += 1
     return {"mailboxes_polled": polled, "replies_matched": matched}
+
+
+@celery_app.task(name="app.workers.tasks.sync_world_trade")
+def sync_world_trade(hs6: str) -> dict:
+    """Refresh ``world_trade`` Stage-1 coverage for one HS6 from UN Comtrade.
+
+    Fail-closed (the PR #83 pattern): the live bulk download runs only when a real
+    ``COMTRADE_API_KEY`` is configured and offline mode is off. Otherwise it does
+    NOT fabricate coverage — it records that live data is unavailable and returns,
+    so an offline/demo deployment never presents synthesized data as a real world
+    screen. The heavy pandas + comtradeapicall download lives in ``etl`` (I7);
+    this task is the product-side trigger that invokes it.
+    """
+    from app.config import get_settings
+
+    settings = get_settings()
+    code = (hs6 or "").strip()
+    if not code:
+        return {"hs6": hs6, "synced": False, "reason": "empty hs6"}
+    if settings.comtrade_offline or not settings.comtrade_api_key:
+        log.warning("world_trade_sync_unavailable", hs6=code, reason="no live comtrade key")
+        return {"hs6": code, "synced": False, "reason": "live comtrade unavailable"}
+    try:
+        from etl import world_trade_sync
+
+        written = world_trade_sync.run(code)
+    except ImportError as exc:
+        # The heavy bulk download lives in the ``etl`` environment (pandas +
+        # comtradeapicall, I7). If that environment is not present, degrade
+        # loudly rather than fabricate coverage.
+        log.error("world_trade_sync_env_missing", hs6=code, error=str(exc))
+        return {"hs6": code, "synced": False, "reason": "etl environment unavailable"}
+    except Exception as exc:  # noqa: BLE001 — a failed sync is a declared gap, not a crash
+        log.error("world_trade_sync_failed", hs6=code, error=str(exc))
+        return {"hs6": code, "synced": False, "reason": str(exc)}
+    log.info("world_trade_synced", hs6=code, rows=written)
+    return {"hs6": code, "synced": True, "rows": written}
+
+
+@celery_app.task(name="app.workers.tasks.refresh_world_trade")
+def refresh_world_trade() -> dict:
+    """Scheduled sweep: re-sync world_trade for HS6 codes in active use.
+
+    Enqueues a per-HS6 :func:`sync_world_trade` for every confirmed product whose
+    coverage is missing or stale (older than ``world_trade_refresh_days``), so the
+    Stage-1 data stays current for the codes customers actually screen. The sync
+    itself is fail-closed, so this is a no-op on an offline/keyless deployment.
+    """
+    from datetime import timedelta
+
+    from app.config import get_settings
+    from app.models import Product, WorldTrade, utcnow
+
+    settings = get_settings()
+    cutoff = utcnow() - timedelta(days=settings.world_trade_refresh_days)
+    requested = 0
+    with session_scope() as db:
+        confirmed_hs6 = set(
+            db.scalars(
+                select(func.distinct(Product.hs_code)).where(
+                    Product.hs_code.is_not(None),
+                    Product.hs_confirmed_by_user.is_(True),
+                )
+            ).all()
+        )
+        for hs6 in confirmed_hs6:
+            newest = db.scalar(select(func.max(WorldTrade.fetched_at)).where(WorldTrade.hs6 == hs6))
+            if newest is None or newest < cutoff:
+                sync_world_trade.delay(hs6)
+                requested += 1
+    if requested:
+        log.info("world_trade_refresh_requested", codes=requested)
+    return {"sync_requested": requested}
 
 
 @celery_app.task(name="app.workers.tasks.reap_stale_sends")

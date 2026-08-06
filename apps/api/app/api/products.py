@@ -68,6 +68,7 @@ async def create_product(
     price_max_val = _coerce_optional_price(price_max, "price_max")
 
     image_url = None
+    image_key = None
     if image is not None:
         # Bounded read: pull at most MAX+1 bytes so an oversized upload is rejected
         # without buffering the whole body.
@@ -85,6 +86,7 @@ async def create_product(
             else "application/octet-stream"
         )
         image_url = storage.put(key, data, ctype)
+        image_key = key  # the worker fetches bytes by this key, not the URL
 
     product = Product(
         factory_id=factory.id,
@@ -93,6 +95,7 @@ async def create_product(
         description_ar=description_ar,
         description_en=description_en,
         image_url=image_url,
+        image_key=image_key,
         price_min=price_min_val,
         price_max=price_max_val,
         currency=currency,

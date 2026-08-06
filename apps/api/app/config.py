@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # Storage
     storage_backend: str = "local"  # "local" | "s3"
     storage_local_dir: str = "./storage"
+    # Multi-container deploys (api + worker as separate services) MUST use object
+    # storage: a local file:// image written by the api is invisible to the
+    # worker. Set this to 1 on such deploys so a misconfigured local backend fails
+    # loudly at startup instead of silently classifying every product text-only.
+    require_object_storage: bool = False
     s3_endpoint_url: str = "http://localhost:9000"
     s3_bucket: str = "silk-products"
     s3_access_key: str = "minioadmin"

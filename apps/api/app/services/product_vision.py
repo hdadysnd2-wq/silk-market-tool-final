@@ -38,32 +38,57 @@ _MEDIA_BY_SUFFIX = {
 def _load_image(product: Product) -> tuple[bytes | None, str]:
     """Load a product image as ``(bytes, media_type)`` — never raises.
 
-    Handles local ``file://`` uploads (media type by extension) and remote
-    ``http(s)://`` URLs (presigned S3/MinIO or public, fetched with redirects
-    followed). Any failure — no URL, missing file, non-2xx response, unknown
-    scheme — degrades to ``(None, "image/jpeg")`` so vision falls back to a
-    text-only description instead of crashing the upload.
+    Primary path: fetch bytes by ``product.image_key`` through the storage
+    interface. This is backend-agnostic and works across containers (S3/MinIO),
+    unlike the old ``file://`` URL which pointed at the API container's disk and
+    was invisible to the worker. Legacy rows with only ``image_url`` fall back to
+    the URL loader (local ``file://`` or remote ``http(s)://``).
+
+    When an image was uploaded but its bytes cannot be retrieved, this is logged
+    LOUDLY at ERROR level (a declared gap, not a silent text-only degradation) so
+    the miss is visible instead of a photo silently going unanalyzed.
     """
     default: tuple[bytes | None, str] = (None, "image/jpeg")
+
+    key = product.image_key
+    if key:
+        from app.services.storage import get_storage
+
+        data = get_storage().get_bytes(key)
+        if data is not None:
+            media = _MEDIA_BY_SUFFIX.get(Path(key).suffix.lower(), "image/jpeg")
+            return data, media
+        log.error(
+            "product_image_unreadable",
+            product_id=str(product.id),
+            image_key=key,
+            detail="image uploaded but bytes could not be loaded; classifying text-only",
+        )
+        return default
+
     url = product.image_url
     if not url:
         return default
     if url.startswith("file://"):
         path = Path(url[len("file://") :])
         if not path.exists():
+            log.error("product_image_unreadable", product_id=str(product.id), url=url)
             return default
         media = _MEDIA_BY_SUFFIX.get(path.suffix.lower(), "image/jpeg")
         try:
             return path.read_bytes(), media
         except OSError:
+            log.error("product_image_unreadable", product_id=str(product.id), url=url)
             return default
     if url.startswith(("http://", "https://")):
         try:
             resp = httpx.get(url, timeout=30, follow_redirects=True)
         except httpx.HTTPError:
+            log.error("product_image_unreadable", product_id=str(product.id), url=url)
             return default
         if resp.status_code // 100 == 2:
             return resp.content, resp.headers.get("content-type", "image/jpeg")
+        log.error("product_image_unreadable", product_id=str(product.id), url=url)
         return default
     return default
 

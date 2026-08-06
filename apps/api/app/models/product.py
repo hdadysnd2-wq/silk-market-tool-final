@@ -45,7 +45,14 @@ class Product(UUIDMixin, TimestampMixin, Base):
     description_en: Mapped[str | None] = mapped_column(Text())
     #: Salient visual attributes from the vision pass ([{name, value}, …]).
     attributes: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    #: Human-visible URL for the image (presigned S3 URL, or a local file:// path
+    #: in dev). Display-only — may expire; never used by the worker to fetch bytes.
     image_url: Mapped[str | None] = mapped_column(String(512))
+    #: Stable storage key (backend-agnostic). The worker fetches image bytes by
+    #: this key through the storage interface, so a multi-container deploy reads
+    #: the same object the API wrote — unlike image_url, which was a file:// path
+    #: on the API container the worker could not read.
+    image_key: Mapped[str | None] = mapped_column(String(512))
     price_min: Mapped[float | None] = mapped_column(Numeric(14, 2))
     price_max: Mapped[float | None] = mapped_column(Numeric(14, 2))
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)

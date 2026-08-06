@@ -247,8 +247,13 @@ else info "adding Redis…"; rw_soft add --database redis; fi
 #   • ${{Postgres.DATABASE_URL}} / ${{Redis.REDIS_URL}} — provisioned above.
 #   • ${{api.RAILWAY_PUBLIC_DOMAIN}} — resolves once you generate a domain for
 #     the api service (§7). API_BASE_URL/APP_BASE_URL/CORS stay correct after.
-# STORAGE_BACKEND=local is ephemeral without a volume; docs/DEPLOY_RAILWAY.md
-# explains attaching one, or switching to STORAGE_BACKEND=s3.
+# STORAGE_BACKEND=local is ephemeral without a volume AND cannot serve product
+# images across services: api and worker are separate containers, so a file://
+# image the api writes is invisible to the worker's vision pass (it degrades to a
+# text-only classification). For image classification to work, switch to
+# STORAGE_BACKEND=s3 with real S3/R2/MinIO credentials and set
+# REQUIRE_OBJECT_STORAGE=1 so a local misconfig fails loudly at startup.
+# docs/DEPLOY_RAILWAY.md has the full object-store setup.
 backend_vars() {
   cat <<EOF
 ENVIRONMENT=production

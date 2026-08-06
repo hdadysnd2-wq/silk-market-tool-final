@@ -39,7 +39,11 @@ log = get_logger(__name__)
 
 
 def unsubscribe_url(token: str) -> str:
-    base = get_settings().app_base_url.rstrip("/")
+    # Must target the API origin: the /u/{token} handlers are mounted on the
+    # FastAPI root, and the web app neither serves nor proxies /u — a link built
+    # from app_base_url 404s for every recipient (and poisons the RFC 8058
+    # List-Unsubscribe headers that reuse this URL).
+    base = get_settings().api_base_url.rstrip("/")
     return f"{base}/u/{token}"
 
 

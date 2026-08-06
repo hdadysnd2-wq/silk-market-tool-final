@@ -21,8 +21,16 @@ from pathlib import Path
 from app.config import get_settings
 from app.providers.registry import get_mailbox_provider, get_sending_provider
 
-# The only adapters allowed to carry cold outreach.
-ALLOWED_SENDING = {"SmartleadSendingProvider", "MockSendingProvider"}
+# The only providers the sending slot may resolve to. Two carry cold outreach
+# (the managed cold vendor and the deterministic mock); the third is the
+# fail-closed gate that refuses every send when Smartlead is configured but its
+# sequence template is unverified. None is a transactional ESP — the point of
+# this guard.
+ALLOWED_SENDING = {
+    "SmartleadSendingProvider",
+    "MockSendingProvider",
+    "GatedSendingProvider",
+}
 ALLOWED_MAILBOX = {"GmailOAuthProvider", "MicrosoftGraphProvider", "MockMailboxProvider"}
 
 # Import names of transactional-ESP SDKs. SES is reached through boto3/botocore,
@@ -45,10 +53,17 @@ SENDING_PKG = Path(__file__).resolve().parents[1] / "app" / "providers" / "sendi
 
 def test_sending_provider_is_never_a_transactional_esp():
     base = get_settings()
-    # With a Smartlead key → managed cold infra; without → the deterministic mock.
-    # Neither branch (nor any key combination) may yield a transactional ESP.
-    for key in ("", "test-smartlead-key"):
-        settings = base.model_copy(update={"smartlead_api_key": key})
+    # Every resolution of the sending slot — no key (mock), key without a verified
+    # sequence (fail-closed gate), and key with a verified sequence (managed cold
+    # infra) — must be an approved provider. No key combination may yield a
+    # transactional ESP.
+    combos = (
+        {"smartlead_api_key": ""},
+        {"smartlead_api_key": "test-smartlead-key"},
+        {"smartlead_api_key": "test-smartlead-key", "smartlead_sequence_verified": True},
+    )
+    for update in combos:
+        settings = base.model_copy(update=update)
         provider = get_sending_provider(settings)
         assert type(provider).__name__ in ALLOWED_SENDING, (
             f"cold-send provider {type(provider).__name__!r} is not an approved cold adapter (I6)"

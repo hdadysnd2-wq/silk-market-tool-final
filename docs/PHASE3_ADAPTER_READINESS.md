@@ -10,6 +10,20 @@ This document is a static readiness audit of the **real** adapters (they are nev
 exercised by the mock/e2e suites, so they are unproven against the live APIs) plus
 the operational runbook for activation.
 
+**One slot deviates from the key-flips-it-live rule: cold sending.** Every other
+slot's worst failure is a degraded *read*; the cold-send slot's worst failure is a
+real email delivered to a real person **without the one-click List-Unsubscribe
+headers** RFC 8058 and invariant I4 require — a compliance breach you cannot
+un-send. Those headers come from the Smartlead campaign *sequence template*, a
+console setting no offline test can observe. So `SMARTLEAD_API_KEY` alone now
+selects a **fail-closed gate** (`providers/sending/gated.py`) that refuses every
+send with an actionable reason; the real adapter is only handed out once the
+operator has also set `SMARTLEAD_SEQUENCE_VERIFIED=1` to assert the template is
+wired. A refused send raises `SendBlocked`, so the approved email stays `queued`
+and is retried once the flag is set — nothing is lost. `GET /health` reports the
+slot as `smartlead (gated)` until then. Locked by
+`apps/api/tests/test_smartlead_send_gate.py`.
+
 ## Status legend
 
 - ✅ **Solid** — auth, request, parsing, and error→safe-degradation look correct.
@@ -26,7 +40,7 @@ the operational runbook for activation.
 | Maps | `OutscraperMapsProvider` | `OUTSCRAPER_API_KEY` | 🔧 / ⚠️ | **Fixed:** added non-JSON (`ValueError`) to the degradation path. ⚠️ Outscraper Maps is often **async** (returns a request id to poll); `async=false` requests sync mode — confirm it returns inline results within the 60s timeout, and that `data[0]` is the row list. |
 | Email finder | `ApolloEmailFinderProvider` | `APOLLO_API_KEY` | 🔧 / ⚠️ | **Fixed:** degrades to `[]` on any vendor-response surprise. ⚠️ Two contract risks: (1) modern Apollo wants the key in the **`X-Api-Key` header**, not the POST body; (2) `mixed_people/search` typically returns **locked/masked emails** unless revealed via the enrichment endpoint — storing a masked address would hurt deliverability. Verify both live. |
 | Email verifier | `ZeroBounceVerifier` | `ZEROBOUNCE_API_KEY` | 🔧 | **Fixed:** degrades to `unknown` (not sendable) on any failure — a hiccup can never leak a sendable verdict. Auth (`api_key` query param), URL, and status map are correct. |
-| Sending (cold) | `SmartleadSendingProvider` | `SMARTLEAD_API_KEY` | 🔧 / ⚠️ | **Reworked to Smartlead's campaign model.** Endpoint corrected from the reply endpoint to the **add-lead-to-campaign** API (`POST {SMARTLEAD_BASE}/campaigns/{campaign_id}/leads?api_key=...`, `SMARTLEAD_BASE = https://server.smartlead.ai/api/v1`); `campaign_ref` carries the Smartlead campaign id. Payload reshaped to `{lead_list:[{email, first_name, last_name, custom_fields}], settings:{…}}` — subject/body + the RFC-8058 one-click List-Unsubscribe intent ride in `custom_fields`; `settings` never bypasses the global-block / unsubscribe lists (I4). Endpoint + payload *shape* verified against Smartlead's public docs. ⚠️ Still the live-verification step: the **exact custom-field names** the sequence references and the **sequence template** that must emit `List-Unsubscribe`/`List-Unsubscribe-Post` from them are an UNPROVEN console step — confirmed only by the PR #40 live-smoke (no live send has validated it). Add-leads response shape varies by API version, so result→lead-id mapping is best-effort. |
+| Sending (cold) | `SmartleadSendingProvider` | `SMARTLEAD_API_KEY` **+ `SMARTLEAD_SEQUENCE_VERIFIED=1`** | 🔧 / ⚠️ | **Reworked to Smartlead's campaign model.** Endpoint corrected from the reply endpoint to the **add-lead-to-campaign** API (`POST {SMARTLEAD_BASE}/campaigns/{campaign_id}/leads?api_key=...`, `SMARTLEAD_BASE = https://server.smartlead.ai/api/v1`); `campaign_ref` carries the Smartlead campaign id. Payload reshaped to `{lead_list:[{email, first_name, last_name, custom_fields}], settings:{…}}` — subject/body + the RFC-8058 one-click List-Unsubscribe intent ride in `custom_fields`; `settings` never bypasses the global-block / unsubscribe lists (I4). Endpoint + payload *shape* verified against Smartlead's public docs. ⚠️ Still the live-verification step: the **exact custom-field names** the sequence references and the **sequence template** that must emit `List-Unsubscribe`/`List-Unsubscribe-Post` from them are an UNPROVEN console step — confirmed only by the PR #40 live-smoke (no live send has validated it). Add-leads response shape varies by API version, so result→lead-id mapping is best-effort. |
 | Mailbox OAuth (Gmail) | `GmailOAuthProvider` | Google OAuth client id + secret | ✅ | Best-implemented: correct auth-code flow (`access_type=offline`, `prompt=consent` for refresh), refresh keeps the prior refresh token, `verify_mailbox` raises (never silent), send builds base64url MIME with one-click `List-Unsubscribe` (I4). |
 | Mailbox OAuth (Microsoft) | `MicrosoftGraphProvider` | Microsoft OAuth client id + secret | ✅ | Mirrors Gmail via the shared `_oauth_http.exchange` (correct `x-www-form-urlencoded` token exchange, revoked-grant → `TokenRefreshError`). Spot-check the Graph `sendMail` payload live. |
 | Embeddings | `HashingEmbeddingProvider` | — | ⚠️ | Deterministic placeholder by design (deferred per the prompt). pgvector is wired but not semantically real; fine until a semantic-search feature ships. |
@@ -57,7 +71,7 @@ Flip one key at a time; everything else stays mock.
 1. **Anthropic** (vision + judge) → live image→HS on 20 real Saudi products; measure HS top-1/top-3 vs human confirmation.
 2. **Comtrade** (+ real ETL world sync) → funnel Stages 1–3 live; **verify ≤150 API calls/analysis** (add budgeting first — see the Comtrade row).
 3. **Primary leads provider + ZeroBounce** → live lists for 2 pilot markets; compliance fields (basis, fetched_at, 90-day validity) populated.
-4. **Smartlead/Instantly + per-factory OAuth** → configure **SPF + DKIM + DMARC on a dedicated subdomain FIRST**, then warm-up ramp, then a supervised pilot campaign. (The Smartlead adapter is now on the campaign model; the remaining pre-send step is wiring the campaign sequence template to the adapter's custom fields — including the one-click List-Unsubscribe headers — and confirming it with the live-smoke.)
+4. **Smartlead/Instantly + per-factory OAuth** → configure **SPF + DKIM + DMARC on a dedicated subdomain FIRST**, then wire the campaign sequence template to the adapter's custom fields (including the one-click List-Unsubscribe headers), then set `SMARTLEAD_SEQUENCE_VERIFIED=1` to open the gate, then warm-up ramp, then a supervised pilot campaign. Until that flag is set the platform refuses every Smartlead send by design.
 
 **Pilot acceptance:** confirmed HS; live top-5 with sources+years; ≥1 complete competitor thread (name + observed price + margin); ≥15 verified leads in one market; one approved→sent→tracked campaign; bounce <5%, complaint <0.1%.
 
@@ -65,7 +79,8 @@ Flip one key at a time; everything else stays mock.
 
 - [ ] Set each vendor key as an env var (`.env.example` lists them): `ANTHROPIC_API_KEY`, `COMTRADE_API_KEY` (+ `COMTRADE_OFFLINE=0`), `CORESIGNAL_API_KEY` / `APOLLO_API_KEY`, `ZEROBOUNCE_API_KEY`, `SMARTLEAD_API_KEY`, and the Google/Microsoft OAuth client id+secret.
 - [ ] Dedicated **sending subdomain** with SPF, DKIM, and DMARC verified **before** any warm-up.
-- [ ] Confirm each flip via `GET /health` → `active_provider_summary()`.
+- [ ] Confirm each flip via `GET /health` → `active_provider_summary()` (`sending` must read `smartlead`, not `smartlead (gated)`, before a pilot send).
+- [ ] Open the cold-send gate **last**: configure the Smartlead sequence template's List-Unsubscribe headers, then set `SMARTLEAD_SEQUENCE_VERIFIED=1`.
 - [ ] Resolve the ⚠️ flags above (Smartlead custom-field/sequence-template wiring — endpoint/model now fixed; Apollo header+email-unlock; Coresignal fields; Outscraper async; Comtrade budget) against the live APIs.
 
 > **The keyed live-smoke script now exists**: `apps/api/app/live_smoke.py`. It makes

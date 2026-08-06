@@ -58,6 +58,7 @@ async def create_product(
     description_en: str | None = Form(None),
     price_min: str | None = Form(None),
     price_max: str | None = Form(None),
+    cost_per_unit: str | None = Form(None),
     currency: str = Form("USD"),
     classify: bool = Form(True),
     image: UploadFile | None = File(None),
@@ -66,6 +67,7 @@ async def create_product(
 
     price_min_val = _coerce_optional_price(price_min, "price_min")
     price_max_val = _coerce_optional_price(price_max, "price_max")
+    cost_per_unit_val = _coerce_optional_price(cost_per_unit, "cost_per_unit")
 
     image_url = None
     if image is not None:
@@ -95,6 +97,7 @@ async def create_product(
         image_url=image_url,
         price_min=price_min_val,
         price_max=price_max_val,
+        cost_per_unit=cost_per_unit_val,
         currency=currency,
         classification_status="pending",
     )

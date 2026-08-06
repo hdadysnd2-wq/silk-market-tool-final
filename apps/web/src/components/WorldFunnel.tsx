@@ -7,6 +7,14 @@ import { pollUntil } from "@/lib/poll";
 import type { Analysis, AnalysisAccepted, FunnelBrief, Product } from "@/lib/types";
 
 /**
+ * How long the UI waits for a world-funnel run before giving up. The offline mock
+ * finishes in well under a second, but a live Comtrade screen makes real, throttled
+ * calls under the per-analysis budget and can take minutes — so this is generous.
+ * The worker always finishes regardless; this only bounds how long the UI polls.
+ */
+const LIVE_SCREEN_TIMEOUT_MS = 180_000;
+
+/**
  * Stage-1 world funnel for a product: screens every market locally and shows the
  * brief-first output (decision #7) — the decision, three sourced numbers and the
  * "limits of this report" section — above the top-5 export candidates. The
@@ -57,6 +65,10 @@ export function WorldFunnel({
       const run = await pollUntil(
         () => api.get<Analysis>(`/analyses/${analysisId}`),
         (a) => a.status === "ranked" || a.status === "enriched",
+        // A live Comtrade world screen makes real, throttled calls under the
+        // per-analysis budget and routinely runs past the 60s default; give it
+        // room (the worker keeps going regardless, but the UI should wait).
+        { timeoutMs: LIVE_SCREEN_TIMEOUT_MS },
       );
       setAnalysis(run);
       // Brief-first: the decision + sourced numbers + limits headline the result.
@@ -91,6 +103,9 @@ export function WorldFunnel({
           a.status === "enriched" ||
           a.status === "deepened" ||
           a.rankings.some((r) => r.stage === 3),
+        // Stage-2 enrichment chains the Stage-3 deep-dive and hits live tariff/PPP
+        // + Comtrade under the budget — same reason as the Stage-1 screen above.
+        { timeoutMs: LIVE_SCREEN_TIMEOUT_MS },
       );
       setAnalysis(run);
       setBrief(await api.get<FunnelBrief>(`/analyses/${analysisId}/brief`));

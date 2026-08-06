@@ -66,10 +66,11 @@ def test_margin_thread_declares_gap_without_offer_price(client, auth_headers, db
         f"/api/v1/products/{product.id}/markets/IN/margin", headers=auth_headers
     ).json()
     assert thread["factory_offer"] is None
+    assert thread["margin_basis"] is None  # neither cost nor offer on file
     assert thread["competitors"]  # prices exist…
     assert all(c["margin_pct"] is None for c in thread["competitors"])  # …but no margin
-    assert all("no factory offer price" in c["note"] for c in thread["competitors"])
-    assert any("No factory offer price" in limit for limit in thread["limits"])
+    assert all("no factory cost or offer price" in c["note"] for c in thread["competitors"])
+    assert any("No factory cost or offer price" in limit for limit in thread["limits"])
 
 
 def test_margin_service_treats_currency_mismatch_as_a_gap(db, factory, product):
@@ -105,3 +106,79 @@ def test_offer_midpoint_handles_partial_band(db, factory):
     )
     thread = build_margin_thread(p, "IN", None)
     assert thread["factory_offer"] == 10.0
+
+
+def test_margin_prefers_real_cost_over_offer_estimate(db, factory, product):
+    # A recorded per-unit cost (800) makes the margin a REAL gross margin against
+    # cost, not headroom vs the 1400 offer midpoint. The offer is still surfaced
+    # for context but is not the basis.
+    product.cost_per_unit = 800.0
+    db.commit()
+    snapshot = MarketSnapshot(
+        hs_code=product.hs_code,
+        market_iso2="IN",
+        source="localprice_mock",
+        observed_prices=[{"competitor": "Acme", "price": 2000.0, "currency": "USD", "source": "x"}],
+    )
+    thread = build_margin_thread(product, "IN", snapshot)
+
+    assert thread["margin_basis"] == "actual_cost"
+    assert thread["cost_per_unit"] == 800.0
+    assert thread["factory_offer"] == 1400.0  # still reported, but not the basis
+    c = thread["competitors"][0]
+    # (2000 − 800) / 2000 = 0.6, computed against cost — NOT (2000 − 1400)/2000.
+    assert c["margin_pct"] == round((2000.0 - 800.0) / 2000.0, 4)
+    assert any("actual per-unit cost" in limit for limit in thread["limits"])
+    assert not any("Gross headroom" in limit for limit in thread["limits"])
+
+
+def test_margin_falls_back_to_offer_estimate_without_cost(db, factory, product):
+    # No cost on file → the estimate basis, explicitly labelled as such.
+    assert product.cost_per_unit is None
+    snapshot = MarketSnapshot(
+        hs_code=product.hs_code,
+        market_iso2="IN",
+        source="localprice_mock",
+        observed_prices=[{"competitor": "Acme", "price": 2000.0, "currency": "USD", "source": "x"}],
+    )
+    thread = build_margin_thread(product, "IN", snapshot)
+
+    assert thread["margin_basis"] == "offer_estimate"
+    assert thread["cost_per_unit"] is None
+    c = thread["competitors"][0]
+    # Basis is the 1400 offer midpoint: (2000 − 1400) / 2000 = 0.3.
+    assert c["margin_pct"] == round((2000.0 - 1400.0) / 2000.0, 4)
+    assert any("Gross headroom" in limit for limit in thread["limits"])
+
+
+def test_create_product_captures_cost_per_unit(client, auth_headers):
+    res = client.post(
+        "/api/v1/products",
+        headers=auth_headers,
+        data={
+            "name_ar": "تمر",
+            "name_en": "Dates",
+            "price_min": "1200",
+            "price_max": "1600",
+            "cost_per_unit": "800.50",
+            "classify": "false",
+        },
+    )
+    assert res.status_code == 202, res.text
+    product_id = res.json()["product"]["id"]
+
+    body = client.get(f"/api/v1/products/{product_id}", headers=auth_headers).json()
+    assert body["cost_per_unit"] == 800.5
+
+
+def test_create_product_cost_per_unit_is_optional(client, auth_headers):
+    res = client.post(
+        "/api/v1/products",
+        headers=auth_headers,
+        data={"name_ar": "عسل", "name_en": "Honey", "classify": "false"},
+    )
+    assert res.status_code == 202, res.text
+    product_id = res.json()["product"]["id"]
+
+    body = client.get(f"/api/v1/products/{product_id}", headers=auth_headers).json()
+    assert body["cost_per_unit"] is None

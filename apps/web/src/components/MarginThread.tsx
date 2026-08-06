@@ -33,7 +33,20 @@ export function MarginThread({
   return (
     <div className="mt-4 rounded-xl bg-white p-4 shadow-sm ring-1 ring-black/5">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="font-semibold text-gray-900">{t("title")}</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-gray-900">{t("title")}</h3>
+          {thread.margin_basis && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                thread.margin_basis === "actual_cost"
+                  ? "bg-brand-50 text-brand-700"
+                  : "bg-amber-50 text-amber-700"
+              }`}
+            >
+              {thread.margin_basis === "actual_cost" ? t("basisActual") : t("basisEstimate")}
+            </span>
+          )}
+        </div>
         {onFetchPrices && (
           <button
             type="button"

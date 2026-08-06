@@ -129,7 +129,16 @@ def process_product_intake(product_id: str, deepen: bool = False) -> dict:
         if product is None:
             return {"error": "product not found"}
         with engine.deepen_scope(deepen):
-            product_vision.describe_product(db, product, get_llm_provider())
+            # Vision is a best-effort enrichment (fills the AR/EN description +
+            # attributes). HS classification is name-based (the engine resolver,
+            # no LLM), so a vision failure — a live LLM error, a bad ANTHROPIC_MODEL,
+            # a timeout — must NEVER block the HS proposal. Degrade to no vision
+            # enrichment and press on to classify, rather than crashing the whole
+            # intake and leaving the product stuck with no HS candidates.
+            try:
+                product_vision.describe_product(db, product, get_llm_provider())
+            except Exception as exc:  # noqa: BLE001 — best-effort; reason is logged
+                log.warning("product_vision_skipped", product_id=product_id, error=str(exc))
             hs_classifier.classify_product(db, product)
             embedding = get_embedding_provider().embed(
                 [f"{product.name_en} {product.description_en or ''}"]

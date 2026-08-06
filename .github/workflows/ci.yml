@@ -105,6 +105,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: packages/silk_intel/silk_intel/requirements.txt
       - name: Install engine deps
         # Mirrors Repo A's proven hermetic CI: pinned runtime deps + pytest.
         # pandas arrives transitively via pytrends (test fixtures only).

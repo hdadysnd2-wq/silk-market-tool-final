@@ -71,6 +71,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: packages/silk_intel/silk_intel/requirements.txt
 
       # PDF converter (LibreOffice/soffice) + Arabic-shaped font: rung 3 clicks
       # the "Export report (PDF)" button and asserts the %PDF signature; without

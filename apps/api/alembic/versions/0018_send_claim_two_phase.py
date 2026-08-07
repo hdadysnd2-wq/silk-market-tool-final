@@ -9,8 +9,8 @@ The enum value is added in an autocommit block because PostgreSQL forbids using
 a newly added enum label inside the same transaction that adds it — the CHECK
 recreation below references ``'sending'``.
 
-Revision ID: 0015
-Revises: 0014
+Revision ID: 0018
+Revises: 0017
 """
 
 from __future__ import annotations
@@ -18,8 +18,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0015"
-down_revision = "0014"
+revision = "0018"
+down_revision = "0017"
 branch_labels = None
 depends_on = None
 

@@ -139,12 +139,14 @@ def db(_schema):
 
 @pytest.fixture(autouse=True)
 def _reset_rate_limit():
-    # The in-process rate limiter keys on the (constant) TestClient IP, so its
-    # buckets would otherwise accumulate across tests and spuriously 429. Clear
-    # before each test for isolation.
-    from app.services import rate_limit
+    # The rate limiter keys on the (constant) TestClient IP, so its buckets
+    # (Redis-backed with an in-process fallback) would otherwise accumulate
+    # across tests and spuriously 429; the session-revocation denylist likewise
+    # leaks jtis across tests. Clear both before each test for isolation.
+    from app.services import rate_limit, sessions
 
     rate_limit.reset()
+    sessions.reset()
     yield
 
 

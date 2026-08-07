@@ -73,6 +73,8 @@ def create_access_token(user_id: uuid.UUID, role: UserRole) -> str:
         "role": role.value,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=settings.access_token_ttl_minutes)).timestamp()),
+        # Unique token id — the handle server-side revocation (logout) keys on.
+        "jti": uuid.uuid4().hex,
     }
     return jwt.encode(payload, settings.secret_key, algorithm=_ALGO)
 
@@ -110,6 +112,15 @@ def get_current_user(
         user_id = uuid.UUID(payload["sub"])
     except (jwt.PyJWTError, KeyError, ValueError) as exc:
         raise _CREDENTIALS_ERROR from exc
+
+    # Server-side revocation: a logged-out jti is dead even though the JWT
+    # still verifies. Tokens minted before the jti claim existed skip this
+    # (their 12h TTL bounds the exposure); is_revoked fails open on a Redis
+    # blip — the is_active check below stays the hard kill switch.
+    from app.services import sessions
+
+    if sessions.is_revoked(payload.get("jti")):
+        raise _CREDENTIALS_ERROR
 
     user = db.get(User, user_id)
     if user is None or not user.is_active:

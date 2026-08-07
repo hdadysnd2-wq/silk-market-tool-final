@@ -277,9 +277,20 @@ def _executive_buyers(db: Session, product: Product, iso2: str | None) -> list[d
             "relevance_score": match.relevance_score,
             "contacts": int(contact_count),
             "legal_review_required": buyer.legal_review_required,
+            # Honest demonstration flag: a buyer surfaced by a mock/offline
+            # adapter must never read as observed customs data in the client
+            # report (audit C6, I1). The renderer marks these rows.
+            "is_demo": _is_demo_provider(buyer.provider_name),
+            "provider": buyer.provider_name,
         }
         for match, buyer, contact_count in rows
     ]
+
+
+def _is_demo_provider(provider_name: str | None) -> bool:
+    """True when a stored provenance name is a deterministic mock/fixture."""
+    name = (provider_name or "").lower()
+    return "mock" in name or "fixture" in name or "demo" in name
 
 
 def _executive_market_row(db: Session, product: Product, ranking: CountryRanking) -> dict:
@@ -298,12 +309,18 @@ def _executive_market_row(db: Session, product: Product, ranking: CountryRanking
     snapshot = _snapshot_for(db, product.hs_code, iso2)
     enrichment = ranking.enrichment or {}
 
+    # The Stage-2 engine model score (0..1) and the Stage-1 screen score
+    # (dollar-scale volume×growth) are on different scales — the report must
+    # declare which one it is showing so the number is never misread (audit C8).
     if ranking.stage2_score is not None:
         score: float | None = float(ranking.stage2_score)
+        score_model = enrichment.get("score_model") or "silk_market_ranker"
     elif ranking.screen_score is not None:
         score = float(ranking.screen_score)
+        score_model = "stage1_screen"
     else:
         score = None
+        score_model = None
     raw_conf = enrichment.get("score_confidence")
     score_confidence = float(raw_conf) if raw_conf is not None else None
     rationale = {
@@ -324,6 +341,7 @@ def _executive_market_row(db: Session, product: Product, ranking: CountryRanking
         "iso2": iso2,
         "score": score,
         "score_confidence": score_confidence,
+        "score_model": score_model,
         "rationale_components": rationale,
         "tags": tags,
         # I9 — the transit-hub demotion stays visible in the executive summary.

@@ -68,7 +68,12 @@ def _components_for(
     saudi = _saudi_share(snapshot)
     if saudi is not None:
         components["saudi_position"] = {
-            "value": saudi,
+            # Percent-points (30.0 for 30%), the engine narrative unit contract
+            # (silk_market_ranker._saudi_position_component). The executive
+            # rationale line renders this with fmt_pct — a 0..1 fraction here
+            # printed 0.3% for a real 30% share (audit C9). Cohort-normalized
+            # scoring is unaffected by the ×100.
+            "value": saudi * 100.0,
             "source": snapshot.source or "comtrade",
             "confidence": 0.9,
             "note": "Saudi supplier share of this market",

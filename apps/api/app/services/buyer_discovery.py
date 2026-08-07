@@ -120,6 +120,7 @@ def discover_buyers(
             market_iso2,
             BuyerSource.customs,
             confidence=records[0].confidence,
+            provider_name=records[0].provider_name,
         )
         _store_shipments(db, buyer, records)
         touched[buyer.id] = buyer
@@ -135,6 +136,7 @@ def discover_buyers(
             market_iso2,
             BuyerSource.maps,
             confidence=rec.confidence,
+            provider_name=rec.provider_name,
         )
         touched[buyer.id] = buyer
         buyer.legal_review_required = True
@@ -165,6 +167,7 @@ def discover_buyers(
                 market_iso2,
                 BuyerSource.importer_intel,
                 confidence=rec.confidence,
+                provider_name=rec.provider_name,
             )
             touched[buyer.id] = buyer
             buyer.legal_review_required = True
@@ -206,12 +209,16 @@ def _upsert_buyer(
     market_iso2: str,
     source: BuyerSource,
     confidence: float,
+    provider_name: str | None = None,
 ) -> Buyer:
     norm = normalization.normalize_name(name)
     # Exact hit first — only a miss pays for the O(country-buyers) fuzzy scan
     # (which previously also rebuilt a throwaway {k: k} dict per candidate).
     hit = index.get(norm)
     if hit is not None:
+        # Backfill provenance if the existing row never captured it.
+        if provider_name and not hit.provider_name:
+            hit.provider_name = provider_name
         return hit
     dup_key = normalization.find_duplicate(name, index)
     if dup_key and dup_key in index:
@@ -223,6 +230,11 @@ def _upsert_buyer(
         country_iso2=market_iso2,
         source=source,
         source_confidence=confidence,
+        # The actual discovery adapter (e.g. "mock_customs", "outscraper",
+        # "volza") — carried so the executive report can honestly mark a
+        # demonstration-sourced buyer rather than presenting it as observed
+        # customs data (audit C6, I1).
+        provider_name=provider_name,
         freshness_at=utcnow(),
     )
     db.add(buyer)

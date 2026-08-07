@@ -19,7 +19,7 @@ from app.api.deps import DbDep, get_owned_product
 from app.models import Product
 from app.schemas.report import ProductReportOut
 from app.services.report import build_product_report
-from app.services.report_view import build_engine_result
+from app.services.report_view import build_engine_result, build_executive_result
 
 _DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
@@ -206,6 +206,49 @@ def product_report_docx(
         raise
 
     filename = f"silk_report_{product.id}.docx"
+    return FileResponse(
+        path,
+        media_type=_DOCX_MEDIA_TYPE,
+        filename=filename,
+        background=BackgroundTask(shutil.rmtree, tmp_dir, ignore_errors=True),
+    )
+
+
+@router.get("/products/{product_id}/report/executive")
+def product_report_executive(
+    db: DbDep,
+    product: Product = Depends(get_owned_product),
+) -> FileResponse:
+    """The Executive Multi-Market Report as a Word document, rendered inline.
+
+    Same seam as the full docx export (decision #7): platform data →
+    ``build_executive_result`` → ``silk_render.build_view`` →
+    ``silk_reports.render_executive_docx``. A product with zero analyses still
+    returns 200 — the engine renders a declared-gap report (I1), never a
+    fabricated one. Returns 501 if the Word renderer is unavailable, mirroring
+    the full export.
+    """
+    from silk_render import build_view
+
+    try:
+        from silk_reports import render_executive_docx
+    except ImportError as exc:  # engine build without the executive renderer
+        raise HTTPException(status_code=501, detail="Word export is unavailable") from exc
+
+    result = build_executive_result(db, product)
+    view = build_view(result)
+
+    tmp_dir = tempfile.mkdtemp(prefix="silk_exec_report_")
+    try:
+        path = render_executive_docx(view, str(Path(tmp_dir) / "executive.docx"))
+    except RuntimeError as exc:  # python-docx missing → the engine raises this
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(status_code=501, detail="Word export is unavailable") from exc
+    except Exception:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
+
+    filename = f"executive_{product.id}.docx"
     return FileResponse(
         path,
         media_type=_DOCX_MEDIA_TYPE,

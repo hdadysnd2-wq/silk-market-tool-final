@@ -2015,6 +2015,121 @@ def _deep_research_view(result: dict) -> dict | None:
     }
 
 
+# ── التقرير التنفيذي متعدد الأسواق — the executive multi-market section ──────
+
+def _exec_int_or_none(v: object) -> "int | None":
+    """عدد صحيح أو None — لا اختلاق: قيمة غير عددية/غير صحيحة = فجوة معلنة."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float) and v.is_integer():
+        return int(v)
+    return None
+
+
+def _executive_section(result: dict) -> "dict | None":
+    """قسم «التقرير التنفيذي متعدد الأسواق» — عرضٌ صرف فوق `result["executive"]`
+    الذي يغذّيه جانبُ المنتج (منصّة silk): فرزٌ عالمي + أعلى ٥ أسواق مرتّبة
+    بمكوّنات مبرّرة وأسعار ومنافسين ومشترين. غيابُ المفتاح = `None` — لا مفتاح
+    "executive" في النموذج إطلاقاً (سلوك /analyze و/research القائم لا يتغيّر).
+
+    عقد عدم الاختلاق: القوائم الفارغة/الغائبة تبقى `[]` (المستهلك يعلن
+    «غير مرصود» — لا صفوف مخترعة)، كل ورقة DataPoint تمرّ عبر `_dp` كي تسافر
+    القيمة مع مصدرها وثقتها وملاحظتها وتاريخها معاً، والملاحظات الحرة تمرّ
+    عبر `_strip_internal_plumbing` (لا سباكة داخلية على وجه العميل)، والصفوف
+    المشوَّهة (غير dict) تُسقَط ولا تُصفَّر أبداً.
+    """
+    ex = result.get("executive")
+    if not isinstance(ex, dict):
+        return None
+    scr = ex.get("screening") if isinstance(ex.get("screening"), dict) else {}
+    screening = {
+        "total_screened": _exec_int_or_none(scr.get("total_screened")),
+        "analysis_status": str(scr.get("analysis_status") or ""),
+        "analysis_at": scr.get("analysis_at"),
+    }
+    markets: list[dict] = []
+    for m in (ex.get("markets") or []):
+        if not isinstance(m, dict):
+            continue
+        rationale: dict[str, dict] = {}
+        for name, comp in (m.get("rationale_components") or {}).items():
+            d = _dp(comp)
+            rationale[str(name)] = {
+                "value": d.get("value"),
+                "source": d.get("source") or "",
+                "confidence": d.get("confidence"),
+                "note": _strip_internal_plumbing(str(d.get("note") or "")) or "",
+                "retrieved_at": d.get("retrieved_at") or "",
+            }
+        present = sum(1 for c in rationale.values()
+                      if c.get("value") is not None)
+        prices = []
+        for p in (m.get("prices") or []):
+            if not isinstance(p, dict):
+                continue
+            prices.append({
+                "competitor": p.get("competitor"),
+                "price": p.get("price"),
+                "currency": p.get("currency"),
+                "store": p.get("store"),
+                "url": p.get("url"),
+                "source": p.get("source") or "",
+                "confidence": p.get("confidence"),
+                "retrieved_at": p.get("retrieved_at") or "",
+            })
+        competitors = []
+        for c in (m.get("competitors") or []):
+            if not isinstance(c, dict):
+                continue
+            competitors.append({
+                "exporter_name": c.get("exporter_name"),
+                "share_pct": c.get("share_pct"),
+                "value_usd": c.get("value_usd"),
+                "source": c.get("source") or "",
+                "confidence": c.get("confidence"),
+                "retrieved_at": c.get("retrieved_at") or "",
+            })
+        buyers = []
+        for b in (m.get("buyers") or []):
+            if not isinstance(b, dict):
+                continue
+            buyers.append({
+                "name": b.get("name"),
+                "source": b.get("source") or "",
+                "confidence": b.get("confidence"),
+                "relevance_score": b.get("relevance_score"),
+                # جهات الاتصال عددٌ (count) لا قائمة — غير العددي فجوة معلنة.
+                "contacts": _exec_int_or_none(b.get("contacts")),
+                "legal_review_required": bool(b.get("legal_review_required")),
+            })
+        markets.append({
+            "country": m.get("country"),
+            "iso3": m.get("iso3"),
+            "iso2": m.get("iso2"),
+            "score": m.get("score"),
+            "score_confidence": m.get("score_confidence"),
+            "rationale_components": rationale,
+            # نفس اصطلاح components_present الكلاسيكي — المحرّك ٤ مكوّنات.
+            "components_present": f"{present}/{len(rationale) or 4}",
+            "tags": [str(t) for t in (m.get("tags") or [])],
+            "transit_hub": bool(m.get("transit_hub")),
+            "prices": prices,
+            "competitors": competitors,
+            "buyers": buyers,
+        })
+    # الوصف الرسمي للرمز من المرجع المحلي (قراءة CSV بلا شبكة) — "" إن لم
+    # يوجد (غياب معلن، لا وصف مختلَق).
+    try:
+        from silk_hs_resolver import official_description
+        hs_desc = official_description(result.get("hs_code"))
+    except Exception:  # noqa: BLE001 — مرجع غائب = فجوة، لا انهيار عرض
+        hs_desc = ""
+    return {"screening": screening, "markets": markets,
+            "hs_official_description": hs_desc}
+
+
 def build_view(result: dict) -> dict:
     """ابنِ نموذج العرض القانوني — the ONE canonical view-model (vision §10.1).
 
@@ -2186,6 +2301,12 @@ def build_view(result: dict) -> dict:
         # أعلى _deep_research_view. None لتحليل /analyze العادي (لا أثر).
         "deep_research": dr_view,
     }
+    # التقرير التنفيذي متعدد الأسواق — إضافي بحت: المفتاح "executive" يظهر
+    # فقط حين يغذّي جانبُ المنتج result["executive"]؛ غيابه = لا مفتاح أصلاً
+    # (غياب لا فراغ — نفس اصطلاح deep_research أعلاه لكن بلا None ظاهر).
+    ex_view = _executive_section(result)
+    if ex_view is not None:
+        view["executive"] = ex_view
     return view
 
 

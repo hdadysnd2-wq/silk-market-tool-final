@@ -442,6 +442,51 @@ def run_stage3_deepdive(self, analysis_id: str, hs6: str, deepen: bool = False) 
         db.close()
 
 
+@celery_app.task(name="app.workers.tasks.render_executive_report")
+def render_executive_report(product_id: str) -> dict:
+    """Render the Executive Multi-Market Report to object storage (no vendor calls).
+
+    Pure Postgres read + render: builds the executive result from the persisted
+    funnel/snapshot/buyer data (``build_executive_result``), renders it through
+    the engine's ONE template seam (``silk_render.build_view`` →
+    ``silk_reports.render_executive_docx``), and stores the ``.docx`` bytes under
+    a stable per-product key. A product with zero analyses still renders — the
+    engine emits a declared-gap report (I1), never a fabricated one.
+    """
+    import shutil
+    import tempfile
+    from pathlib import Path
+
+    from app.models import Product
+    from app.services.report_view import build_executive_result
+    from app.services.storage import get_storage
+
+    with session_scope() as db:
+        product = db.get(Product, uuid.UUID(product_id))
+        if product is None:
+            return {"error": "product not found"}
+        result = build_executive_result(db, product)
+
+    from silk_render import build_view
+    from silk_reports import render_executive_docx
+
+    view = build_view(result)
+    tmp_dir = tempfile.mkdtemp(prefix="silk_exec_report_")
+    try:
+        path = render_executive_docx(view, str(Path(tmp_dir) / "executive.docx"))
+        data = Path(path).read_bytes()
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    key = f"reports/executive/{product_id}.docx"
+    get_storage().put(
+        key=key,
+        data=data,
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+    return {"product_id": product_id, "report_key": key}
+
+
 @celery_app.task(name="app.workers.tasks.draft_campaign_emails")
 def draft_campaign_emails(campaign_id: str) -> dict:
     from app.models import Campaign

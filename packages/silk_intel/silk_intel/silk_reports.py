@@ -3864,6 +3864,291 @@ def render_docx(view: dict, path: str) -> str:
     return path
 
 
+# ═══ التقرير التنفيذي متعدد الأسواق — the executive multi-market derivative ═══
+# مشتقّ جديد فوق النموذج القانوني نفسه (view["executive"] من build_view) —
+# لا مسار عرض موازياً: نفس الهوية البصرية (_load_branding/_add_table/RTL)،
+# نفس حارس الإنتاج (_assert_production_clean)، نفس لافتة التدهور، ونفس عقد
+# عدم الاختلاق (كل قائمة فارغة تُعلَن «غير مرصود» بنصّها — لا صفوف مخترعة).
+
+_EXEC_TITLE = "التقرير التنفيذي متعدد الأسواق"
+# «سعر غير مرصود» سلسلة العقد القائمة حرفياً (correlation.py) — لا صياغة ثانية.
+_EXEC_NO_PRICES_LINE = ("سعر غير مرصود — لم تُرصد أسعار منافسين لهذا السوق "
+                        "بعد (فجوة معلنة).")
+_EXEC_NO_BUYERS_LINE = "لا مشترون مرصودون بعد لهذا السوق"
+_EXEC_NO_COMPETITORS_LINE = ("لا بيانات منافسين (مصدِّرين) مرصودة بعد لهذا "
+                             "السوق — فجوة معلنة.")
+_EXEC_NO_MARKETS_LINE = ("لا أسواق مرشّحة مرصودة بعد في هذا التحليل — "
+                         "فجوة معلنة، لا ترتيب مخترَع.")
+_EXEC_SCREENING_GAP_LINE = ("عدد الأسواق المفروزة غير مرصود بعد — فجوة "
+                            "معلنة (لم يُسجَّل الفرز العالمي).")
+_EXEC_TRANSIT_TAG = "⚠ محور عبور"
+_EXEC_LEGAL_MARK = "⚖"
+
+# حالة التحليل الداخلية (إنجليزية من جانب المنتج) → عربية؛ غير المعروف يمرّ
+# كما ورد (لا تخمين).
+_EXEC_STATUS_AR = {"complete": "مكتمل", "completed": "مكتمل",
+                   "done": "مكتمل", "running": "قيد التنفيذ",
+                   "in_progress": "قيد التنفيذ", "pending": "قيد الانتظار",
+                   "partial": "جزئي", "failed": "فشل"}
+
+
+def _exec_status_ar(status: object) -> str:
+    s = str(status or "").strip()
+    return _EXEC_STATUS_AR.get(s.lower(), s) or "غير مسجَّلة"
+
+
+def _exec_market_tags(m: dict) -> str:
+    """وسوم السوق للعرض — الوسوم المغذّاة + وسم محور العبور ⚠ عند العلم."""
+    tags = [_strip_inline_markdown(_clean_report_text(t, 60))
+            for t in (m.get("tags") or []) if str(t or "").strip()]
+    if m.get("transit_hub") and _EXEC_TRANSIT_TAG not in tags:
+        tags.append(_EXEC_TRANSIT_TAG)
+    return "، ".join(tags) if tags else "—"
+
+
+def _exec_rationale_line(m: dict) -> str:
+    """سطر الأساس التجاري من مكوّنات الترتيب — اسم عربي + قيمة + مصدر لكل
+    مكوّن مرصود (الأرقام لاتينية LTR داخل الجملة عبر bidi)؛ لا ثقة خامة في
+    السرد. لا مكوّن مرصوداً => فجوة معلنة بنصّها."""
+    from silk_narrative import fmt_money, fmt_pct, internal_ar
+    parts = []
+    for name, c in (m.get("rationale_components") or {}).items():
+        v = c.get("value")
+        if v is None:
+            continue
+        if name == "market_size":
+            val = fmt_money(v)
+        elif name in ("saudi_position", "saudi_share_pct"):
+            val = fmt_pct(v)
+        elif isinstance(v, (int, float)) and not isinstance(v, bool):
+            val = _fmt(v)
+        else:
+            val = _strip_inline_markdown(_clean_report_text(v, 120))
+        src = _clean_source_label(c.get("source")) or "مصدر غير مسمّى"
+        parts.append(f"{internal_ar(name)}: {val} (المصدر: {src})")
+    if not parts:
+        return ("لا مكوّنات تقييم مرصودة لهذا السوق — فجوة معلنة "
+                "(الترتيب غير مسبَّب بعد).")
+    return "الأساس التجاري للترتيب: " + "؛ ".join(parts) + "."
+
+
+def _exec_provenance_note(ex: dict) -> str:
+    """سطر الأثر المضغوط — المصادر المرصودة عبر نقاط بيانات القسم التنفيذي
+    كلها + نطاق تواريخ الجلب (أقدم–أحدث). لا نقاط = غياب معلن."""
+    sources: set[str] = set()
+    dates: list[str] = []
+
+    def _take(row: dict) -> None:
+        src = str(row.get("source") or "").strip()
+        if src:
+            sources.add(_clean_source_label(src))
+        ra = str(row.get("retrieved_at") or "").strip()
+        if ra:
+            dates.append(ra[:10])
+
+    for m in ex.get("markets") or []:
+        for c in (m.get("rationale_components") or {}).values():
+            _take(c)
+        for key in ("prices", "competitors", "buyers"):
+            for row in m.get(key) or []:
+                _take(row)
+    if not sources:
+        return ("لا مصادر مرصودة في بيانات هذا التقرير التنفيذي بعد — "
+                "فجوة معلنة.")
+    srcs = "، ".join(sorted(sources))
+    if dates:
+        lo, hi = min(dates), max(dates)
+        span = lo if lo == hi else f"{lo} إلى {hi}"
+        return (f"مصادر بيانات هذا التقرير: {srcs} — نطاق تواريخ الجلب: "
+                f"{span}.")
+    return (f"مصادر بيانات هذا التقرير: {srcs} — تواريخ الجلب غير مسجَّلة "
+            "(فجوة معلنة).")
+
+
+def _exec_screening_section(doc, ex: dict) -> None:
+    """٣. الفرز العالمي — سطر الفرز + جدول أعلى ٥ أسواق (الدرجة/الثقة/
+    المكوّنات الحاضرة/الوسوم). الثقة الخامة مسموحة في الجداول حصراً."""
+    doc.add_heading("٣. الفرز العالمي", level=1)
+    scr = ex.get("screening") or {}
+    total = scr.get("total_screened")
+    if total is None:
+        doc.add_paragraph(_EXEC_SCREENING_GAP_LINE)
+    else:
+        doc.add_paragraph(
+            f"فُرزت {total} سوقاً عالمياً وفق مكوّنات الترتيب الموزونة، "
+            "ورُشِّحت الأسواق الخمسة الأعلى أدناه.")
+    status_line = f"حالة التحليل: {_exec_status_ar(scr.get('analysis_status'))}"
+    at = str(scr.get("analysis_at") or "").strip()
+    if at:
+        status_line += f" — تاريخ التحليل: {at[:10]}"
+    doc.add_paragraph(status_line, style="Intense Quote")
+    mkts = (ex.get("markets") or [])[:5]
+    if not mkts:
+        doc.add_paragraph(_EXEC_NO_MARKETS_LINE)
+        return
+    _add_table(doc, ["السوق", "الدرجة", "الثقة", "المكوّنات الحاضرة", "وسوم"],
+               [[m.get("country") or m.get("iso3"), _fmt(m.get("score")),
+                 _fmt(m.get("score_confidence")),
+                 m.get("components_present") or "—", _exec_market_tags(m)]
+                for m in mkts],
+               caption="الأسواق الخمسة المرشّحة (الأفضل أولاً)")
+
+
+def _exec_market_block(doc, i: int, m: dict) -> None:
+    """كتلة سوق واحد في «٤. الأسواق الخمسة بالتفصيل» — سطر الأساس ثم جداول
+    الأسعار والمنافسين والمشترين؛ كل قائمة فارغة تُعلَن بسطرها لا تُخفى."""
+    from silk_narrative import confidence_phrase, fmt_money, fmt_pct
+    doc.add_heading(f"٤.{i} {m.get('country') or m.get('iso3') or '—'}",
+                    level=2)
+    doc.add_paragraph(
+        f"ثقة درجة الترتيب: {confidence_phrase(m.get('score_confidence'))}",
+        style="Intense Quote")
+    doc.add_paragraph(_exec_rationale_line(m))
+    if m.get("transit_hub"):
+        doc.add_paragraph(
+            f"{_EXEC_TRANSIT_TAG} — قد تعكس أرقام واردات هذا السوق إعادة "
+            "تصدير لا استهلاكاً محلياً؛ تُقرأ الحصص بحذر.",
+            style="Intense Quote")
+    # الأسعار — «سعر غير مرصود» سلسلة العقد القائمة عند الفراغ.
+    prices = m.get("prices") or []
+    if prices:
+        _add_table(doc, ["المنافس", "السعر", "العملة", "المتجر", "المصدر"],
+                   [[_clean_report_text(p.get("competitor"), 80),
+                     _fmt(p.get("price")), p.get("currency") or "—",
+                     _clean_report_text(p.get("store"), 60) or "—",
+                     _clean_source_label(p.get("source")) or "—"]
+                    for p in prices[:8]],
+                   caption="أسعار المنافسين المرصودة")
+    else:
+        doc.add_paragraph(_EXEC_NO_PRICES_LINE)
+    # المنافسون (المصدِّرون) — أعلى ٥.
+    comps = m.get("competitors") or []
+    if comps:
+        _add_table(doc, ["المصدِّر المنافس", "الحصة", "القيمة", "المصدر"],
+                   [[_clean_report_text(c.get("exporter_name"), 80),
+                     fmt_pct(c.get("share_pct")), fmt_money(c.get("value_usd")),
+                     _clean_source_label(c.get("source")) or "—"]
+                    for c in comps[:5]],
+                   caption="أبرز المصدِّرين المنافسين لهذا السوق")
+    else:
+        doc.add_paragraph(_EXEC_NO_COMPETITORS_LINE)
+    # المشترون — العدد جهات اتصال (count)؛ ⚖ = مراجعة قانونية قبل التواصل.
+    buyers = m.get("buyers") or []
+    if buyers:
+        rows = []
+        legal_any = False
+        for b in buyers[:8]:
+            name = _clean_report_text(b.get("name"), 80) or "—"
+            if b.get("legal_review_required"):
+                name = f"{name} {_EXEC_LEGAL_MARK}"
+                legal_any = True
+            rows.append([name, _clean_source_label(b.get("source")) or "—",
+                         _fmt(b.get("relevance_score")),
+                         _fmt(b.get("contacts"))])
+        _add_table(doc, ["المشتري", "المصدر", "الملاءمة", "جهات الاتصال"],
+                   rows, caption="مشترون مرشّحون مرصودون")
+        if legal_any:
+            doc.add_paragraph(
+                f"{_EXEC_LEGAL_MARK} = يتطلب مراجعة قانونية قبل أي تواصل.",
+                style="Intense Quote")
+    else:
+        doc.add_paragraph(_EXEC_NO_BUYERS_LINE)
+
+
+def render_executive_docx(view: dict, path: str) -> str:
+    """التقرير التنفيذي متعدد الأسواق (Word) — مشتقّ ٤-٦ صفحات من النموذج
+    القانوني حصراً: غلاف مضغوط، الخلاصة التنفيذية (حكم `view["decision"]`
+    الواحد — لا حكم ثانٍ أبداً)، المنتج والتصنيف، الفرز العالمي، الأسواق
+    الخمسة بالتفصيل، ثم حدود التقرير ومصادره. يعيد المسار عند النجاح؛
+    RuntimeError واضحة بلا python-docx.
+
+    يقرأ `view["executive"]` (يبنيه `silk_render._executive_section` حين
+    يغذّيه جانب المنتج)؛ غيابه كلياً = مستند فجوات معلنة، لا انهيار ولا
+    اختلاق. الكسور العشرية الخامة (درجة/ثقة/ملاءمة) في الجداول حصراً —
+    السرد يستعمل `confidence_phrase` (أسلوب البيت)."""
+    try:
+        from docx import Document
+    except ImportError as exc:
+        raise RuntimeError(_DOCX_HINT) from exc
+    from silk_narrative import confidence_phrase, country_ar, verdict_ar
+
+    _assert_production_clean(view)
+    ex = view.get("executive") or {"screening": {}, "markets": [],
+                                   "hs_official_description": ""}
+    doc = Document()
+    _apply_rtl(doc)   # §4: المستند كله من اليمين لليسار
+
+    # ═══ الغلاف المضغوط ═══
+    _add_page_header_footer(doc, f"سِلك — {_EXEC_TITLE}: {view.get('product')}")
+    _add_cover_wordmark(doc, _load_branding())
+    doc.add_heading(_EXEC_TITLE, 0)
+    if view.get("test_run"):
+        doc.add_paragraph("⚠ TEST RUN — تشغيل برهاني ببدائل موسومة، "
+                          "ليس تقريراً إنتاجياً")
+    _stamp_degraded_banner(doc, view)
+    h = view.get("header") or {}
+    _add_table(doc, ["البند", "القيمة"], [
+        ["المنتج", view.get("product")],
+        ["رمز HS", view.get("hs_code")],
+        ["ثقة التصنيف", confidence_phrase(view.get("hs_confidence"))],
+        ["تاريخ الإعداد", h.get("date")]])
+    doc.add_page_break()
+
+    # ═══ ١) الخلاصة التنفيذية — حكم النموذج الواحد، لا حكم ثانٍ ═══
+    doc.add_heading("١. الخلاصة التنفيذية", level=1)
+    d = view.get("decision") or {}
+    vtxt = verdict_ar(d.get("verdict"))
+    _add_verdict_badge(doc, vtxt)
+    market_ar = country_ar(d.get("market"), d.get("market"))
+    line = f"التوصية: {vtxt}"
+    if market_ar and market_ar != "—":
+        line += f" — سوق {market_ar}"
+    line += f" (ثقة {confidence_phrase(d.get('confidence'))})"
+    doc.add_paragraph(line)
+    why = _strip_inline_markdown(_clean_report_text(d.get("why"), 400))
+    if why:
+        doc.add_paragraph(f"لماذا: {why}")
+    if d.get("sufficiency"):
+        doc.add_paragraph(str(d["sufficiency"]), style="Intense Quote")
+
+    # ═══ ٢) المنتج والتصنيف ═══
+    doc.add_heading("٢. المنتج والتصنيف", level=1)
+    doc.add_paragraph(f"المنتج: {view.get('product') or '—'} — رمز HS: "
+                      f"{view.get('hs_code') or '—'} (ثقة التصنيف "
+                      f"{confidence_phrase(view.get('hs_confidence'))}).")
+    hs_desc = str(ex.get("hs_official_description") or "").strip()
+    if hs_desc:
+        doc.add_paragraph(
+            f"الوصف الرسمي للبند: {_clean_report_text(hs_desc, 280)}",
+            style="Intense Quote")
+
+    # ═══ ٣) الفرز العالمي ═══
+    _exec_screening_section(doc, ex)
+
+    # ═══ ٤) الأسواق الخمسة بالتفصيل ═══
+    doc.add_heading("٤. الأسواق الخمسة بالتفصيل", level=1)
+    mkts = (ex.get("markets") or [])[:5]
+    if mkts:
+        for i, m in enumerate(mkts, 1):
+            _exec_market_block(doc, i, m)
+    else:
+        doc.add_paragraph(_EXEC_NO_MARKETS_LINE)
+
+    # ═══ ٥) حدود التقرير ومصادره ═══
+    doc.add_heading("٥. حدود التقرير ومصادره", level=1)
+    limits = view.get("limits") or []
+    if limits:
+        for x in _gap_list_ar(limits[:10]):
+            doc.add_paragraph(str(x), style="List Bullet")
+    else:
+        doc.add_paragraph("لا حدود مسجّلة لهذا التحليل.")
+    doc.add_paragraph(_exec_provenance_note(ex), style="Intense Quote")
+
+    _finalize_rtl(doc)   # §4: اتجاه RTL صريح على كل فقرة/run قبل الحفظ
+    doc.save(path)
+    return path
+
+
 def _md_cell(x: object) -> str:
     """خلية جدول Markdown آمنة — escape pipes/newlines for a table cell."""
     return str(x if x is not None else "—").replace("|", "/").replace("\n", " ")

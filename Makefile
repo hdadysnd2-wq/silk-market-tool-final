@@ -40,6 +40,9 @@ dev: up migrate seed ## One-shot: up + migrate + seed (offline, no keys)
 demo: ## Run the golden-path demo end to end and print each step
 	$(COMPOSE) exec api python -m app.seeds.demo_golden_path
 
+journey: ## Run the Factory Report Journey end to end (intake → world screen → Top 5 → report w/ prices + buyers)
+	$(COMPOSE) exec api python -m app.seeds.demo_factory_report_journey
+
 create-admin: ## Create/promote the first platform admin (make create-admin EMAIL=you@example.com [NAME="Owner"]); prompts for the password
 	$(COMPOSE) exec api python -m app.seeds.create_admin $(EMAIL) $(if $(NAME),--name "$(NAME)")
 

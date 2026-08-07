@@ -251,8 +251,8 @@
             ],
             "rejected": [],
             "coverage": 0.6,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:38:56+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:47+00:00"
           },
           "competitor": {
             "agent": "competitor",
@@ -349,8 +349,8 @@
             ],
             "rejected": [],
             "coverage": 0.8,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:38:57+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:49+00:00"
           },
           "regulatory": {
             "agent": "regulatory",
@@ -434,8 +434,8 @@
             ],
             "rejected": [],
             "coverage": 0.75,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:38:56+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:47+00:00"
           },
           "pricing": {
             "agent": "pricing",
@@ -483,8 +483,8 @@
             ],
             "rejected": [],
             "coverage": 0.4,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:39:03+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:54+00:00"
           },
           "risk": {
             "agent": "risk",
@@ -517,8 +517,8 @@
             ],
             "rejected": [],
             "coverage": 0.2,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:39:03+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:54+00:00"
           },
           "consumer_demand": {
             "agent": "consumer_demand",
@@ -567,8 +567,8 @@
             ],
             "rejected": [],
             "coverage": 0.33,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:39:02+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:52+00:00"
           },
           "supplier": {
             "agent": "supplier",
@@ -582,8 +582,8 @@
             ],
             "rejected": [],
             "coverage": 0.0,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:38:56+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:47+00:00"
           },
           "logistics": {
             "agent": "logistics",
@@ -600,8 +600,8 @@
             ],
             "rejected": [],
             "coverage": 0.0,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:39:04+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:55+00:00"
           }
         },
         "coverage": 0.39,
@@ -826,7 +826,7 @@
             "source": "UN Comtrade (مخزن الحقائق)",
             "confidence": 0.9,
             "note": "HS080410 total imports (World) to market 156 2023, USD — من المخزن، جُلبت أصلاً 2026-08-07",
-            "retrieved_at": "2026-08-07T03:38:39+00:00",
+            "retrieved_at": "2026-08-07T05:41:30+00:00",
             "status": "",
             "data_year": null,
             "source_ids": []
@@ -841,7 +841,7 @@
             "source": "UN Comtrade (مخزن الحقائق)",
             "confidence": 0.9,
             "note": "HS080410 imports to CHN 2023; share 50.0% — من المخزن، جُلبت أصلاً 2026-08-07",
-            "retrieved_at": "2026-08-07T03:38:39+00:00",
+            "retrieved_at": "2026-08-07T05:41:30+00:00",
             "status": "",
             "data_year": 2023,
             "source_ids": []
@@ -856,7 +856,7 @@
             "source": "UN Comtrade (مخزن الحقائق)",
             "confidence": 0.9,
             "note": "HS080410 imports to CHN 2023; share 30.0% — من المخزن، جُلبت أصلاً 2026-08-07",
-            "retrieved_at": "2026-08-07T03:38:39+00:00",
+            "retrieved_at": "2026-08-07T05:41:30+00:00",
             "status": "",
             "data_year": 2023,
             "source_ids": []
@@ -871,7 +871,7 @@
             "source": "UN Comtrade (مخزن الحقائق)",
             "confidence": 0.9,
             "note": "HS080410 imports to CHN 2023; share 20.0% — من المخزن، جُلبت أصلاً 2026-08-07",
-            "retrieved_at": "2026-08-07T03:38:39+00:00",
+            "retrieved_at": "2026-08-07T05:41:30+00:00",
             "status": "",
             "data_year": 2023,
             "source_ids": []
@@ -1169,8 +1169,8 @@
             ],
             "rejected": [],
             "coverage": 0.6,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:38:56+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:47+00:00"
           },
           "competitor": {
             "agent": "competitor",
@@ -1255,8 +1255,8 @@
             ],
             "rejected": [],
             "coverage": 0.8,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:39:02+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:52+00:00"
           },
           "regulatory": {
             "agent": "regulatory",
@@ -1382,8 +1382,8 @@
             "gaps": [],
             "rejected": [],
             "coverage": 1.0,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:38:56+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:47+00:00"
           },
           "pricing": {
             "agent": "pricing",
@@ -1431,8 +1431,8 @@
             ],
             "rejected": [],
             "coverage": 0.4,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:39:04+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:55+00:00"
           },
           "risk": {
             "agent": "risk",
@@ -1465,8 +1465,8 @@
             ],
             "rejected": [],
             "coverage": 0.2,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:39:04+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:54+00:00"
           },
           "consumer_demand": {
             "agent": "consumer_demand",
@@ -1515,8 +1515,8 @@
             ],
             "rejected": [],
             "coverage": 0.33,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:39:02+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:52+00:00"
           },
           "supplier": {
             "agent": "supplier",
@@ -1530,8 +1530,8 @@
             ],
             "rejected": [],
             "coverage": 0.0,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:38:56+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:47+00:00"
           },
           "logistics": {
             "agent": "logistics",
@@ -1548,8 +1548,8 @@
             ],
             "rejected": [],
             "coverage": 0.0,
-            "started_at": "2026-08-07T03:38:56+00:00",
-            "finished_at": "2026-08-07T03:39:04+00:00"
+            "started_at": "2026-08-07T05:41:47+00:00",
+            "finished_at": "2026-08-07T05:41:55+00:00"
           }
         },
         "coverage": 0.42,
@@ -1770,7 +1770,7 @@
             "source": "UN Comtrade (مخزن الحقائق)",
             "confidence": 0.9,
             "note": "HS080410 total imports (World) to market 784 2023, USD — من المخزن، جُلبت أصلاً 2026-08-07",
-            "retrieved_at": "2026-08-07T03:38:39+00:00",
+            "retrieved_at": "2026-08-07T05:41:30+00:00",
             "status": "",
             "data_year": null,
             "source_ids": []
@@ -1785,7 +1785,7 @@
             "source": "UN Comtrade (مخزن الحقائق)",
             "confidence": 0.9,
             "note": "HS080410 imports to ARE 2023; share 100.0% — من المخزن، جُلبت أصلاً 2026-08-07",
-            "retrieved_at": "2026-08-07T03:38:39+00:00",
+            "retrieved_at": "2026-08-07T05:41:30+00:00",
             "status": "",
             "data_year": 2023,
             "source_ids": []
@@ -2220,8 +2220,8 @@
               ],
               "rejected": [],
               "coverage": 0.6,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:38:56+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:47+00:00"
             },
             "competitor": {
               "agent": "competitor",
@@ -2318,8 +2318,8 @@
               ],
               "rejected": [],
               "coverage": 0.8,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:38:57+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:49+00:00"
             },
             "regulatory": {
               "agent": "regulatory",
@@ -2403,8 +2403,8 @@
               ],
               "rejected": [],
               "coverage": 0.75,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:38:56+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:47+00:00"
             },
             "pricing": {
               "agent": "pricing",
@@ -2452,8 +2452,8 @@
               ],
               "rejected": [],
               "coverage": 0.4,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:39:03+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:54+00:00"
             },
             "risk": {
               "agent": "risk",
@@ -2486,8 +2486,8 @@
               ],
               "rejected": [],
               "coverage": 0.2,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:39:03+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:54+00:00"
             },
             "consumer_demand": {
               "agent": "consumer_demand",
@@ -2536,8 +2536,8 @@
               ],
               "rejected": [],
               "coverage": 0.33,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:39:02+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:52+00:00"
             },
             "supplier": {
               "agent": "supplier",
@@ -2551,8 +2551,8 @@
               ],
               "rejected": [],
               "coverage": 0.0,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:38:56+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:47+00:00"
             },
             "logistics": {
               "agent": "logistics",
@@ -2569,8 +2569,8 @@
               ],
               "rejected": [],
               "coverage": 0.0,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:39:04+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:55+00:00"
             }
           },
           "coverage": 0.39,
@@ -3091,8 +3091,8 @@
               ],
               "rejected": [],
               "coverage": 0.6,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:38:56+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:47+00:00"
             },
             "competitor": {
               "agent": "competitor",
@@ -3177,8 +3177,8 @@
               ],
               "rejected": [],
               "coverage": 0.8,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:39:02+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:52+00:00"
             },
             "regulatory": {
               "agent": "regulatory",
@@ -3304,8 +3304,8 @@
               "gaps": [],
               "rejected": [],
               "coverage": 1.0,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:38:56+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:47+00:00"
             },
             "pricing": {
               "agent": "pricing",
@@ -3353,8 +3353,8 @@
               ],
               "rejected": [],
               "coverage": 0.4,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:39:04+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:55+00:00"
             },
             "risk": {
               "agent": "risk",
@@ -3387,8 +3387,8 @@
               ],
               "rejected": [],
               "coverage": 0.2,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:39:04+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:54+00:00"
             },
             "consumer_demand": {
               "agent": "consumer_demand",
@@ -3437,8 +3437,8 @@
               ],
               "rejected": [],
               "coverage": 0.33,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:39:02+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:52+00:00"
             },
             "supplier": {
               "agent": "supplier",
@@ -3452,8 +3452,8 @@
               ],
               "rejected": [],
               "coverage": 0.0,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:38:56+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:47+00:00"
             },
             "logistics": {
               "agent": "logistics",
@@ -3470,8 +3470,8 @@
               ],
               "rejected": [],
               "coverage": 0.0,
-              "started_at": "2026-08-07T03:38:56+00:00",
-              "finished_at": "2026-08-07T03:39:04+00:00"
+              "started_at": "2026-08-07T05:41:47+00:00",
+              "finished_at": "2026-08-07T05:41:55+00:00"
             }
           },
           "coverage": 0.42,

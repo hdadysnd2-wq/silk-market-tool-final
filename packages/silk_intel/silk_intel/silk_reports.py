@@ -165,6 +165,30 @@ def _clean_source_label(s: object) -> str:
     return re.sub(r"\s{2,}", " ", txt).strip(" ،-—") or "—"
 
 
+# C12: مفاتيح سجلّ المزوّدين الداخلية → أسماء مصادر عمومية عربية على وجه
+# العميل. كانت «world_trade»/«serpapi_shopping»/«importer_intel»/«maps»
+# تُطبَع خاماً في التقرير التنفيذي (سطر الأساس + أثر §5). المفتاح غير المعروف
+# يمرّ كما ورد (لا انهيار، لا اختلاق اسم).
+_EXEC_SOURCE_LABELS = {
+    "world_trade": "الأمم المتحدة (كومتريد)",
+    "comtrade": "الأمم المتحدة (كومتريد)",
+    "worldbank": "البنك الدولي",
+    "serpapi_shopping": "رصد متاجر إلكترونية",
+    "maps": "خرائط الويب",
+    "importer_intel": "سجلات شحن مدفوعة",
+}
+
+
+def _exec_source_label(s: object) -> str:
+    """سمِّ المصدر بلغة عامة للعميل في التقرير التنفيذي (C12) — يُنظَّف أولاً
+    عبر `_clean_source_label`، ثم يُترجَم مفتاحُ السجلّ الداخلي (world_trade،
+    serpapi_shopping…) إلى اسم مصدرٍ عموميٍّ عربيّ؛ المفتاح غير المعروف يمرّ
+    كما ورد. يُطبَّق حيثما يظهر مصدرٌ تنفيذيّ (سطر الأساس + جداول الأسواق +
+    أثر §5)."""
+    cleaned = _clean_source_label(s)
+    return _EXEC_SOURCE_LABELS.get(cleaned.strip().lower(), cleaned)
+
+
 def _trim_sentence(s: object, max_len: int = 240) -> str:
     """قصّ نظيف عند حدّ جملة (§5/§6 — «سجل الأدلة» لا يعرض حقيقة مبتورة
     بـ«…»): النص كاملاً إن كان ضمن الحدّ، وإلا يُقصّ عند آخر علامة ترقيم
@@ -3883,18 +3907,34 @@ _EXEC_SCREENING_GAP_LINE = ("عدد الأسواق المفروزة غير مر�
                             "معلنة (لم يُسجَّل الفرز العالمي).")
 _EXEC_TRANSIT_TAG = "⚠ محور عبور"
 _EXEC_LEGAL_MARK = "⚖"
+# C10: المسار التنفيذي المغذّى من المنصّة يعرض الفرز والإثراء دون تشغيل مرحلة
+# التوليف المرجَّحة، فالسوق الأعلى بلا هيئة محلفين وبلا قرار محرّك موزون — سقط
+# _decision لعبارة تغطية «0/0 وفجوات: لا شيء» المضلِّلة على تقرير يُعلن فجوات
+# متعددة في §5. لا نخترع حكماً: نُعلن الفجوة الصادقة بدل سطر السباكة.
+_EXEC_NO_SYNTHESIS_WHY = ("مرحلة التوليف المرجَّحة لم تُشغَّل — التقرير التنفيذي "
+                          "يعرض الفرز والإثراء دون حكمٍ مركّب.")
 
-# حالة التحليل الداخلية (إنجليزية من جانب المنتج) → عربية؛ غير المعروف يمرّ
-# كما ورد (لا تخمين).
+# حالة التحليل الداخلية (مفردات جانب المنتج) → عربية للعرض. تشمل مفردات
+# فرز المنصّة (pending|classified|ranked|enriched|deepened + none «بلا تحليل»)
+# فوق المفردات العامة (complete/running/…). C11: كانت المفردات المنصّية غير
+# مغطّاة فتطبع الكلمة الإنجليزية خاماً في السرد العربي؛ وأي حالة غير معروفة
+# صارت تُبدَّل ببديل عربي آمن، لا تُمرَّر خاماً أبداً.
 _EXEC_STATUS_AR = {"complete": "مكتمل", "completed": "مكتمل",
                    "done": "مكتمل", "running": "قيد التنفيذ",
                    "in_progress": "قيد التنفيذ", "pending": "قيد الانتظار",
-                   "partial": "جزئي", "failed": "فشل"}
+                   "partial": "جزئي", "failed": "فشل",
+                   # مفردات فرز المنصّة (silk platform screening status)
+                   "none": "لم يبدأ التحليل", "classified": "صُنِّف المنتج",
+                   "ranked": "فُرزت الأسواق", "enriched": "أُثريت الأسواق",
+                   "deepened": "عُمّقت الأسواق"}
 
 
 def _exec_status_ar(status: object) -> str:
     s = str(status or "").strip()
-    return _EXEC_STATUS_AR.get(s.lower(), s) or "غير مسجَّلة"
+    if not s:
+        return "غير مسجَّلة"
+    # C11: غير المعروف → بديل عربي آمن (لا مفتاح إنجليزي خام على وجه العميل).
+    return _EXEC_STATUS_AR.get(s.lower(), "حالة غير معروفة")
 
 
 def _exec_market_tags(m: dict) -> str:
@@ -3924,7 +3964,7 @@ def _exec_rationale_line(m: dict) -> str:
             val = _fmt(v)
         else:
             val = _strip_inline_markdown(_clean_report_text(v, 120))
-        src = _clean_source_label(c.get("source")) or "مصدر غير مسمّى"
+        src = _exec_source_label(c.get("source")) or "مصدر غير مسمّى"
         parts.append(f"{internal_ar(name)}: {val} (المصدر: {src})")
     if not parts:
         return ("لا مكوّنات تقييم مرصودة لهذا السوق — فجوة معلنة "
@@ -3941,7 +3981,7 @@ def _exec_provenance_note(ex: dict) -> str:
     def _take(row: dict) -> None:
         src = str(row.get("source") or "").strip()
         if src:
-            sources.add(_clean_source_label(src))
+            sources.add(_exec_source_label(src))
         ra = str(row.get("retrieved_at") or "").strip()
         if ra:
             dates.append(ra[:10])
@@ -4016,7 +4056,7 @@ def _exec_market_block(doc, i: int, m: dict) -> None:
                    [[_clean_report_text(p.get("competitor"), 80),
                      _fmt(p.get("price")), p.get("currency") or "—",
                      _clean_report_text(p.get("store"), 60) or "—",
-                     _clean_source_label(p.get("source")) or "—"]
+                     _exec_source_label(p.get("source")) or "—"]
                     for p in prices[:8]],
                    caption="أسعار المنافسين المرصودة")
     else:
@@ -4027,7 +4067,7 @@ def _exec_market_block(doc, i: int, m: dict) -> None:
         _add_table(doc, ["المصدِّر المنافس", "الحصة", "القيمة", "المصدر"],
                    [[_clean_report_text(c.get("exporter_name"), 80),
                      fmt_pct(c.get("share_pct")), fmt_money(c.get("value_usd")),
-                     _clean_source_label(c.get("source")) or "—"]
+                     _exec_source_label(c.get("source")) or "—"]
                     for c in comps[:5]],
                    caption="أبرز المصدِّرين المنافسين لهذا السوق")
     else:
@@ -4042,7 +4082,7 @@ def _exec_market_block(doc, i: int, m: dict) -> None:
             if b.get("legal_review_required"):
                 name = f"{name} {_EXEC_LEGAL_MARK}"
                 legal_any = True
-            rows.append([name, _clean_source_label(b.get("source")) or "—",
+            rows.append([name, _exec_source_label(b.get("source")) or "—",
                          _fmt(b.get("relevance_score")),
                          _fmt(b.get("contacts"))])
         _add_table(doc, ["المشتري", "المصدر", "الملاءمة", "جهات الاتصال"],
@@ -4105,7 +4145,14 @@ def render_executive_docx(view: dict, path: str) -> str:
         line += f" — سوق {market_ar}"
     line += f" (ثقة {confidence_phrase(d.get('confidence'))})"
     doc.add_paragraph(line)
-    why = _strip_inline_markdown(_clean_report_text(d.get("why"), 400))
+    # C10: حين يكون الحكم هو تراجُع _decision المتدهوّر (لا حكم صادر ولا بوابة
+    # كفاية محرّك موزون) — وهو دائماً حال المسار التنفيذي المغذّى من المنصّة —
+    # يُستبدَل سطرُ «لماذا» بإعلان فجوةٍ صادق بدل عبارة تغطية «0/0 وفجوات: لا
+    # شيء» المضلِّلة. لا حكم ثانٍ يُخترَع؛ الشارة تبقى «تعذّر إصدار توصية».
+    if not d.get("verdict") and not d.get("sufficiency"):
+        why = _EXEC_NO_SYNTHESIS_WHY
+    else:
+        why = _strip_inline_markdown(_clean_report_text(d.get("why"), 400))
     if why:
         doc.add_paragraph(f"لماذا: {why}")
     if d.get("sufficiency"):

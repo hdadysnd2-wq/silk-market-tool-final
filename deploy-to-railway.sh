@@ -306,6 +306,8 @@ ${STORAGE_VARS}
 COMTRADE_API_KEY=${COMTRADE_API_KEY:-}
 SENTRY_DSN=${SENTRY_DSN:-}
 TRUSTED_PROXY_COUNT=1
+SILK_DATA_DIR=/app/data
+SILK_REQUIRE_PERSISTENT_DATA_DIR=1
 EOF
 }
 
@@ -371,6 +373,11 @@ these in the Railway dashboard (Project → each service → Settings):${RESET}
      • Object storage (S3/R2/MinIO) was configured from your environment and
        REQUIRE_OBJECT_STORAGE=1 is set — a drift back to local storage aborts
        startup instead of silently breaking vision + report downloads.
+     • The engine's paid-spend cap + HS cache live in SQLite under
+       SILK_DATA_DIR=/app/data with SILK_REQUIRE_PERSISTENT_DATA_DIR=1, so
+       startup FAILS unless a Volume is mounted there (audit: otherwise the
+       daily paid-call cap resets to zero on every redeploy). Attach a Volume
+       at ${BOLD}/app/data${RESET} on the api AND worker services.
      • A SECRET_KEY was generated and set on api/worker/beat/web (identical
        across all four, as required — web verifies the session JWT). Rotate it
        in the dashboard for production.

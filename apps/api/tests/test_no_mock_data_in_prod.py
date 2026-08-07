@@ -19,6 +19,8 @@ def _settings(**overrides) -> Settings:
         "environment": "production",
         "secret_key": "x" * 40,
         "token_encryption_key": "t" * 44,
+        "trusted_proxy_count": 1,
+        "api_base_url": "https://api.silk.example",
     }
     base.update(overrides)
     return Settings(**base)

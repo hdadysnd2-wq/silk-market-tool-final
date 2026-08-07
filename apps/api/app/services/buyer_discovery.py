@@ -230,7 +230,7 @@ def _upsert_buyer(
         country_iso2=market_iso2,
         source=source,
         source_confidence=confidence,
-        # The actual discovery adapter (e.g. "mock_customs", "outscraper",
+        # The actual discovery adapter (e.g. "customs_sample", "outscraper",
         # "volza") — carried so the executive report can honestly mark a
         # demonstration-sourced buyer rather than presenting it as observed
         # customs data (audit C6, I1).

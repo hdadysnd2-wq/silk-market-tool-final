@@ -20,9 +20,13 @@ from app.providers.countries import iso3_to_iso2
 from app.schemas.analysis import AnalysisAccepted, AnalysisOut, CountryRankingOut, FunnelBriefOut
 from app.security import CurrentUser, assert_factory_access
 from app.services.funnel_brief import build_funnel_brief
+from app.services.ranking_rationale import build_rationale
 from app.workers.tasks import run_stage2_enrich, run_stage3_deepdive, run_world_ranking
 
 router = APIRouter(tags=["analyses"])
+
+#: Top-N rows that carry the one-line "why this market ranked" rationale (J1).
+_RATIONALE_TOP_N = 5
 
 
 def _ranking_out(r: CountryRanking) -> CountryRankingOut:
@@ -31,6 +35,15 @@ def _ranking_out(r: CountryRanking) -> CountryRankingOut:
     # so the top-5 can drill into each country's deep-dive. None for an unknown
     # market — a declared gap, never a fabricated code (I1).
     out.market_iso2 = iso3_to_iso2(r.importer_iso3)
+    # J1 transparency — computed on read from the persisted score components
+    # (nothing new stored): the top-5 rows each carry a deterministic one-liner
+    # naming the two heaviest components with their real values and sources.
+    # Rows without scored components (Stage-1-only runs) stay None (I1).
+    if r.rank <= _RATIONALE_TOP_N:
+        rationale = build_rationale((r.enrichment or {}).get("score_components"))
+        if rationale is not None:
+            out.rationale_en = rationale["en"]
+            out.rationale_ar = rationale["ar"]
     return out
 
 

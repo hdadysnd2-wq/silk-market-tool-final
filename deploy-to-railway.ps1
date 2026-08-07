@@ -314,7 +314,12 @@ try {
         ('CORS_ORIGINS=https://' + (RailwayRef 'web.RAILWAY_PUBLIC_DOMAIN')),
         "COMTRADE_API_KEY=$($env:COMTRADE_API_KEY)",
         "SENTRY_DSN=$($env:SENTRY_DSN)",
-        'TRUSTED_PROXY_COUNT=1'
+        'TRUSTED_PROXY_COUNT=1',
+        # Engine paid-spend cap + HS cache SQLite: pin to a mounted volume so a
+        # redeploy can't reset the daily cap to zero (audit). Startup fails
+        # unless a Volume is mounted at /app/data on api + worker.
+        'SILK_DATA_DIR=/app/data',
+        'SILK_REQUIRE_PERSISTENT_DATA_DIR=1'
     ) + $storageVars
 
     # api - public HTTP; runs migrations + seed on boot (RUN_SEED handled by start-api.sh).

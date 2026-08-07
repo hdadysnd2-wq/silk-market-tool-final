@@ -60,6 +60,12 @@ def test_sh_keeps_proxy_count_and_sentry():
     assert "SENTRY_DSN=" in SH, "error reporting must be plumbed through (H4)"
 
 
+def test_sh_pins_engine_spend_cap_to_a_persistent_volume():
+    # Otherwise the daily paid-call cap resets to zero on every redeploy.
+    assert "SILK_DATA_DIR=/app/data" in SH
+    assert "SILK_REQUIRE_PERSISTENT_DATA_DIR=1" in SH
+
+
 def test_ps1_matches_sh_policy():
     assert "REQUIRE_OBJECT_STORAGE=1" in PS1
     assert "ALLOW_LOCAL_STORAGE" in PS1
@@ -68,3 +74,5 @@ def test_ps1_matches_sh_policy():
             "the PowerShell deploy script must not hard-disable the sync (C1)"
         )
     assert "TRUSTED_PROXY_COUNT=1" in PS1
+    assert "SILK_DATA_DIR=/app/data" in PS1
+    assert "SILK_REQUIRE_PERSISTENT_DATA_DIR=1" in PS1

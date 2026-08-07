@@ -252,7 +252,12 @@ def test_executive_markets_cap_at_top_five(db, factory, product):
             )
         )
     db.commit()
-    run_product_world_analysis(db, product)
+    # Override the top-20% shortlist quota (J1) with an explicit top_n so the
+    # WHOLE seeded set persists — this test is about the executive report's
+    # independent cap-at-5, not about the shortlist quota (covered by
+    # test_world_funnel). With the quota active, 7 covered would keep only 5 and
+    # the cap would be indistinguishable from the shortlist size.
+    run_product_world_analysis(db, product, top_n=len(isos))
     db.commit()
 
     result = build_executive_result(db, product)

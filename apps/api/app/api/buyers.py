@@ -86,12 +86,30 @@ def discover(
 def list_buyers(
     db: DbDep,
     market: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
     product: Product = Depends(get_owned_product),
 ) -> list[BuyerMatchOut]:
+    # Bounded page (audit H2): the buyers view is polled every few seconds and a
+    # single market can hold ~220 buyers — an unpaginated list was hundreds of
+    # rows per poll per user. Clamp to a sane page and slice deterministically
+    # (buyers_for_product already orders by score desc).
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
     pairs = buyers_for_product(db, product.id, market.upper() if market else None)
+    pairs = pairs[offset : offset + limit]
+
+    # Batch-load contacts for the page's buyers in ONE query instead of one per
+    # buyer (the N+1 the audit flagged).
+    buyer_ids = [buyer.id for _match, buyer in pairs]
+    contacts_by_buyer: dict[object, list[Contact]] = {}
+    if buyer_ids:
+        for contact in db.scalars(select(Contact).where(Contact.buyer_id.in_(buyer_ids))).all():
+            contacts_by_buyer.setdefault(contact.buyer_id, []).append(contact)
+
     results: list[BuyerMatchOut] = []
     for match, buyer in pairs:
-        contacts = db.scalars(select(Contact).where(Contact.buyer_id == buyer.id)).all()
+        contacts = contacts_by_buyer.get(buyer.id, [])
         buyer_out = BuyerOut.model_validate(buyer)
         # Rule 6 / I8 — stamp the 90-day validity window and flag stale leads so a
         # human sees an explicit warning rather than treating old data as current.

@@ -273,7 +273,7 @@ def process_product_intake(self, product_id: str, deepen: bool = False) -> dict:
 
 @celery_app.task(bind=True, name="app.workers.tasks.run_world_ranking", max_retries=_MAX_RETRIES)
 def run_world_ranking(
-    self, analysis_id: str, hs6: str, top_n: int = 20, deepen: bool = False
+    self, analysis_id: str, hs6: str, top_n: int | None = None, deepen: bool = False
 ) -> dict:
     """Screen the world for a confirmed HS6 and persist the country shortlist.
 
@@ -618,7 +618,29 @@ def process_followups() -> dict:
             .order_by(Email.sent_at)
             .limit(FOLLOWUP_BATCH_LIMIT)
         ).all()
+        from app.models import Campaign, Factory
+        from app.services.email_drafting import (
+            ensure_compliance_footer,
+            render_html_body,
+            unsubscribe_url,
+        )
+
         for original in candidates:
+            token = secrets.token_urlsafe(24)
+            campaign = db.get(Campaign, original.campaign_id)
+            factory = db.get(Factory, campaign.factory_id) if campaign else None
+            # Build the follow-up body exactly like an initial draft (audit L3):
+            # intro + parent text, then the SAME compliance footer (sender
+            # identity + postal address + unsubscribe line) keyed on THIS row's
+            # own token, then render the HTML from that footed text. Previously
+            # the HTML was a verbatim copy of the parent's — no intro, parent's
+            # token embedded — so the two MIME parts disagreed and the follow-up
+            # lacked its own unsubscribe line.
+            followup_text = _followup_body(original.body_text)
+            if factory is not None:
+                followup_text = ensure_compliance_footer(
+                    followup_text, factory, original.language, unsubscribe_url(token)
+                )
             db.add(
                 Email(
                     campaign_id=original.campaign_id,
@@ -626,17 +648,37 @@ def process_followups() -> dict:
                     buyer_id=original.buyer_id,
                     status=EmailStatus.draft,
                     subject=f"Re: {original.subject}",
-                    body_text=_followup_body(original.body_text),
-                    body_html=original.body_html,
+                    body_text=followup_text,
+                    body_html=render_html_body(followup_text, token, original.language),
                     language=original.language,
                     is_followup=True,
                     followup_number=1,
                     parent_email_id=original.id,
-                    unsubscribe_token=secrets.token_urlsafe(24),
+                    unsubscribe_token=token,
                 )
             )
             created += 1
     return {"followup_drafts_created": created}
+
+
+@celery_app.task(name="app.workers.tasks.beat_heartbeat")
+def beat_heartbeat() -> dict:
+    """Write beat's liveness heartbeat to Redis (audit H4).
+
+    A dead beat silently disables every reaper/sweep/warmup job; this canary
+    lets /health and /metrics see beat's age so the outage is observable.
+    """
+    import time
+
+    from app.observability import BEAT_HEARTBEAT_KEY, BEAT_STALE_SECONDS
+    from app.redis_client import get_redis
+
+    try:
+        get_redis().set(BEAT_HEARTBEAT_KEY, repr(time.time()), ex=BEAT_STALE_SECONDS * 4)
+    except Exception as exc:  # noqa: BLE001 — never let the canary crash beat
+        log.warning("beat_heartbeat_write_failed", error=str(exc))
+        return {"heartbeat": False}
+    return {"heartbeat": True}
 
 
 @celery_app.task(name="app.workers.tasks.evaluate_deliverability")

@@ -48,13 +48,28 @@ def get_embedding_provider(settings: Settings | None = None) -> EmbeddingProvide
 
 
 def get_shipments_provider(settings: Settings | None = None) -> ShipmentsProvider:
-    """Comtrade for aggregates; the mock supplies transaction-level rows.
+    """Company-level shipments: Volza when keyed; sample data only in local/demo.
 
-    Comtrade has no company-level shipments, so when only aggregate stats are
-    configured we still need a transaction source. The mock customs provider
-    fills that role and is always available.
+    Comtrade supplies market aggregates but no company-level shipments (see
+    ``get_comtrade_provider``); this slot supplies the transaction-level rows
+    buyer discovery groups into importers. ``VOLZA_API_KEY`` selects the live
+    bill-of-lading adapter. Keyless, only ``local`` (or the explicit
+    ``ALLOW_MOCK_DATA=1`` demo opt-in) gets the deterministic sample provider —
+    whose fabricated importers are loudly labeled (``"SAMPLE — …"``,
+    ``customs_sample``). Keyless anywhere else the slot fails closed: buyer
+    discovery's customs step becomes a DECLARED GAP (an empty importer list
+    with a logged reason) instead of silently minting sample companies as
+    ``BuyerSource.customs`` rows (audit 2026-08-07 C3 pattern).
     """
     settings = settings or get_settings()
+    if settings.volza_api_key:
+        from app.providers.shipments.volza import VolzaShipmentsProvider
+
+        return VolzaShipmentsProvider(settings.volza_api_key, api_url=settings.volza_api_url)
+    if settings.environment.strip().lower() != "local" and not settings.allow_mock_data:
+        from app.providers.shipments.gated import GatedShipmentsProvider
+
+        return GatedShipmentsProvider()
     from app.providers.shipments.mock import MockShipmentsProvider
 
     return MockShipmentsProvider(seed=settings.mock_seed)

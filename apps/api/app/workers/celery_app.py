@@ -101,4 +101,11 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.tasks.run_pdpl_retention",
         "schedule": crontab(hour=1, minute=30),
     },
+    # Beat-liveness canary (audit H4): beat writes a heartbeat every minute;
+    # /health reports 503 and /metrics exposes the age if it goes stale, so a
+    # silently-dead beat (which would stop every reaper/sweep above) is visible.
+    "beat-heartbeat": {
+        "task": "app.workers.tasks.beat_heartbeat",
+        "schedule": crontab(minute="*"),
+    },
 }

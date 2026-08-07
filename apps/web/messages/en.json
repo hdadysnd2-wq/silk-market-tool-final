@@ -131,7 +131,17 @@
     "refine": "Refine (Stage 2)",
     "refining": "Refining…",
     "refined": "Refined (Stage 2)",
-    "tariffLabel": "tariff"
+    "tariffLabel": "tariff",
+    "scoreBreakdown": "Score breakdown",
+    "components": {
+      "market_size": "Market size (USD imports)",
+      "demand_capacity": "Demand capacity (PPP/capita)",
+      "saudi_position": "Saudi supplier share (%)",
+      "unit_price_level": "Unit price level (USD/unit)",
+      "tariff_access": "Applied tariff (fraction)",
+      "competition": "Supplier concentration",
+      "logistics_proximity": "Distance from Jeddah (km)"
+    }
   },
   "buyers": {
     "title": "Potential buyers",

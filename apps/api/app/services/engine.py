@@ -139,11 +139,14 @@ def score_market_components(rows: list[dict]) -> list[dict]:
     """Score markets with the engine's audited weighted model (Wave 3 item 2).
 
     ``rows``: ``[{"iso3": str, "components": {name: {"value", "source",
-    "confidence", "note"}}}]`` where component names are the engine's four
-    (``market_size``, ``saudi_position``, ``demand_capacity``, ``competition``).
-    The platform supplies its OWN synced data; the engine owns the model —
-    weights, per-cohort normalization, renormalization over present components,
-    competition inversion, and the I9 transit-hub demotion. Returns
+    "confidence", "note"}}}]`` where component names are the engine's seven
+    (``market_size``, ``demand_capacity``, ``saudi_position``,
+    ``unit_price_level``, ``tariff_access``, ``competition``,
+    ``logistics_proximity`` — J1). The platform supplies its OWN synced data;
+    the engine owns the model — weights, per-cohort normalization,
+    renormalization over present components, inversion of the lower-is-better
+    components (competition, tariff, distance), and the I9 transit-hub
+    demotion. Returns
     ``[{"iso3", "total_score", "confidence", "transit_hub"}]`` aligned by
     index. A missing component is skipped and lowers confidence — never a
     fabricated value (I1).
@@ -168,6 +171,18 @@ def score_market_components(rows: list[dict]) -> list[dict]:
         for r in rows
     ]
     return silk_market_ranker.score_component_rows(engine_rows)
+
+
+def component_weights() -> dict[str, float]:
+    """The engine's audited component-weight table (read-only copy).
+
+    The ONE scoring model's weights (locked decision #8/J1) — exposed so
+    product-side transparency (the per-country ranking rationale) can order
+    components by their real model weight without keeping a parallel table.
+    """
+    import silk_market_ranker
+
+    return dict(silk_market_ranker.WEIGHTS)
 
 
 def hs6_reference(hs6: str) -> tuple[bool, str | None]:

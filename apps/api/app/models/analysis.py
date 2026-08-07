@@ -44,6 +44,9 @@ class Analysis(UUIDMixin, TimestampMixin, Base):
     #: report show "screened N → shortlisted M → top 5" with the real world count,
     #: not the shortlist length. None for runs predating this column.
     total_screened: Mapped[int | None] = mapped_column(Integer)
+    #: How many markets the Stage-1 top-20% cut kept for Stage 2 (J1 funnel
+    #: transparency: "screened N → shortlisted M → top 5"). None for older runs.
+    shortlisted: Mapped[int | None] = mapped_column(Integer)
 
 
 class HSClassification(UUIDMixin, TimestampMixin, Base):

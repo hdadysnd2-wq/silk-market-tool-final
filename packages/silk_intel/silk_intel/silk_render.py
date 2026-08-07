@@ -2116,6 +2116,11 @@ def _executive_section(result: dict) -> "dict | None":
             "tags": [str(t) for t in (m.get("tags") or [])],
             "transit_hub": bool(m.get("transit_hub")),
             "prices": prices,
+            # ملاحظة أسعار اختيارية من جانب المنتج — J3: مصدر أسعار غير مهيّأ
+            # (بوابة C3) => «الأسعار بانتظار مصدر بيانات» بدل السطر العام.
+            # تمريرة إضافية صرفة عبر مُطهِّر السباكة؛ غيابها = "" (لا تغيير).
+            "prices_note": _strip_internal_plumbing(
+                str(m.get("prices_note") or "")) or "",
             "competitors": competitors,
             "buyers": buyers,
         })

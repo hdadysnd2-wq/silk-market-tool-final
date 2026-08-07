@@ -109,7 +109,20 @@ export interface CountryRanking {
     ppp_gni_per_capita: number | null;
     source: string;
     note: string;
+    /** Per-country engine scoring components (transparent scoring, J1): which
+     *  real signals fed the ONE audited model, each with its value + source.
+     *  Absent components are declared gaps (I1) — they are simply not listed. */
+    score_components?: Record<
+      string,
+      { value: number; source: string; confidence?: number; note?: string }
+    >;
+    score_confidence?: number;
+    score_model?: string;
   } | null;
+  /** Deterministic one-line "why this market ranked" (top-5 rows only, J1);
+   *  null until Stage 2 has produced score components — never invented. */
+  rationale_en?: string | null;
+  rationale_ar?: string | null;
   /** Stage-3 per-market deep-dive (competitors, requirements, correlation
    *  threads); null until Stage 3 runs, or a declared gap for an unmapped market. */
   deepdive?: Record<string, unknown> | null;
@@ -126,6 +139,8 @@ export interface Analysis {
   created_at: string;
   /** Markets screened worldwide in Stage 1 (funnel transparency); null on older runs. */
   total_screened: number | null;
+  /** Markets the Stage-1 top-20% cut kept for Stage 2 (J1); null on older runs. */
+  shortlisted?: number | null;
   rankings: CountryRanking[];
 }
 

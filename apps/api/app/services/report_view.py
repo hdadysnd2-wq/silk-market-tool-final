@@ -39,6 +39,27 @@ TOP_MARKETS = 5
 #: is a summary, not a dump.
 EXEC_LIST_CAP = 5
 
+#: Client-facing line shown INSTEAD of the generic empty-prices state when the
+#: observed-price slot fails closed (``GatedPriceProvider``, audit C3): no price
+#: source is configured at all, so the gap is "pending a data source" — not
+#: "searched and nothing was observed". Bilingual: the docx derivative is
+#: Arabic-first, the JSON payload is also read by English-speaking operators.
+PRICING_PENDING_LINE = "الأسعار بانتظار مصدر بيانات — pricing pending data source"
+
+
+def _price_source_pending() -> bool:
+    """True when NO observed-price source is configured (the slot is gated).
+
+    The registry returns the C3 ``GatedPriceProvider`` exactly when no
+    ``LOCALPRICE_API_KEY`` is set outside ``local`` and there is no explicit
+    ``ALLOW_MOCK_DATA`` demo opt-in. In that state the executive prices section
+    must say it is *pending a data source* rather than render the generic
+    "not observed" empty state (which implies a source was consulted).
+    """
+    from app.providers.registry import get_price_provider
+
+    return getattr(get_price_provider(), "name", "") == "gated-prices"
+
 
 def _dp(
     value: float | None,
@@ -288,12 +309,22 @@ def _executive_buyers(db: Session, product: Product, iso2: str | None) -> list[d
 
 
 def _is_demo_provider(provider_name: str | None) -> bool:
-    """True when a stored provenance name is a deterministic mock/fixture."""
+    """True when a stored provenance name is a deterministic mock/fixture.
+
+    ``sample`` covers the shipments stand-in (``customs_sample``, J4), whose
+    fabricated importers additionally carry a "SAMPLE — " name prefix.
+    """
     name = (provider_name or "").lower()
-    return "mock" in name or "fixture" in name or "demo" in name
+    return "mock" in name or "fixture" in name or "demo" in name or "sample" in name
 
 
-def _executive_market_row(db: Session, product: Product, ranking: CountryRanking) -> dict:
+def _executive_market_row(
+    db: Session,
+    product: Product,
+    ranking: CountryRanking,
+    *,
+    price_source_pending: bool = False,
+) -> dict:
     """One executive market: score + rationale + snapshot rows AS STORED (I1).
 
     ``score`` prefers the Stage-2 engine score, falling back to the Stage-1
@@ -334,6 +365,7 @@ def _executive_market_row(db: Session, product: Product, ranking: CountryRanking
         for name, c in (enrichment.get("score_components") or {}).items()
     }
     tags = [t for t in (ranking.tags or []) if t]
+    prices = list(snapshot.observed_prices or []) if snapshot is not None else []
 
     return {
         "country": (market.name_en if market else None) or iso3,
@@ -346,7 +378,11 @@ def _executive_market_row(db: Session, product: Product, ranking: CountryRanking
         "tags": tags,
         # I9 — the transit-hub demotion stays visible in the executive summary.
         "transit_hub": any("transit" in t.lower() for t in tags),
-        "prices": list(snapshot.observed_prices or []) if snapshot is not None else [],
+        "prices": prices,
+        # J3 — a gated (keyless) price slot with nothing persisted is a *pending
+        # data source*, not a searched-and-empty market; prices persisted before
+        # the gate (or by a keyed run) always render as stored (I1).
+        "prices_note": PRICING_PENDING_LINE if price_source_pending and not prices else "",
         "competitors": (
             list(snapshot.top_exporters or [])[:EXEC_LIST_CAP] if snapshot is not None else []
         ),
@@ -367,8 +403,12 @@ def build_executive_result(db: Session, product: Product) -> dict:
     analysis = _latest_analysis(db, product)
     rankings = _analysis_rankings(db, analysis)
     result = _engine_result(db, product, rankings)
+    pending = _price_source_pending()
     result["executive"] = {
         "screening": _screening_summary(analysis),
-        "markets": [_executive_market_row(db, product, r) for r in rankings[:TOP_MARKETS]],
+        "markets": [
+            _executive_market_row(db, product, r, price_source_pending=pending)
+            for r in rankings[:TOP_MARKETS]
+        ],
     }
     return result

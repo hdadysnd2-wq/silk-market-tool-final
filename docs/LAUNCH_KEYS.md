@@ -27,10 +27,17 @@ the send path hard-blocks until the built-in DNS check passes.
 |---|---|---|
 | Observed competitor prices | `LOCALPRICE_API_KEY` (+ `LOCALPRICE_API_URL` if non-default) | SerpApi. Without it, prices are a declared gap in prod (never mock — C3) |
 | Stage-2 live enrichment (tariff/PPP) | `MARKET_ENRICHMENT_LIVE=1` | Keyless (World Bank/WITS public APIs) — just flip it on in prod |
+| Shipment data (buyer lists) | `VOLZA_API_KEY` (+ `VOLZA_API_URL` if the plan's endpoint differs) | Volza recommended first¹. Without a key, buyer discovery's customs step is a declared gap in prod (never sample importers — C3 pattern); the adapter (`providers/shipments/volza.py`) is ready and waiting on the subscription. |
 | Buyer discovery — maps long-tail | `OUTSCRAPER_API_KEY` | |
 | Buyer discovery — enrichment | `CORESIGNAL_API_KEY` | |
 | Email finding / verification | `APOLLO_API_KEY`, `ZEROBOUNCE_API_KEY` | |
 | Cold-send infrastructure (optional channel) | `SMARTLEAD_API_KEY` **+ console work** | Not launchable yet even with the key: the Smartlead campaign-id mapping and webhook wiring are unbuilt (audit C-1/campaigns). Keep `SMARTLEAD_SEQUENCE_VERIFIED` unset so the slot stays fail-closed. |
+
+¹ Shipment-data vendor choice: **Volza** first — API-accessible at the lowest
+entry price, good MENA/Asia coverage, importer-level granularity. Alternatives
+behind the same adapter seam: **Panjiva** (S&P — premium, best data quality,
+higher cost and slower procurement) and **ImportGenius** (mid-price, US-centric
+coverage).
 
 ## 3. The three one-command proofs
 

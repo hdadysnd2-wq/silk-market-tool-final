@@ -1,19 +1,21 @@
 """Funnel Stage 2: budgeted live enrichment of the Stage-1 shortlist → top 5.
 
-Stage 1 screens every market locally (zero calls) and shortlists ~15-20. Stage 2
+Stage 1 screens every market locally (zero calls) and shortlists the top 20% of
+covered markets (clamped to 5–30, J1). Stage 2
 enriches that shortlist with budgeted macro/tariff signals (applied tariff, PPP)
 — charging the per-analysis API budget (locked decision #5) and logging spend —
 then re-ranks with the ENGINE's audited weighted component model (Wave 3 item 2:
 ``engine.score_market_components`` → ``silk_market_ranker.score_component_rows``
 — weights, per-cohort normalization, renormalization over present components,
-competition inversion, I9 transit-hub demotion). The platform supplies its own
-persisted signals as components: import volume (``world_trade``), PPP GNI/capita
-(demand-capacity proxy), and — when a ``MarketSnapshot`` exists — the Saudi
-supplier share and top-supplier concentration. A missing signal is a skipped
-component that lowers that row's score confidence (I1) — never fabricated. The
-applied tariff stays in ``enrichment`` as display/report data; it is not part of
-the engine's scoring model (the old tariff-drag heuristic was a product-local
-invention the audit flagged).
+inversion of competition/tariff/distance, I9 transit-hub demotion). The platform
+supplies its own persisted signals as components (J1, seven total): import
+volume (``world_trade``), PPP GNI/capita (demand-capacity proxy), the Saudi
+supplier share and top-supplier concentration (when a ``MarketSnapshot``
+exists), the observed Comtrade unit value (``import_usd/import_qty`` from
+``world_trade``), the applied tariff from the enrichment record, and the derived
+great-circle distance from Jeddah (``providers.countries_distance``). A missing
+signal is a skipped component that lowers that row's score confidence (I1) —
+never fabricated.
 """
 
 from __future__ import annotations
@@ -22,8 +24,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.logging import get_logger
-from app.models import Analysis, CountryRanking, MarketSnapshot
+from app.models import Analysis, CountryRanking, MarketSnapshot, WorldTrade
 from app.providers.countries import iso3_to_iso2
+from app.providers.countries_distance import DISTANCE_SOURCE, distance_from_jeddah_km
 from app.providers.registry import get_market_enrichment_provider
 from app.services import heartbeat
 from app.services.api_budget import charge
@@ -31,10 +34,32 @@ from app.services.api_budget import charge
 log = get_logger(__name__)
 
 
+def _unit_price(db: Session, hs6: str, r: CountryRanking) -> float | None:
+    """Observed Comtrade unit value (USD per reported qty unit) for this market.
+
+    Derived from the persisted ``world_trade`` row: ``import_usd / import_qty``.
+    A row without a positive quantity is a declared gap (I1) — returns ``None``
+    so the component is omitted, never a fabricated unit value.
+    """
+    row = db.scalar(
+        select(WorldTrade).where(
+            WorldTrade.hs6 == hs6,
+            WorldTrade.importer_iso3 == r.importer_iso3,
+            WorldTrade.year == r.year,
+        )
+    )
+    if row is None or row.import_usd is None or row.import_qty is None:
+        return None
+    qty = float(row.import_qty)
+    if qty <= 0:
+        return None
+    return float(row.import_usd) / qty
+
+
 def _components_for(
     db: Session, hs6: str, r: CountryRanking, ppp: float | None, ppp_source: str
 ) -> dict[str, dict]:
-    """The engine's four scoring components from the platform's persisted data.
+    """The engine's seven scoring components from the platform's persisted data.
 
     Every component carries its source; an absent signal is simply omitted so
     the engine skips it (renormalizing and lowering confidence) — no fabricated
@@ -86,11 +111,36 @@ def _components_for(
             "confidence": 0.9,
             "note": "largest-supplier concentration",
         }
+    # J1 — the three new components, each from REAL persisted/derived data only.
+    unit_price = _unit_price(db, hs6, r)
+    if unit_price is not None:
+        components["unit_price_level"] = {
+            "value": unit_price,
+            "source": "world_trade",
+            "confidence": 0.8,
+            "note": "Comtrade unit value USD/qty",
+        }
+    tariff = (r.enrichment or {}).get("applied_tariff_pct")
+    if tariff is not None:
+        components["tariff_access"] = {
+            "value": float(tariff),
+            "source": (r.enrichment or {}).get("source") or "enrichment",
+            "confidence": 0.8,
+            "note": "applied import tariff for HS6",
+        }
+    distance_km = distance_from_jeddah_km(r.importer_iso3)
+    if distance_km is not None:
+        components["logistics_proximity"] = {
+            "value": distance_km,
+            "source": DISTANCE_SOURCE,
+            "confidence": 0.9,
+            "note": "great-circle km, Jeddah → market's main port",
+        }
     return components
 
 
 def enrich_shortlist(
-    db: Session, analysis: Analysis, hs6: str, limit: int = 20
+    db: Session, analysis: Analysis, hs6: str, limit: int | None = None
 ) -> list[CountryRanking]:
     """Enrich the persisted Stage-1 shortlist (budgeted) and re-rank to a top 5.
 
@@ -98,7 +148,14 @@ def enrich_shortlist(
     stops early and logs when the budget is exhausted, leaving the rest on their
     Stage-1 score. Returns the shortlist re-ordered by the Stage-2 score, with
     ``rank`` reassigned so the top-5 the report surfaces reflects Stage 2.
+    ``limit`` defaults to the Stage-1 shortlist ceiling (``SHORTLIST_MAX``) so
+    the whole persisted shortlist is re-ranked as ONE cohort — a partial re-rank
+    would leave stale Stage-1 ranks below the cut line.
     """
+    from app.services.world_funnel import SHORTLIST_MAX
+
+    if limit is None:
+        limit = SHORTLIST_MAX
     rows = list(
         db.scalars(
             select(CountryRanking)

@@ -7,6 +7,7 @@ import hmac
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import ValidationError
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import DbDep
 from app.config import get_settings
@@ -76,8 +77,14 @@ async def smartlead_webhook(request: Request, db: DbDep) -> dict:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Malformed webhook payload"
         ) from exc
 
-    email = record_engagement(db, event.message_id, event.event, event.bounce_type)
-    db.commit()
+    # The DB write + campaign-health evaluation are blocking; run them in the
+    # threadpool so a bounce/engagement burst can't stall the event loop (H1).
+    def _apply() -> object:
+        email = record_engagement(db, event.message_id, event.event, event.bounce_type)
+        db.commit()
+        return email
+
+    email = await run_in_threadpool(_apply)
     if email is None:
         return {"detail": "no matching email", "event": event.event}
     return {"detail": "recorded", "event": event.event, "email_status": email.status.value}

@@ -131,7 +131,17 @@
     "refine": "تحسين (المرحلة ٢)",
     "refining": "جارٍ التحسين…",
     "refined": "مُحسَّن (المرحلة ٢)",
-    "tariffLabel": "الرسوم"
+    "tariffLabel": "الرسوم",
+    "scoreBreakdown": "تفصيل الدرجة",
+    "components": {
+      "market_size": "حجم السوق (واردات بالدولار)",
+      "demand_capacity": "طاقة الطلب (قوة شرائية للفرد)",
+      "saudi_position": "حصة السعودية (٪)",
+      "unit_price_level": "مستوى سعر الوحدة (دولار/وحدة)",
+      "tariff_access": "الرسوم الجمركية المطبقة (نسبة)",
+      "competition": "تركّز المورّدين",
+      "logistics_proximity": "المسافة من جدة (كم)"
+    }
   },
   "buyers": {
     "title": "المشترون المحتملون",

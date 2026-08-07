@@ -1,9 +1,15 @@
-"""Deterministic customs-shipment stand-in.
+"""Deterministic customs-shipment stand-in — loudly labeled SAMPLE data.
 
 Generates a stable set of importer companies and their shipment history for a
 given (HS code, market) so buyer discovery has transaction-level data to work
 with even without a paid customs feed. Real bulk data is loaded separately by
-``csv_ingest`` into the same ``shipments`` table.
+``csv_ingest`` into the same ``shipments`` table; the live vendor seam is
+``providers/shipments/volza.py`` (J4).
+
+Every fabricated company name carries the ``SAMPLE_NAME_PREFIX`` and the
+provider is named ``customs_sample`` so a demo buyer can never read as observed
+customs data — the prefix travels through discovery into ``Buyer.name`` and
+surfaces verbatim in the buyers UI and the executive report (I1).
 """
 
 from __future__ import annotations
@@ -54,13 +60,18 @@ _IMPORTER_TYPES = {
 }
 _ORIGINS = ["CN", "IN", "TR", "DE", "SA", "AE", "US", "IT", "TH", "MY"]
 
+#: Loud label carried by every fabricated importer name (J4). Constant, so the
+#: generated names stay deterministic; the prefix flows through discovery into
+#: ``Buyer.name`` and renders verbatim wherever the buyer is shown.
+SAMPLE_NAME_PREFIX = "SAMPLE — "
+
 
 def _type_pool(hs_code: str) -> list[str]:
     return _IMPORTER_TYPES.get(hs_code[:2], ["Trading", "Industries", "Distribution"])
 
 
 class MockShipmentsProvider:
-    name = "mock_customs"
+    name = "customs_sample"
 
     def __init__(self, seed: int = 42) -> None:
         self._seed = seed
@@ -73,7 +84,7 @@ class MockShipmentsProvider:
         while len(names) < count:
             stem = rng.choice(_IMPORTER_STEMS)
             kind = rng.choice(types)
-            name = f"{stem} {kind}"
+            name = f"{SAMPLE_NAME_PREFIX}{stem} {kind}"
             if name not in used:
                 used.add(name)
                 names.append(name)

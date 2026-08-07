@@ -92,6 +92,10 @@ class Settings(BaseSettings):
     # registers the providers when a key is present; the engine's PAID/deepen
     # structural guard still applies at call time.
     volza_api_key: str = ""
+    # Volza data-API base URL. The paid host/path can differ per subscription
+    # plan (the engine's silk_volza_agent reads the same env var for the same
+    # reason); the shipments adapter appends its endpoint paths to this base.
+    volza_api_url: str = "https://api.volza.com/v1"
     explee_api_key: str = ""
     zerobounce_api_key: str = ""
     smartlead_api_key: str = ""
@@ -115,6 +119,9 @@ class Settings(BaseSettings):
     dkim_selectors: str = "default,google,selector1,selector2,s1,s2,k1,smartlead,dkim"
 
     sentry_dsn: str = ""
+    # Outside local, /metrics requires this bearer token; unset → the endpoint
+    # 404s (never an open Prometheus scrape surface). Local is always open.
+    metrics_token: str = ""
 
     # Per-tenant mailbox OAuth (multi-tenant email sending).
     #
@@ -253,6 +260,40 @@ class Settings(BaseSettings):
                 'python -c "from cryptography.fernet import Fernet; '
                 'print(Fernet.generate_key().decode())" and set it — it encrypts '
                 "mailbox OAuth tokens at rest, independently of SECRET_KEY."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _safe_prod_networking_defaults(self) -> Settings:
+        """Fail closed on the two unsafe defaults the audit flagged (H7).
+
+        Outside local:
+        - ``trusted_proxy_count == 0`` behind an edge proxy collapses the per-IP
+          login throttle into ONE global bucket → 20 junk logins lock everyone
+          out. Any real deploy sits behind ≥1 proxy, so 0 is never right there.
+        - ``api_base_url`` still at the localhost default means every outbound
+          email embeds a localhost unsubscribe link — an RFC 8058 / compliance
+          break on the money path.
+        Local/CI keep the convenient defaults.
+        """
+        if self.environment.strip().lower() == "local":
+            return self
+        if self.trusted_proxy_count < 1:
+            raise ValueError(
+                f"TRUSTED_PROXY_COUNT={self.trusted_proxy_count} but "
+                f"ENVIRONMENT={self.environment!r} is not 'local'. A real deploy "
+                "sits behind at least one reverse proxy; 0 makes the per-IP login "
+                "throttle a global lockout (20 bad logins lock out everyone). Set "
+                "it to the number of trusted proxies in front of the API (Railway "
+                "edge = 1)."
+            )
+        if "localhost" in self.api_base_url or "127.0.0.1" in self.api_base_url:
+            raise ValueError(
+                f"API_BASE_URL={self.api_base_url!r} still points at localhost but "
+                f"ENVIRONMENT={self.environment!r} is not 'local'. Every outbound "
+                "email embeds its unsubscribe link under this origin; a localhost "
+                "link is a dead unsubscribe (RFC 8058 / compliance break). Set it "
+                "to the API's public URL."
             )
         return self
 

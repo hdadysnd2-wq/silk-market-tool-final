@@ -11,12 +11,14 @@ visible tag *and* a score penalty so they do not silently top the ranking.
 Mirror-derived rows carry a "mirror data" tag; a missing figure is surfaced as a
 declared gap, never a fabricated number (I1).
 
-Stages 2 (budgeted live enrichment of ~15–20) and 3 (full agent deep-dive on the
+Stages 2 (budgeted live enrichment of the top-20% shortlist, clamped 5–30) and 3
+(full agent deep-dive on the
 top 5) run on the shortlist this stage produces — they are not this module.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 from sqlalchemy import func, select
@@ -78,14 +80,36 @@ class Stage1Result:
     year: int | None
     total_screened: int
     markets: list[ScreenedMarket]
+    #: Markets with actual import data (the shortlist quota base); the rest are
+    #: declared no-data gaps (I1) that cannot meaningfully compete for a slot.
+    covered: int = 0
+    #: How many markets were kept for Stage 2 (funnel transparency:
+    #: "screened N → shortlisted M → top 5").
+    shortlisted: int = 0
 
     def as_dict(self) -> dict:
         return {
             "hs6": self.hs6,
             "year": self.year,
             "total_screened": self.total_screened,
+            "covered": self.covered,
+            "shortlisted": self.shortlisted,
             "markets": [m.as_dict() for m in self.markets],
         }
+
+
+#: J1 shortlist quota — Stage 1 keeps the top ``SHORTLIST_FRACTION`` of covered
+#: markets (ceil), clamped to [SHORTLIST_MIN, SHORTLIST_MAX]. The clamp bounds
+#: the budgeted Stage-2 pass: never fewer than 5 candidates for a thin market,
+#: never more than 30 live-enrichment charges for a huge one.
+SHORTLIST_FRACTION = 0.20
+SHORTLIST_MIN = 5
+SHORTLIST_MAX = 30
+
+
+def shortlist_quota(covered: int) -> int:
+    """ceil(20% of covered markets), clamped to [5, 30] (bounded Stage-2 budget)."""
+    return max(SHORTLIST_MIN, min(SHORTLIST_MAX, math.ceil(covered * SHORTLIST_FRACTION)))
 
 
 #: Substring marking a ``world_trade`` row as demo-seed data (see seeds/seed.py).
@@ -116,13 +140,15 @@ def coverage_state(db: Session, hs6: str) -> str:
     return "live"
 
 
-def screen_world(db: Session, hs6: str, top_n: int = 20) -> Stage1Result:
+def screen_world(db: Session, hs6: str, top_n: int | None = None) -> Stage1Result:
     """Screen every importer for ``hs6`` in the latest available year (Stage 1).
 
-    Returns the ranked shortlist (up to ``top_n``) with the transit-port guard
-    (I9) applied and provenance tags attached. ``total_screened`` is the full
-    count of markets considered, so the report can show the funnel transparently
-    ("screened N markets → shortlisted …").
+    Returns the ranked shortlist with the transit-port guard (I9) applied and
+    provenance tags attached. The shortlist size defaults to the top-20% cut
+    (:func:`shortlist_quota` — ceil(20%) of *covered* markets, clamped to
+    [5, 30] to bound the Stage-2 budget); an explicit ``top_n`` overrides it.
+    ``total_screened`` / ``covered`` / ``shortlisted`` expose the funnel
+    transparently ("screened N markets → shortlisted M …").
     """
     year = _latest_year(db, hs6)
     if year is None:
@@ -134,7 +160,19 @@ def screen_world(db: Session, hs6: str, top_n: int = 20) -> Stage1Result:
     screened = [_screen_row(r) for r in rows]
     # Deterministic order: score desc, then ISO3 asc as a stable tiebreak.
     screened.sort(key=lambda m: (-m.screen_score, m.importer_iso3))
-    return Stage1Result(hs6=hs6, year=year, total_screened=len(screened), markets=screened[:top_n])
+    # Coverage = markets holding actual import data; no-data rows are declared
+    # gaps (I1) that score 0 and must not inflate the percentage base.
+    covered = sum(1 for m in screened if m.import_usd is not None)
+    keep = top_n if top_n is not None else shortlist_quota(covered)
+    kept = screened[:keep]
+    return Stage1Result(
+        hs6=hs6,
+        year=year,
+        total_screened=len(screened),
+        covered=covered,
+        shortlisted=len(kept),
+        markets=kept,
+    )
 
 
 def _screen_row(row: WorldTrade) -> ScreenedMarket:

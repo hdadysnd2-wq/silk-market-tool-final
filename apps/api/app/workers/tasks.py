@@ -290,7 +290,7 @@ def run_world_ranking(
     import uuid as _uuid
 
     from app.models import Analysis
-    from app.services import engine, world_funnel
+    from app.services import engine, heartbeat, world_funnel
     from app.services.api_budget import budget_scope
     from app.services.ranking import rank_and_persist
 
@@ -319,8 +319,22 @@ def run_world_ranking(
             # #5), and the deepen scope (I5) gates paid engine agents behind
             # /deepen.
             with engine.deepen_scope(deepen), budget_scope(label=f"ranking:{analysis_id}:{hs6}"):
+                # Liveness beat at the start of the ranking work (C5): a slow screen
+                # — or a redelivery — must not look dead to the stuck-row reaper.
+                # Mirrors the stage 2/3 heartbeat (symptom B).
+                heartbeat.beat(analysis.id)
                 rankings = rank_and_persist(db, analysis, hs6, top_n=top_n)
-                if analysis.status in ("pending", "classified"):
+                # Re-read before the transition (C5): reconcile_stuck_analyses may
+                # have terminalized this row in its OWN transaction while Stage 1 ran
+                # (symptom B write race). A terminal 'failed' is never overwritten by
+                # a late 'ranked' — mirrors the stage 2/3 guards.
+                db.refresh(analysis)
+                if analysis.status == "failed":
+                    log.warning(
+                        "world_ranking_finished_after_terminal_status",
+                        analysis_id=analysis_id,
+                    )
+                elif analysis.status in ("pending", "classified"):
                     analysis.status = "ranked"
             db.flush()
             if coverage == "demo":
@@ -371,16 +385,17 @@ def run_stage2_enrich(self, analysis_id: str, hs6: str, deepen: bool = False) ->
             # stage ran (symptom B write race) — a terminal status is never
             # overwritten by a late completion.
             db.refresh(analysis)
-            if analysis.status in ("pending", "classified", "ranked"):
+            # C2 (defense-in-depth): only a ranked-or-already-enriched analysis is
+            # promoted to 'enriched'. A never-ranked run ('pending'/'classified' —
+            # e.g. Stage 2 enqueued before Stage 1 committed) must NOT become
+            # 'enriched' with zero rankings; it is left as-is (the API precondition
+            # gate is the first line of defense, this is the backstop).
+            if analysis.status in ("ranked", "enriched"):
                 analysis.status = "enriched"
             elif analysis.status == "failed":
                 log.warning("stage2_finished_after_terminal_status", analysis_id=analysis_id)
         db.commit()
-        # Auto-chain Stage 3 (FREE per-market deep-dive). Commit-before-enqueue so
-        # the Stage-3 task's own session sees the enriched rows; eager mode runs it
-        # inline (tests), prod queues it. deepen is carried forward (stays False).
-        run_stage3_deepdive.delay(analysis_id, hs6, deepen=deepen)
-        return {
+        result = {
             "analysis_id": analysis_id,
             "hs6": hs6,
             "status": analysis.status,
@@ -391,6 +406,15 @@ def run_stage2_enrich(self, analysis_id: str, hs6: str, deepen: bool = False) ->
         return _handle_pipeline_failure(self, analysis_id, "stage2_enrich", exc)
     finally:
         db.close()
+    # Auto-chain Stage 3 (FREE per-market deep-dive) AFTER the commit AND OUTSIDE
+    # the try (C3). Commit-before-enqueue so the Stage-3 task's own session sees the
+    # enriched rows; eager mode runs it inline (tests), prod queues it. Keeping the
+    # enqueue outside the try means a post-commit broker fault (a kombu/redis
+    # OperationalError, which _is_transient does NOT match) can no longer be caught
+    # by the except above and overwrite the just-committed 'enriched' status with
+    # 'failed' (dropping Stage 3). deepen is carried forward (stays False).
+    run_stage3_deepdive.delay(analysis_id, hs6, deepen=deepen)
+    return result
 
 
 @celery_app.task(bind=True, name="app.workers.tasks.run_stage3_deepdive", max_retries=_MAX_RETRIES)

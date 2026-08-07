@@ -127,6 +127,18 @@ def enrich_analysis(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> Ana
             status_code=status.HTTP_409_CONFLICT,
             detail="HS code must be confirmed before Stage-2 enrichment",
         )
+    # C2 — Stage 2 must not run before Stage 1 has committed a ranking. Gate on the
+    # analysis status too (not just HS confirmation): enriching a 'pending' /
+    # 'classified' / 'failed' analysis would produce an 'enriched' run with zero
+    # rankings. Only a ranked-or-later analysis may be (re-)enriched.
+    if analysis.status not in ("ranked", "enriched", "deepened"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "analysis must be ranked before Stage-2 enrichment "
+                f"(current status: {analysis.status})"
+            ),
+        )
     # Snapshot the pre-enrich analysis for the 202 body BEFORE enqueuing (eager mode
     # would otherwise bleed the re-ranked Stage-2 result in).
     accepted = _to_out(db, analysis)
@@ -155,6 +167,17 @@ def deepdive_analysis(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> A
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="HS code must be confirmed before Stage-3 deep-dive",
+        )
+    # C2 — Stage 3 runs on the Stage-2 finalists, so it must not run before Stage 2
+    # has committed an enriched shortlist. Only an enriched-or-already-deepened
+    # analysis may be (re-)deep-dived.
+    if analysis.status not in ("enriched", "deepened"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "analysis must be enriched before Stage-3 deep-dive "
+                f"(current status: {analysis.status})"
+            ),
         )
     # Snapshot the pre-deepdive analysis for the 202 body BEFORE enqueuing (eager
     # mode would otherwise bleed the deep-dived result in).

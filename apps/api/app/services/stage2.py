@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.logging import get_logger
 from app.models import Analysis, CountryRanking
 from app.providers.registry import get_market_enrichment_provider
+from app.services import heartbeat
 from app.services.api_budget import charge
 
 log = get_logger(__name__)
@@ -61,6 +62,10 @@ def enrich_shortlist(
     provider = get_market_enrichment_provider()
     enriched = 0
     for r in rows:
+        # Liveness beat per market: a live enrichment pass can legitimately take
+        # minutes; without this the stuck-row reaper cannot tell it from a lost
+        # worker (symptom B).
+        heartbeat.beat(analysis.id)
         if not charge(1, source="market_enrichment"):
             log.warning(
                 "stage2_budget_exhausted",

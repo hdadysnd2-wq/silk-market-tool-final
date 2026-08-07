@@ -49,9 +49,29 @@ export function WorldFunnel({
   const [brief, setBrief] = useState<FunnelBrief | null>(null);
   const [loading, setLoading] = useState(false);
   const [enriching, setEnriching] = useState(false);
+  const [stage, setStage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const confirmed = Boolean(product.hs_code && product.hs_confirmed_by_user);
+
+  // Per-stage progress label from the analysis status — the funnel is a staged
+  // pipeline (pending → ranked → enriched → deepened), not one opaque spinner.
+  const stageLabel = (s: string | null): string | null => {
+    if (s === "pending" || s === "classified") return t("stagePending");
+    if (s === "ranked") return t("stageRanked");
+    if (s === "enriched") return t("stageEnriched");
+    return null;
+  };
+
+  // A terminal `failed` ends the wait IMMEDIATELY with the persisted reason.
+  // (The old predicate waited only for success states, so a sub-second failure
+  // spun for the full 3-minute poll window and surfaced as a raw timeout.)
+  const settleFailed = (run: Analysis) => {
+    if (run.status !== "failed") return false;
+    setAnalysis(null);
+    setError(run.failure_reason || t("analysisFailed"));
+    return true;
+  };
 
   async function screen() {
     setLoading(true);
@@ -64,12 +84,13 @@ export function WorldFunnel({
       const analysisId = accepted.analysis.id;
       const run = await pollUntil(
         () => api.get<Analysis>(`/analyses/${analysisId}`),
-        (a) => a.status === "ranked" || a.status === "enriched",
+        (a) => a.status === "ranked" || a.status === "enriched" || a.status === "failed",
         // A live Comtrade world screen makes real, throttled calls under the
         // per-analysis budget and routinely runs past the 60s default; give it
         // room (the worker keeps going regardless, but the UI should wait).
-        { timeoutMs: LIVE_SCREEN_TIMEOUT_MS },
+        { timeoutMs: LIVE_SCREEN_TIMEOUT_MS, onProgress: (a) => setStage(a.status) },
       );
+      if (settleFailed(run)) return;
       setAnalysis(run);
       // Brief-first: the decision + sourced numbers + limits headline the result.
       setBrief(await api.get<FunnelBrief>(`/analyses/${analysisId}/brief`));
@@ -102,11 +123,13 @@ export function WorldFunnel({
         (a) =>
           a.status === "enriched" ||
           a.status === "deepened" ||
+          a.status === "failed" ||
           a.rankings.some((r) => r.stage === 3),
         // Stage-2 enrichment chains the Stage-3 deep-dive and hits live tariff/PPP
         // + Comtrade under the budget — same reason as the Stage-1 screen above.
-        { timeoutMs: LIVE_SCREEN_TIMEOUT_MS },
+        { timeoutMs: LIVE_SCREEN_TIMEOUT_MS, onProgress: (a) => setStage(a.status) },
       );
+      if (settleFailed(run)) return;
       setAnalysis(run);
       setBrief(await api.get<FunnelBrief>(`/analyses/${analysisId}/brief`));
     } catch (err) {
@@ -137,6 +160,9 @@ export function WorldFunnel({
       </div>
 
       {!confirmed && <p className="mt-2 text-sm text-gray-500">{t("confirmFirst")}</p>}
+      {(loading || enriching) && stageLabel(stage) && (
+        <p className="mt-2 text-sm text-gray-500">{stageLabel(stage)}</p>
+      )}
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
       {brief && (

@@ -147,10 +147,23 @@ def applied_tariff(
     url = (f"{_WITS_BASE}/{reporter_code}/partner/{partner_m49.zfill(3)}"
            f"/product/{hs6}/year/{year}/datatype/reported")
     params = {"format": "JSON"}
+    # WS4 parity: this call bypassed the shared per-host breaker (raw
+    # requests.get), so a dead WITS host cost the full timeout × every market in
+    # the stage-2 fan-out (30s × 20 = a silent 10-minute floor). Fast-fail with
+    # a declared gap while the breaker is open; probe again after cooldown.
+    import silk_circuit
+    _wits_host = _WITS_BASE.split("/")[2] if "://" in _WITS_BASE else _WITS_BASE
+    if silk_circuit.http_breaker.is_open(_wits_host):
+        return DataPoint(
+            None, "World Bank WITS", 0.0,
+            f"WITS متعثّر (قاطع الدائرة مفتوح بعد أعطالٍ متتالية) لـHS{hs6} "
+            f"{partner_iso3}←{market_iso3} {year} — أعد المحاولة لاحقاً.",
+            _today())
     try:
         r = requests.get(url, params=params, timeout=_TIMEOUT)
         r.raise_for_status()
         rate = _parse_rate(r)
+        silk_circuit.http_breaker.record_success(_wits_host)
     except requests.exceptions.HTTPError as e:
         # WITS يعيد 400 (لا 404/200-فارغ) حين لا توجد بيانات تعريفة مُبلَّغة
         # لهذا الثلاثي (مُبلِّغ/شريك/منتج/سنة) — شائع لاقتصادات لا تُبلِّغ
@@ -159,17 +172,21 @@ def applied_tariff(
         # نص عربي هادئ بلا رابط/نص استثناء خام يتسرّب لتقرير مُنتَج.
         status = getattr(e.response, "status_code", None)
         if status is not None and 400 <= status < 500:
+            # 4xx = the host answered (healthy); it is a data gap, not an outage.
+            silk_circuit.http_breaker.record_success(_wits_host)
             note = (f"لا بيانات تعريفة مُبلَّغة إلى WITS لهذا الزوج (HS{hs6}، "
                     f"{partner_iso3}←{market_iso3}، {year}) — الزوج غير "
                     "مُغطّى في مصدر WITS لهذه السنة، ليس عطلاً تقنياً "
                     f"(HTTP {status}).")
         else:
+            silk_circuit.http_breaker.record_failure(_wits_host)
             note = (f"WITS غير متاح الآن (HTTP {status or '؟'}) لـHS{hs6} "
                     f"{partner_iso3}←{market_iso3} {year} — أعد المحاولة لاحقاً.")
         log.warning("WITS HTTPError %s for HS%s %s->%s %s: %s",
                    status, hs6, partner_iso3, market_iso3, year, e)
         return DataPoint(None, "World Bank WITS", 0.0, note, _today())
     except Exception as e:  # noqa: BLE001 — WITS is volatile; never raise
+        silk_circuit.http_breaker.record_failure(_wits_host)
         note = (f"WITS غير متاح الآن ({type(e).__name__}) لـHS{hs6} "
                 f"{partner_iso3}←{market_iso3} {year} — أعد المحاولة لاحقاً.")
         log.warning("WITS %s for HS%s %s->%s %s: %s",

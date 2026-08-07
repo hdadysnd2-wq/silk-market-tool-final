@@ -148,7 +148,11 @@ class Settings(BaseSettings):
     broker_visibility_timeout_seconds: int = 3600
     # An analysis left in a non-terminal status longer than this (no worker
     # progress) is reconciled to ``failed`` so the funnel never stalls silently.
-    analysis_stuck_minutes: int = 30
+    # MUST exceed one stage's worst-case wall clock — 4 executions × the 600s
+    # soft limit + retry backoff ≈ 41 min — or the reaper kills legitimately
+    # long live-vendor runs (symptom B). Stage loops also heartbeat the row per
+    # market (services.heartbeat), so a healthy run is never stale regardless.
+    analysis_stuck_minutes: int = 50
     # world_trade (Stage-1 screening data) coverage refresh: a confirmed HS6 whose
     # rows are older than this is re-synced from UN Comtrade by the scheduled sweep.
     # The per-HS6 live sync is fail-closed on a real COMTRADE key (offline demos

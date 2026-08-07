@@ -43,7 +43,35 @@ def _is_transient(exc: Exception) -> bool:
         # Only 429 + 5xx are transient; a 4xx (bad request/auth) will not fix
         # itself on retry.
         return exc.response.status_code == 429 or exc.response.status_code >= 500
+    # Celery's soft time limit is billiard's own class — NOT a TimeoutError
+    # subclass — so it used to be classified permanent: one slow vendor pass
+    # failed the whole analysis with the truncated reason
+    # "SoftTimeLimitExceeded: " (str() is empty). A timeout is the definition
+    # of transient; the retry budget (_MAX_RETRIES) keeps it bounded.
+    from billiard.exceptions import SoftTimeLimitExceeded
+
+    if isinstance(exc, SoftTimeLimitExceeded):
+        return True
     return isinstance(exc, _TRANSIENT_EXC)
+
+
+def _describe_failure(exc: Exception) -> str:
+    """Human-readable failure text for persisted failure_reason fields.
+
+    ``SoftTimeLimitExceeded`` stringifies to "" — the persisted reason ended in
+    a bare colon. Name the actual limit instead so the user (and the operator)
+    see what bound was hit.
+    """
+    from billiard.exceptions import SoftTimeLimitExceeded
+
+    if isinstance(exc, SoftTimeLimitExceeded):
+        from app.config import get_settings
+
+        return (
+            f"stage exceeded the {get_settings().task_soft_time_limit_seconds}s "
+            "time limit (slow external data source); retries exhausted"
+        )
+    return f"{type(exc).__name__}: {exc}"
 
 
 def _mark_product_failed(product_id: str, reason: str) -> None:
@@ -84,7 +112,7 @@ def _handle_pipeline_failure(task, analysis_id: str, stage: str, exc: Exception)
         )
         raise task.retry(exc=exc, countdown=_RETRY_BACKOFF * (2**task.request.retries))
     log.error(f"{stage}_failed", analysis_id=analysis_id, error=str(exc))
-    _mark_analysis_failed(analysis_id, f"{stage}: {type(exc).__name__}: {exc}")
+    _mark_analysis_failed(analysis_id, f"{stage}: {_describe_failure(exc)}")
     raise exc
 
 
@@ -338,8 +366,15 @@ def run_stage2_enrich(self, analysis_id: str, hs6: str, deepen: bool = False) ->
             return {"error": "analysis not found"}
         with engine.deepen_scope(deepen), budget_scope(label=f"stage2:{analysis_id}"):
             enrich_shortlist(db, analysis, hs6)
+            # Re-read the row before deciding the transition: the stuck-row
+            # reaper may have terminalized it in its own transaction while this
+            # stage ran (symptom B write race) — a terminal status is never
+            # overwritten by a late completion.
+            db.refresh(analysis)
             if analysis.status in ("pending", "classified", "ranked"):
                 analysis.status = "enriched"
+            elif analysis.status == "failed":
+                log.warning("stage2_finished_after_terminal_status", analysis_id=analysis_id)
         db.commit()
         # Auto-chain Stage 3 (FREE per-market deep-dive). Commit-before-enqueue so
         # the Stage-3 task's own session sees the enriched rows; eager mode runs it
@@ -387,7 +422,12 @@ def run_stage3_deepdive(self, analysis_id: str, hs6: str, deepen: bool = False) 
         product = db.get(Product, analysis.product_id) if analysis.product_id else None
         with engine.deepen_scope(deepen), budget_scope(label=f"stage3:{analysis_id}"):
             deepdive_shortlist(db, analysis, hs6, product)
-            analysis.status = "deepened"
+            # Same terminal-status guard as stage 2 (symptom B write race).
+            db.refresh(analysis)
+            if analysis.status != "failed":
+                analysis.status = "deepened"
+            else:
+                log.warning("stage3_finished_after_terminal_status", analysis_id=analysis_id)
         db.commit()
         return {
             "analysis_id": analysis_id,

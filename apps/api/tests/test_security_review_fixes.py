@@ -47,7 +47,9 @@ def test_empty_cors_rejected_outside_local():
 
 
 def test_explicit_cors_allowlist_constructs():
-    settings = Settings(**_prod_kwargs(cors_origins="https://app.silk.example,https://admin.silk.example"))
+    settings = Settings(
+        **_prod_kwargs(cors_origins="https://app.silk.example,https://admin.silk.example")
+    )
     assert settings.cors_origin_list == [
         "https://app.silk.example",
         "https://admin.silk.example",

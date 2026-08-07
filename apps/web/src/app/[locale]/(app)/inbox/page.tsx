@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { ErrorNotice } from "@/components/ErrorNotice";
 import { Link } from "@/i18n/routing";
 import { useApi } from "@/lib/useApi";
 
@@ -21,13 +22,16 @@ interface InboxItem {
 export default function InboxPage() {
   const t = useTranslations("inbox");
   // Poll: replies land from the reply-detection beat / provider webhooks.
-  const { data, loading } = useApi<InboxItem[]>("/inbox", 15000);
+  const { data, loading, error, reload } = useApi<InboxItem[]>("/inbox", 15000);
   const rows = data ?? [];
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900">{t("title")}</h1>
       <p className="mt-1 text-sm text-gray-500">{t("subtitle")}</p>
+
+      {/* A load failure must not masquerade as "no replies yet" (audit). */}
+      {error && rows.length === 0 && <ErrorNotice message={error} onRetry={reload} />}
 
       <ul className="mt-6 space-y-2">
         {rows.map((r) => (
@@ -67,7 +71,7 @@ export default function InboxPage() {
             </div>
           </li>
         ))}
-        {!loading && rows.length === 0 && (
+        {!loading && !error && rows.length === 0 && (
           <p className="rounded-xl bg-white p-8 text-center text-sm text-gray-500 ring-1 ring-black/5">
             {t("empty")}
           </p>

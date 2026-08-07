@@ -1,16 +1,20 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { ErrorNotice } from "@/components/ErrorNotice";
 import { Link } from "@/i18n/routing";
 import { useApi } from "@/lib/useApi";
 import type { DashboardStats, SenderAccount } from "@/lib/types";
 
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
-  const { data, loading } = useApi<DashboardStats>("/dashboard");
+  const { data, loading, error, reload } = useApi<DashboardStats>("/dashboard");
   const { data: senders } = useApi<SenderAccount[]>("/sender-accounts");
 
   if (loading) return <p className="text-gray-400">…</p>;
+  // A failed load used to return null — a blank page indistinguishable from
+  // "no data" (audit). Surface the error with a retry instead.
+  if (error) return <ErrorNotice message={error} onRetry={reload} />;
   if (!data) return null;
 
   const hasActivity = data.campaigns > 0;

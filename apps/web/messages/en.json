@@ -302,7 +302,9 @@
     "next": "Next",
     "close": "Close",
     "error": "Something went wrong",
-    "language": "العربية"
+    "language": "العربية",
+    "loadError": "Couldn't load this — check your connection and try again.",
+    "retry": "Try again"
   },
   "profile": {
     "title": "Profile & account",
@@ -412,5 +414,10 @@
     "repliedBadge": "Replied",
     "empty": "No replies yet. When a buyer replies to your outreach it will show up here.",
     "openMailboxHint": "The reply text lives in your connected sending mailbox — open it to answer the buyer."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications",
+    "markRead": "Mark read"
   }
 }

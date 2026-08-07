@@ -6,6 +6,7 @@ import httpx
 
 from app.logging import get_logger
 from app.providers.base import VerificationOutcome, VerificationResult
+from app.providers.http_errors import safe_error
 
 log = get_logger(__name__)
 
@@ -41,7 +42,9 @@ class ZeroBounceVerifier:
         # unexpected shape — to the safe outcome, never crash the caller (I1).
         # `unknown` is not sendable, so a hiccup can never leak an unverified send.
         except Exception as exc:
-            log.warning("zerobounce_failed", email=email, error=str(exc))
+            # The key rides in the query string, so httpx error text embeds it —
+            # log a status/type only, never the raw exception URL (secret leak).
+            log.warning("zerobounce_failed", email=email, error=safe_error(exc))
             return VerificationResult(
                 email=email, outcome=VerificationOutcome.unknown, provider_name=self.name
             )

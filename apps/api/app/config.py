@@ -297,6 +297,51 @@ class Settings(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def _reject_wildcard_cors_outside_local(self) -> Settings:
+        """Fail closed on a credentialed wildcard CORS origin outside local.
+
+        The app serves cookie/Bearer-authenticated tenant PII and mounts CORS with
+        ``allow_credentials=True``. Starlette, given ``*`` with credentials on,
+        reflects the caller's Origin and returns ``Access-Control-Allow-Credentials:
+        true`` — i.e. ANY site can read a logged-in user's authenticated responses.
+        Outside local we require an explicit, non-wildcard allowlist. Local/CI keep
+        the convenient ``http://localhost:3000`` default.
+        """
+        if self.environment.strip().lower() == "local":
+            return self
+        origins = self.cors_origin_list
+        if not origins or "*" in origins:
+            raise ValueError(
+                f"CORS_ORIGINS={self.cors_origins!r} is empty or contains '*' but "
+                f"ENVIRONMENT={self.environment!r} is not 'local'. The API mounts "
+                "credentialed CORS, so a wildcard lets any site read authenticated "
+                "tenant data cross-origin. Set an explicit comma-separated allowlist "
+                "of exact origins (e.g. https://app.example.com)."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _reject_default_s3_creds_outside_local(self) -> Settings:
+        """Fail closed if S3 is enabled with the built-in MinIO dev credentials.
+
+        ``minioadmin/minioadmin`` is the public MinIO default; a deploy that flips
+        ``storage_backend=s3`` without overriding the keys would run object storage
+        on well-known credentials. Only enforced when S3 is actually selected;
+        local dev/CI (and the default ``local`` backend) keep the convenience keys.
+        """
+        if self.environment.strip().lower() == "local":
+            return self
+        if self.storage_backend.strip().lower() == "s3" and (
+            self.s3_access_key == "minioadmin" or self.s3_secret_key == "minioadmin"
+        ):
+            raise ValueError(
+                f"STORAGE_BACKEND=s3 with ENVIRONMENT={self.environment!r} but the "
+                "S3 credentials are still the built-in MinIO dev default "
+                "('minioadmin'). Set real S3_ACCESS_KEY / S3_SECRET_KEY."
+            )
+        return self
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

@@ -9,9 +9,14 @@ from app.config import get_settings
 from app.models import utcnow
 from app.schemas.common import DeliverabilityUpdate, DnsCheckOut, FactoryOut, FactoryUpdate
 from app.security import CurrentUser
-from app.services import audit, dns_check
+from app.services import audit, dns_check, rate_limit
 
 router = APIRouter(prefix="/factory", tags=["factory"])
+
+# The deliverability check issues live DNS lookups for a tenant-supplied domain;
+# throttle per user so it can't be driven as an unbounded DNS-lookup source.
+DNS_CHECK_RATE_LIMIT = 30  # checks per user per hour
+DNS_CHECK_WINDOW_SECONDS = 3600
 
 
 @router.get("", response_model=FactoryOut)
@@ -51,11 +56,21 @@ def check_deliverability_dns(db: DbDep, user: CurrentUser) -> DnsCheckOut:
     self-attest them (the PUT schemas dropped those fields). Results are written
     to the factory and an audit row so the check is traceable.
     """
+    rate_limit.check(
+        f"dns_check:{user.id}",
+        limit=DNS_CHECK_RATE_LIMIT,
+        window_seconds=DNS_CHECK_WINDOW_SECONDS,
+    )
     factory = resolve_factory(db, user)
     if not factory.sending_domain:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Set a sending domain before running the deliverability check.",
+        )
+    if not dns_check.is_valid_domain(factory.sending_domain):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Sending domain is not a valid hostname.",
         )
 
     selectors = tuple(s.strip() for s in get_settings().dkim_selectors.split(",") if s.strip()) or (

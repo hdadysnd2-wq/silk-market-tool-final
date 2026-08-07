@@ -99,6 +99,12 @@ def verify_user_otp(db: Session, user: User, code: str) -> bool:
     The caller MUST commit afterwards even on a False result so the incremented
     attempt counter persists across requests — otherwise the lockout never trips.
     """
+    # A deactivated account must not complete OTP either (parity with
+    # ``authenticate``). get_current_user re-checks is_active on every request so
+    # a token would grant no access regardless, but the passwordless path should
+    # fail closed here too rather than mint a token for a disabled user.
+    if not user.is_active:
+        return False
     if user.otp_expires_at is None or user.otp_expires_at < utcnow():
         return False
     # Locked: too many wrong attempts against this code. Requires a fresh issue.

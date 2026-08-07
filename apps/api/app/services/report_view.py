@@ -16,15 +16,28 @@ honestly, it is never fabricated (I1).
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Analysis, CountryRanking, Market, MarketSnapshot, Product
+from app.models import (
+    Analysis,
+    Buyer,
+    Contact,
+    CountryRanking,
+    Market,
+    MarketSnapshot,
+    Product,
+    ProductBuyerMatch,
+)
 from app.providers.countries import iso3_to_iso2
 from app.services.report import _hs_confidence
 
 #: Top-N funnel markets carried into the full report (mirrors the funnel top-5).
 TOP_MARKETS = 5
+
+#: Cap on per-market executive rows (competitors, buyers) — the executive report
+#: is a summary, not a dump.
+EXEC_LIST_CAP = 5
 
 
 def _dp(
@@ -79,18 +92,23 @@ def _top_supplier_share(snapshot: MarketSnapshot | None) -> float | None:
     return max(shares) if shares else None
 
 
+def _snapshot_for(db: Session, hs_code: str | None, iso2: str | None) -> MarketSnapshot | None:
+    """The persisted ``MarketSnapshot`` for one (hs_code, market), if any."""
+    if not hs_code or not iso2:
+        return None
+    return db.scalar(
+        select(MarketSnapshot).where(
+            MarketSnapshot.hs_code == hs_code,
+            MarketSnapshot.market_iso2 == iso2,
+        )
+    )
+
+
 def _market_row(db: Session, product: Product, ranking: CountryRanking) -> dict:
     iso3 = ranking.importer_iso3
     iso2 = iso3_to_iso2(iso3)
     market = db.get(Market, iso2) if iso2 else None
-    snapshot = None
-    if product.hs_code and iso2:
-        snapshot = db.scalar(
-            select(MarketSnapshot).where(
-                MarketSnapshot.hs_code == product.hs_code,
-                MarketSnapshot.market_iso2 == iso2,
-            )
-        )
+    snapshot = _snapshot_for(db, product.hs_code, iso2)
 
     # Real retrieval provenance, carried through instead of being discarded:
     # snapshot figures were fetched at snapshot.fetched_at; funnel-screen rows
@@ -161,29 +179,30 @@ def _market_row(db: Session, product: Product, ranking: CountryRanking) -> dict:
     }
 
 
-def build_engine_result(db: Session, product: Product) -> dict:
-    """Reconstitute an engine ``result`` from the product's latest analysis.
-
-    Feeds ``silk_render.build_view``. Markets come from the persisted world-funnel
-    shortlist (top 5), each carrying sourced ``market_size`` / ``saudi_position`` /
-    ``competition`` figures and a declared-gap ``demand_capacity`` (I1). With no
-    analysis yet, ``markets`` is empty and ``build_view`` renders a valid stub.
-    """
-    analysis = db.scalar(
+def _latest_analysis(db: Session, product: Product) -> Analysis | None:
+    """The product's most recent analysis run — the one the report reflects."""
+    return db.scalar(
         select(Analysis)
         .where(Analysis.product_id == product.id)
         .order_by(Analysis.created_at.desc())
     )
-    rankings: list[CountryRanking] = []
-    if analysis is not None:
-        rankings = list(
-            db.scalars(
-                select(CountryRanking)
-                .where(CountryRanking.analysis_id == analysis.id)
-                .order_by(CountryRanking.rank)
-            )
-        )
 
+
+def _analysis_rankings(db: Session, analysis: Analysis | None) -> list[CountryRanking]:
+    """The persisted world-funnel rankings of an analysis, ordered by rank."""
+    if analysis is None:
+        return []
+    return list(
+        db.scalars(
+            select(CountryRanking)
+            .where(CountryRanking.analysis_id == analysis.id)
+            .order_by(CountryRanking.rank)
+        )
+    )
+
+
+def _engine_result(db: Session, product: Product, rankings: list[CountryRanking]) -> dict:
+    """Assemble the engine ``result`` dict from already-loaded funnel rankings."""
     rows = [_market_row(db, product, r) for r in rankings[:TOP_MARKETS]]
     years = [r.year for r in rankings if r.year is not None]
     data_year = max(years) if years else None
@@ -197,3 +216,159 @@ def build_engine_result(db: Session, product: Product) -> dict:
         "data_year": data_year,
         "markets": rows,
     }
+
+
+def build_engine_result(db: Session, product: Product) -> dict:
+    """Reconstitute an engine ``result`` from the product's latest analysis.
+
+    Feeds ``silk_render.build_view``. Markets come from the persisted world-funnel
+    shortlist (top 5), each carrying sourced ``market_size`` / ``saudi_position`` /
+    ``competition`` figures and a declared-gap ``demand_capacity`` (I1). With no
+    analysis yet, ``markets`` is empty and ``build_view`` renders a valid stub.
+    """
+    analysis = _latest_analysis(db, product)
+    return _engine_result(db, product, _analysis_rankings(db, analysis))
+
+
+def _screening_summary(analysis: Analysis | None) -> dict:
+    """Funnel-transparency header: how wide the screen was and where it stands.
+
+    With no analysis yet every field is a declared absence (I1): ``total_screened``
+    and ``analysis_at`` stay ``None`` and the status honestly reads ``"none"``.
+    """
+    if analysis is None:
+        return {"total_screened": None, "analysis_status": "none", "analysis_at": None}
+    at = analysis.updated_at or analysis.created_at
+    return {
+        "total_screened": analysis.total_screened,
+        "analysis_status": analysis.status,
+        "analysis_at": at.isoformat() if at else None,
+    }
+
+
+def _executive_buyers(db: Session, product: Product, iso2: str | None) -> list[dict]:
+    """Top buyer matches for (product, market), each with its stored provenance.
+
+    Ordered by relevance (name as a deterministic tiebreak), capped at
+    ``EXEC_LIST_CAP``. ``contacts`` is the count of Contact rows discovered for
+    the buyer — a real number from the database, never an estimate.
+    """
+    if not iso2:
+        return []
+    rows = db.execute(
+        select(ProductBuyerMatch, Buyer, func.count(Contact.id))
+        .join(Buyer, Buyer.id == ProductBuyerMatch.buyer_id)
+        .outerjoin(Contact, Contact.buyer_id == Buyer.id)
+        .where(
+            ProductBuyerMatch.product_id == product.id,
+            ProductBuyerMatch.market_iso2 == iso2,
+        )
+        .group_by(ProductBuyerMatch.id, Buyer.id)
+        .order_by(ProductBuyerMatch.relevance_score.desc(), Buyer.name)
+        .limit(EXEC_LIST_CAP)
+    ).all()
+    return [
+        {
+            "name": buyer.name,
+            "source": buyer.source.value,
+            "confidence": (
+                float(buyer.source_confidence) if buyer.source_confidence is not None else None
+            ),
+            "relevance_score": match.relevance_score,
+            "contacts": int(contact_count),
+            "legal_review_required": buyer.legal_review_required,
+            # Honest demonstration flag: a buyer surfaced by a mock/offline
+            # adapter must never read as observed customs data in the client
+            # report (audit C6, I1). The renderer marks these rows.
+            "is_demo": _is_demo_provider(buyer.provider_name),
+            "provider": buyer.provider_name,
+        }
+        for match, buyer, contact_count in rows
+    ]
+
+
+def _is_demo_provider(provider_name: str | None) -> bool:
+    """True when a stored provenance name is a deterministic mock/fixture."""
+    name = (provider_name or "").lower()
+    return "mock" in name or "fixture" in name or "demo" in name
+
+
+def _executive_market_row(db: Session, product: Product, ranking: CountryRanking) -> dict:
+    """One executive market: score + rationale + snapshot rows AS STORED (I1).
+
+    ``score`` prefers the Stage-2 engine score, falling back to the Stage-1
+    screen score; the rationale components and score confidence come verbatim
+    from the persisted Stage-2 enrichment (``{}``/``None`` when Stage 2 has not
+    run — a declared absence, never synthesized). Snapshot prices/competitors
+    pass through exactly as stored, keeping whatever provenance fields the
+    writer attached.
+    """
+    iso3 = ranking.importer_iso3
+    iso2 = iso3_to_iso2(iso3)
+    market = db.get(Market, iso2) if iso2 else None
+    snapshot = _snapshot_for(db, product.hs_code, iso2)
+    enrichment = ranking.enrichment or {}
+
+    # The Stage-2 engine model score (0..1) and the Stage-1 screen score
+    # (dollar-scale volume×growth) are on different scales — the report must
+    # declare which one it is showing so the number is never misread (audit C8).
+    if ranking.stage2_score is not None:
+        score: float | None = float(ranking.stage2_score)
+        score_model = enrichment.get("score_model") or "silk_market_ranker"
+    elif ranking.screen_score is not None:
+        score = float(ranking.screen_score)
+        score_model = "stage1_screen"
+    else:
+        score = None
+        score_model = None
+    raw_conf = enrichment.get("score_confidence")
+    score_confidence = float(raw_conf) if raw_conf is not None else None
+    rationale = {
+        name: {
+            "value": c.get("value"),
+            "source": c.get("source"),
+            "confidence": c.get("confidence"),
+            "note": c.get("note"),
+            "retrieved_at": c.get("retrieved_at"),
+        }
+        for name, c in (enrichment.get("score_components") or {}).items()
+    }
+    tags = [t for t in (ranking.tags or []) if t]
+
+    return {
+        "country": (market.name_en if market else None) or iso3,
+        "iso3": iso3,
+        "iso2": iso2,
+        "score": score,
+        "score_confidence": score_confidence,
+        "score_model": score_model,
+        "rationale_components": rationale,
+        "tags": tags,
+        # I9 — the transit-hub demotion stays visible in the executive summary.
+        "transit_hub": any("transit" in t.lower() for t in tags),
+        "prices": list(snapshot.observed_prices or []) if snapshot is not None else [],
+        "competitors": (
+            list(snapshot.top_exporters or [])[:EXEC_LIST_CAP] if snapshot is not None else []
+        ),
+        "buyers": _executive_buyers(db, product, iso2),
+    }
+
+
+def build_executive_result(db: Session, product: Product) -> dict:
+    """The engine ``result`` plus the executive multi-market section.
+
+    Same shape as :func:`build_engine_result` (so ``silk_render.build_view``
+    consumes it unchanged) with ``result["executive"]`` added: the screening
+    summary and the top-5 funnel markets, each carrying score + rationale
+    provenance, the stored snapshot prices/competitors, and the top buyer
+    matches. Zero analyses → ``executive["markets"] == []`` and the engine
+    renders a declared-gap report (I1) — nothing is fabricated.
+    """
+    analysis = _latest_analysis(db, product)
+    rankings = _analysis_rankings(db, analysis)
+    result = _engine_result(db, product, rankings)
+    result["executive"] = {
+        "screening": _screening_summary(analysis),
+        "markets": [_executive_market_row(db, product, r) for r in rankings[:TOP_MARKETS]],
+    }
+    return result

@@ -115,6 +115,20 @@ def _isolated_fact_store(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolated_circuit_breaker():
+    """عزل قاطع الدائرة المشترك لكل اختبار — وكيل التعريفات صار يسجّل أعطاله
+    في `silk_circuit.http_breaker` (موجة المنصة ٣)، فاختبارٌ يُفشل الشبكة
+    عمداً خمسَ مرات كان يفتح القاطع لكل اختبارٍ لاحقٍ في نفس التشغيلة
+    (test_wits_400 يرى ملاحظة «قاطع مفتوح» بدل ملاحظة 400 النظيفة). كل
+    اختبار يبدأ وينتهي بقاطعٍ صافٍ."""
+    import silk_circuit
+
+    silk_circuit.http_breaker.reset()
+    yield
+    silk_circuit.http_breaker.reset()
+
+
+@pytest.fixture(autouse=True)
 def _hermetic_env_guard():
     """عزل علم `SILK_HERMETIC` لكل اختبار — اختبارات كانت تضبطه خاماً
     (`os.environ[...] = "1"`) بلا استرجاع فيتسرّب لكل اختبار لاحق: build_view

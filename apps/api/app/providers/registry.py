@@ -60,6 +60,28 @@ def get_shipments_provider(settings: Settings | None = None) -> ShipmentsProvide
     return MockShipmentsProvider(seed=settings.mock_seed)
 
 
+def get_importer_intel_providers(settings: Settings | None = None) -> list:
+    """Engine importer-intel agents as ADDITIONAL buyer-discovery sources.
+
+    Fail-closed twice over: a provider is registered only when its paid key is
+    configured, and the wrapped engine agent (PAID=True) structurally refuses to
+    execute outside the deepen scope even with a key. Keyless deployments and
+    the offline suite therefore see an empty list and zero behavior change; the
+    platform's own customs + maps discovery stays primary either way.
+    """
+    settings = settings or get_settings()
+    providers: list = []
+    if settings.volza_api_key:
+        from app.providers.buyers_intel.engine_importers import VolzaImporterProvider
+
+        providers.append(VolzaImporterProvider())
+    if settings.explee_api_key:
+        from app.providers.buyers_intel.engine_importers import ExpleeImporterProvider
+
+        providers.append(ExpleeImporterProvider())
+    return providers
+
+
 def get_comtrade_provider(settings: Settings | None = None):
     settings = settings or get_settings()
     from app.providers.shipments.comtrade import ComtradeProvider

@@ -69,6 +69,7 @@ class ComtradeProvider:
                 continue
             by_year[year] = by_year.get(year, 0.0) + float(row.get("primaryValue") or 0.0)
 
+        prov_name, prov_conf = self._provenance(payload)
         records = []
         for year, value in sorted(by_year.items()):
             records.append(
@@ -80,8 +81,8 @@ class ComtradeProvider:
                         value_usd=value,
                     ),
                     source=SourceType.COMTRADE,
-                    provider_name=self.name,
-                    confidence=0.9,
+                    provider_name=prov_name,
+                    confidence=prov_conf,
                     fetched_at=self._fetched_at(payload),
                 )
             )
@@ -117,6 +118,7 @@ class ComtradeProvider:
 
         ranked = sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[:limit]
         fetched = self._fetched_at(payload)
+        prov_name, prov_conf = self._provenance(payload)
         return [
             ProviderRecord(
                 data=ExporterShare(
@@ -127,8 +129,8 @@ class ComtradeProvider:
                     year=latest_year,
                 ),
                 source=SourceType.COMTRADE,
-                provider_name=self.name,
-                confidence=0.9,
+                provider_name=prov_name,
+                confidence=prov_conf,
                 fetched_at=fetched,
             )
             for iso2, value in ranked
@@ -155,11 +157,25 @@ class ComtradeProvider:
                 pass
         return datetime.now(UTC)
 
+    def _provenance(self, payload: dict[str, Any]) -> tuple[str, float]:
+        """(provider_name, confidence) reflecting the payload's ACTUAL origin.
+
+        Offline fixtures and live-failure fallbacks must not present as genuine
+        live UN Comtrade (audit C7): a fixture-served payload is stamped
+        ``comtrade_fixture`` at a lowered confidence so the stored snapshot rows
+        and the executive report show the substitution honestly (I1).
+        """
+        if payload.get("_provenance") == "live":
+            return self.name, 0.9
+        return "comtrade_fixture", 0.4
+
     def _fetch(self, hs_code: str, importer_iso2: str) -> dict[str, Any]:
         cache_path = self._cache_path(hs_code, importer_iso2)
 
         if self.offline:
-            return self._read_cache(cache_path, hs_code, importer_iso2)
+            payload = self._read_cache(cache_path, hs_code, importer_iso2)
+            payload["_provenance"] = "fixture"
+            return payload
 
         payload = self._fetch_live(hs_code, importer_iso2)
         if payload is None:
@@ -170,7 +186,10 @@ class ComtradeProvider:
                 hs_code=hs_code,
                 importer=importer_iso2,
             )
-            return self._read_cache(cache_path, hs_code, importer_iso2)
+            payload = self._read_cache(cache_path, hs_code, importer_iso2)
+            payload["_provenance"] = "degraded_fixture"
+            return payload
+        payload["_provenance"] = "live"
         self._write_cache(cache_path, payload)
         return payload
 

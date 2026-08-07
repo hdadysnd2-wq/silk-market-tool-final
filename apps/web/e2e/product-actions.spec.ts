@@ -105,3 +105,43 @@ test("the report screen downloads the HTML export", async ({ page, context }) =>
   ]);
   expect(htmlRequested).toBe(true);
 });
+
+test("the executive report is the default Word download; the deep report stays a drill-down", async ({
+  page,
+  context,
+}) => {
+  await context.addCookies([{ name: "silk_token", value: fakeToken(), url: BASE }]);
+  await page.route(/\/api\/v1\//, (route) => json(route, []));
+  await page.route(/\/api\/v1\/products\/prod-1\/report\?locale=/, (route) =>
+    json(route, PRODUCT_REPORT),
+  );
+  const DOCX_TYPE =
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  let executiveRequested = false;
+  let deepRequested = false;
+  await page.route(/\/api\/v1\/products\/prod-1\/report\/executive/, (route) => {
+    executiveRequested = true;
+    return route.fulfill({ contentType: DOCX_TYPE, body: "PK-exec" });
+  });
+  await page.route(/\/api\/v1\/products\/prod-1\/report\.docx/, (route) => {
+    deepRequested = true;
+    return route.fulfill({ contentType: DOCX_TYPE, body: "PK-deep" });
+  });
+
+  await page.goto("/en/products/prod-1/report");
+  await expect(page.getByText("Premium Dates")).toBeVisible();
+
+  // Executive is the primary (default) deliverable.
+  await Promise.all([
+    page.waitForRequest((r) => r.url().includes("/report/executive")),
+    page.getByRole("button", { name: "Executive report (Word)" }).click(),
+  ]);
+  expect(executiveRequested).toBe(true);
+
+  // The deep report is NOT gone — it is the on-demand drill-down.
+  await Promise.all([
+    page.waitForRequest((r) => r.url().includes("/report.docx")),
+    page.getByRole("button", { name: "Deep report (Word)" }).click(),
+  ]);
+  expect(deepRequested).toBe(true);
+});

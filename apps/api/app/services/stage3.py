@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.logging import get_logger
 from app.models import Analysis, CountryRanking, MarketSnapshot, Product
 from app.providers.countries import iso3_to_iso2
+from app.services import heartbeat
 from app.services.competitor_snapshot import build_snapshot
 
 log = get_logger(__name__)
@@ -108,6 +109,8 @@ def deepdive_shortlist(
     )
     deepened = 0
     for r in finalists:
+        # Liveness beat per finalist — see services.heartbeat (symptom B).
+        heartbeat.beat(analysis.id)
         iso2 = iso3_to_iso2(r.importer_iso3)
         if iso2 is None:
             # I1 — no alpha-2 to drive the deep-dive; declare the gap, never fabricate.

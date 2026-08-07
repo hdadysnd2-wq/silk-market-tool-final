@@ -43,7 +43,35 @@ def _is_transient(exc: Exception) -> bool:
         # Only 429 + 5xx are transient; a 4xx (bad request/auth) will not fix
         # itself on retry.
         return exc.response.status_code == 429 or exc.response.status_code >= 500
+    # Celery's soft time limit is billiard's own class — NOT a TimeoutError
+    # subclass — so it used to be classified permanent: one slow vendor pass
+    # failed the whole analysis with the truncated reason
+    # "SoftTimeLimitExceeded: " (str() is empty). A timeout is the definition
+    # of transient; the retry budget (_MAX_RETRIES) keeps it bounded.
+    from billiard.exceptions import SoftTimeLimitExceeded
+
+    if isinstance(exc, SoftTimeLimitExceeded):
+        return True
     return isinstance(exc, _TRANSIENT_EXC)
+
+
+def _describe_failure(exc: Exception) -> str:
+    """Human-readable failure text for persisted failure_reason fields.
+
+    ``SoftTimeLimitExceeded`` stringifies to "" — the persisted reason ended in
+    a bare colon. Name the actual limit instead so the user (and the operator)
+    see what bound was hit.
+    """
+    from billiard.exceptions import SoftTimeLimitExceeded
+
+    if isinstance(exc, SoftTimeLimitExceeded):
+        from app.config import get_settings
+
+        return (
+            f"stage exceeded the {get_settings().task_soft_time_limit_seconds}s "
+            "time limit (slow external data source); retries exhausted"
+        )
+    return f"{type(exc).__name__}: {exc}"
 
 
 def _mark_product_failed(product_id: str, reason: str) -> None:
@@ -84,7 +112,7 @@ def _handle_pipeline_failure(task, analysis_id: str, stage: str, exc: Exception)
         )
         raise task.retry(exc=exc, countdown=_RETRY_BACKOFF * (2**task.request.retries))
     log.error(f"{stage}_failed", analysis_id=analysis_id, error=str(exc))
-    _mark_analysis_failed(analysis_id, f"{stage}: {type(exc).__name__}: {exc}")
+    _mark_analysis_failed(analysis_id, f"{stage}: {_describe_failure(exc)}")
     raise exc
 
 
@@ -262,7 +290,7 @@ def run_world_ranking(
     import uuid as _uuid
 
     from app.models import Analysis
-    from app.services import engine, world_funnel
+    from app.services import engine, heartbeat, world_funnel
     from app.services.api_budget import budget_scope
     from app.services.ranking import rank_and_persist
 
@@ -291,8 +319,22 @@ def run_world_ranking(
             # #5), and the deepen scope (I5) gates paid engine agents behind
             # /deepen.
             with engine.deepen_scope(deepen), budget_scope(label=f"ranking:{analysis_id}:{hs6}"):
+                # Liveness beat at the start of the ranking work (C5): a slow screen
+                # — or a redelivery — must not look dead to the stuck-row reaper.
+                # Mirrors the stage 2/3 heartbeat (symptom B).
+                heartbeat.beat(analysis.id)
                 rankings = rank_and_persist(db, analysis, hs6, top_n=top_n)
-                if analysis.status in ("pending", "classified"):
+                # Re-read before the transition (C5): reconcile_stuck_analyses may
+                # have terminalized this row in its OWN transaction while Stage 1 ran
+                # (symptom B write race). A terminal 'failed' is never overwritten by
+                # a late 'ranked' — mirrors the stage 2/3 guards.
+                db.refresh(analysis)
+                if analysis.status == "failed":
+                    log.warning(
+                        "world_ranking_finished_after_terminal_status",
+                        analysis_id=analysis_id,
+                    )
+                elif analysis.status in ("pending", "classified"):
                     analysis.status = "ranked"
             db.flush()
             if coverage == "demo":
@@ -338,14 +380,22 @@ def run_stage2_enrich(self, analysis_id: str, hs6: str, deepen: bool = False) ->
             return {"error": "analysis not found"}
         with engine.deepen_scope(deepen), budget_scope(label=f"stage2:{analysis_id}"):
             enrich_shortlist(db, analysis, hs6)
-            if analysis.status in ("pending", "classified", "ranked"):
+            # Re-read the row before deciding the transition: the stuck-row
+            # reaper may have terminalized it in its own transaction while this
+            # stage ran (symptom B write race) — a terminal status is never
+            # overwritten by a late completion.
+            db.refresh(analysis)
+            # C2 (defense-in-depth): only a ranked-or-already-enriched analysis is
+            # promoted to 'enriched'. A never-ranked run ('pending'/'classified' —
+            # e.g. Stage 2 enqueued before Stage 1 committed) must NOT become
+            # 'enriched' with zero rankings; it is left as-is (the API precondition
+            # gate is the first line of defense, this is the backstop).
+            if analysis.status in ("ranked", "enriched"):
                 analysis.status = "enriched"
+            elif analysis.status == "failed":
+                log.warning("stage2_finished_after_terminal_status", analysis_id=analysis_id)
         db.commit()
-        # Auto-chain Stage 3 (FREE per-market deep-dive). Commit-before-enqueue so
-        # the Stage-3 task's own session sees the enriched rows; eager mode runs it
-        # inline (tests), prod queues it. deepen is carried forward (stays False).
-        run_stage3_deepdive.delay(analysis_id, hs6, deepen=deepen)
-        return {
+        result = {
             "analysis_id": analysis_id,
             "hs6": hs6,
             "status": analysis.status,
@@ -356,6 +406,15 @@ def run_stage2_enrich(self, analysis_id: str, hs6: str, deepen: bool = False) ->
         return _handle_pipeline_failure(self, analysis_id, "stage2_enrich", exc)
     finally:
         db.close()
+    # Auto-chain Stage 3 (FREE per-market deep-dive) AFTER the commit AND OUTSIDE
+    # the try (C3). Commit-before-enqueue so the Stage-3 task's own session sees the
+    # enriched rows; eager mode runs it inline (tests), prod queues it. Keeping the
+    # enqueue outside the try means a post-commit broker fault (a kombu/redis
+    # OperationalError, which _is_transient does NOT match) can no longer be caught
+    # by the except above and overwrite the just-committed 'enriched' status with
+    # 'failed' (dropping Stage 3). deepen is carried forward (stays False).
+    run_stage3_deepdive.delay(analysis_id, hs6, deepen=deepen)
+    return result
 
 
 @celery_app.task(bind=True, name="app.workers.tasks.run_stage3_deepdive", max_retries=_MAX_RETRIES)
@@ -387,7 +446,12 @@ def run_stage3_deepdive(self, analysis_id: str, hs6: str, deepen: bool = False) 
         product = db.get(Product, analysis.product_id) if analysis.product_id else None
         with engine.deepen_scope(deepen), budget_scope(label=f"stage3:{analysis_id}"):
             deepdive_shortlist(db, analysis, hs6, product)
-            analysis.status = "deepened"
+            # Same terminal-status guard as stage 2 (symptom B write race).
+            db.refresh(analysis)
+            if analysis.status != "failed":
+                analysis.status = "deepened"
+            else:
+                log.warning("stage3_finished_after_terminal_status", analysis_id=analysis_id)
         db.commit()
         return {
             "analysis_id": analysis_id,
@@ -400,6 +464,51 @@ def run_stage3_deepdive(self, analysis_id: str, hs6: str, deepen: bool = False) 
         return _handle_pipeline_failure(self, analysis_id, "stage3_deepdive", exc)
     finally:
         db.close()
+
+
+@celery_app.task(name="app.workers.tasks.render_executive_report")
+def render_executive_report(product_id: str) -> dict:
+    """Render the Executive Multi-Market Report to object storage (no vendor calls).
+
+    Pure Postgres read + render: builds the executive result from the persisted
+    funnel/snapshot/buyer data (``build_executive_result``), renders it through
+    the engine's ONE template seam (``silk_render.build_view`` →
+    ``silk_reports.render_executive_docx``), and stores the ``.docx`` bytes under
+    a stable per-product key. A product with zero analyses still renders — the
+    engine emits a declared-gap report (I1), never a fabricated one.
+    """
+    import shutil
+    import tempfile
+    from pathlib import Path
+
+    from app.models import Product
+    from app.services.report_view import build_executive_result
+    from app.services.storage import get_storage
+
+    with session_scope() as db:
+        product = db.get(Product, uuid.UUID(product_id))
+        if product is None:
+            return {"error": "product not found"}
+        result = build_executive_result(db, product)
+
+    from silk_render import build_view
+    from silk_reports import render_executive_docx
+
+    view = build_view(result)
+    tmp_dir = tempfile.mkdtemp(prefix="silk_exec_report_")
+    try:
+        path = render_executive_docx(view, str(Path(tmp_dir) / "executive.docx"))
+        data = Path(path).read_bytes()
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    key = f"reports/executive/{product_id}.docx"
+    get_storage().put(
+        key=key,
+        data=data,
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+    return {"product_id": product_id, "report_key": key}
 
 
 @celery_app.task(name="app.workers.tasks.draft_campaign_emails")

@@ -94,6 +94,21 @@ _last_hit: dict[str, float] = {}
 _RETRYABLE = (429, 500, 502, 503, 504)
 
 
+def _is_worker_time_limit(exc: BaseException) -> bool:
+    """هل الاستثناء مهلةَ عامل Celery الناعمة؟ — Celery's soft time limit.
+
+    تدقيق C15: `SoftTimeLimitExceeded` (من billiard) ترث Exception، فكانت
+    تُبتَلَع في المعالِجات العريضة على مسار المزوّد فتتحوّل لفجوة معلنة بدل أن
+    تصعد لمنطق إعادة المحاولة/التعليم-كفاشل على مستوى المهمة. استيرادٌ كسول بلا
+    اعتمادٍ صلب على billiard — غيابُ زمن-تشغيل العامل يعيد False ببساطة.
+    """
+    try:
+        from billiard.exceptions import SoftTimeLimitExceeded
+    except Exception:  # noqa: BLE001 — billiard absent (engine used standalone)
+        return False
+    return isinstance(exc, SoftTimeLimitExceeded)
+
+
 def _min_gap_ms(host: str) -> float:
     """نافذة التباعد الدنيا بين نداءات نفس المضيف — بلاغ حي (تشغيلة تمور/
     هولندا الثالثة، 429 متكرر من كومتريد): البعثات المتوازية الاثنتا عشرة
@@ -151,9 +166,17 @@ def _http_get(url: str, params: dict | None = None,
         _throttle(host)
         # headers شرطيّ: بلا ترويسات يبقى النداء مطابقاً للتوقيع القديم (لا
         # يكسر محاكاة `_session.get` القائمة) — الترويسات مسار WTO الجديد وحده.
-        resp = (_session.get(url, params=params, headers=headers,
-                             timeout=timeout) if headers is not None
-                else _session.get(url, params=params, timeout=timeout))
+        try:
+            resp = (_session.get(url, params=params, headers=headers,
+                                 timeout=timeout) if headers is not None
+                    else _session.get(url, params=params, timeout=timeout))
+        except requests.exceptions.RequestException:
+            # WS4 gap (تدقيق C16): مهلة/انقطاعُ نقلٍ لم يكن يُسجَّل فشلاً في
+            # القاطع، فمضيفٌ مسدودٌ لا يفتح الدائرة أبداً ويدفع كلُّ نداءٍ لاحق
+            # المهلةَ كاملةً × كلّ سوق. سجّل الفشل ثمّ أعِد الرفع — الطبقةُ
+            # الأعلى تُعلن الفجوة كالمعتاد.
+            breaker.record_failure(host)
+            raise
         if resp.status_code not in _RETRYABLE:
             breaker.record_success(host)
             return resp
@@ -499,6 +522,8 @@ def comtrade_trade(
             payload = r.json()
         data = payload.get("data") or []
     except Exception as e:  # noqa: BLE001 — never raise to caller
+        if _is_worker_time_limit(e):
+            raise  # C15: مهلةُ العامل تصعد لمنطق إعادة المحاولة، لا تُبتلَع كفجوة
         log.warning("Comtrade fetch failed (%s, reporter=%s, %s): %s",
                     hs_code, reporter_m49, year, e)
         return None  # 1b: تعذّر الجلب ≠ لا سجل — المستهلك يميّز
@@ -663,6 +688,8 @@ def _world_bank_for_year(iso3: str, indicator: str,
         log.warning(note)
         return DataPoint(None, "World Bank", 0.0, note, _today())
     except Exception as e:  # noqa: BLE001
+        if _is_worker_time_limit(e):
+            raise  # C15: مهلةُ العامل تصعد لمنطق إعادة المحاولة، لا تُبتلَع كفجوة
         note = f"{indicator} fetch failed for {iso3}: {e}"
         log.warning(note)
         return DataPoint(None, "World Bank", 0.0, note, _today())

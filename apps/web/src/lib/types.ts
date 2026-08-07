@@ -120,6 +120,8 @@ export interface Analysis {
   product_id: string | null;
   product_name: string;
   status: string;
+  /** Persisted reason when `status === "failed"` — display it, never a raw timeout. */
+  failure_reason: string | null;
   deepen: boolean;
   created_at: string;
   /** Markets screened worldwide in Stage 1 (funnel transparency); null on older runs. */

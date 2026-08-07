@@ -82,6 +82,12 @@ class Settings(BaseSettings):
     coresignal_api_key: str = ""
     outscraper_api_key: str = ""
     apollo_api_key: str = ""
+    # Engine importer-intel agents (Wave 3 item 4) — the SAME env vars the
+    # engine agents read (VOLZA_API_KEY / EXPLEE_API_KEY). The registry only
+    # registers the providers when a key is present; the engine's PAID/deepen
+    # structural guard still applies at call time.
+    volza_api_key: str = ""
+    explee_api_key: str = ""
     zerobounce_api_key: str = ""
     smartlead_api_key: str = ""
     smartlead_webhook_secret: str = ""
@@ -148,7 +154,11 @@ class Settings(BaseSettings):
     broker_visibility_timeout_seconds: int = 3600
     # An analysis left in a non-terminal status longer than this (no worker
     # progress) is reconciled to ``failed`` so the funnel never stalls silently.
-    analysis_stuck_minutes: int = 30
+    # MUST exceed one stage's worst-case wall clock — 4 executions × the 600s
+    # soft limit + retry backoff ≈ 41 min — or the reaper kills legitimately
+    # long live-vendor runs (symptom B). Stage loops also heartbeat the row per
+    # market (services.heartbeat), so a healthy run is never stale regardless.
+    analysis_stuck_minutes: int = 50
     # world_trade (Stage-1 screening data) coverage refresh: a confirmed HS6 whose
     # rows are older than this is re-synced from UN Comtrade by the scheduled sweep.
     # The per-HS6 live sync is fail-closed on a real COMTRADE key (offline demos

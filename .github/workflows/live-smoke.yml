@@ -69,3 +69,66 @@ jobs:
           else
             uv run python -m app.live_smoke
           fi
+
+  # Wave 3: the brain path — one REAL product through image/name → HS (live
+  # Claude) → world screening (live Comtrade) → top-5 → buyers/snapshot →
+  # executive Word report, uploaded as the run's artifact. Fail-closed: SKIPs
+  # (exit 0) without ANTHROPIC_API_KEY + COMTRADE_API_KEY. Never sends email.
+  brain-path:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        ports: ["5432:5432"]
+        env:
+          POSTGRES_USER: silk
+          POSTGRES_PASSWORD: silk
+          POSTGRES_DB: silk_smoke
+        options: >-
+          --health-cmd "pg_isready -U silk" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://silk:silk@localhost:5432/silk_smoke
+      REDIS_URL: redis://localhost:6379/0
+      STORAGE_BACKEND: local
+      COMTRADE_OFFLINE: "0"
+      CELERY_TASK_ALWAYS_EAGER: "1"
+      CELERY_TASK_EAGER_PROPAGATES: "1"
+      SECRET_KEY: ci-live-smoke-secret-key-at-least-32-bytes
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      COMTRADE_API_KEY: ${{ secrets.COMTRADE_API_KEY }}
+      LOCALPRICE_API_KEY: ${{ secrets.LOCALPRICE_API_KEY }}
+      LOCALPRICE_API_URL: ${{ secrets.LOCALPRICE_API_URL }}
+      # Hard daily spend ceiling for the whole run (engine silk_usage).
+      SILK_PAID_DAILY_CAP: "25"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - name: Sync dependencies (+ etl for the live Comtrade sync)
+        run: |
+          uv sync --extra dev
+          uv pip install -r ../../etl/requirements.txt
+      - name: Migrate
+        run: uv run alembic upgrade head
+      - name: Run the brain path (fail-closed; never sends)
+        run: uv run python -m app.live_smoke_brain --out executive_smoke.docx
+      - name: Upload the executive report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: executive-report
+          path: apps/api/executive_smoke.docx
+          if-no-files-found: ignore

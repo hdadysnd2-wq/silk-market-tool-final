@@ -2,11 +2,14 @@
 // a POST returns 202 with a `pending` entity, and the client re-fetches the
 // entity's GET endpoint until it reaches a terminal state.
 
-interface PollOptions {
+interface PollOptions<T> {
   /** Delay between attempts, in ms. */
   intervalMs?: number;
   /** Give up (reject) after this many ms of total elapsed time. */
   timeoutMs?: number;
+  /** Called with every fetched value (terminal or not) — lets the caller show
+   *  per-stage progress instead of one opaque spinner. */
+  onProgress?: (value: T) => void;
 }
 
 /**
@@ -17,11 +20,12 @@ interface PollOptions {
 export async function pollUntil<T>(
   fetchFn: () => Promise<T>,
   done: (value: T) => boolean,
-  { intervalMs = 1500, timeoutMs = 60000 }: PollOptions = {},
+  { intervalMs = 1500, timeoutMs = 60000, onProgress }: PollOptions<T> = {},
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const value = await fetchFn();
+    onProgress?.(value);
     if (done(value)) return value;
     if (Date.now() >= deadline) {
       throw new Error(`pollUntil: timed out after ${timeoutMs}ms`);

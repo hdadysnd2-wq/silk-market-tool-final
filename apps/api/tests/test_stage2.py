@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from app.models import Analysis, CountryRanking, WorldTrade
 from app.services import api_budget
-from app.services.stage2 import enrich_shortlist, stage2_score
+from app.services.stage2 import enrich_shortlist
 
 HS6 = "392010"  # the confirmed hs_code on the `product` fixture
 
@@ -52,15 +52,31 @@ def _run_stage1(client, product, auth_headers) -> str:
     return resp.json()["analysis"]["id"]
 
 
-def test_stage2_score_applies_tariff_drag_and_ppp_lift():
-    base = 100.0
-    # No signals → unchanged.
-    assert stage2_score(base, None, None) == 100.0
-    # 20% tariff → ×0.8 (and no ppp).
-    assert stage2_score(base, 0.20, None) == 80.0
-    # PPP lifts within a bounded band; higher PPP never explodes the score.
-    assert stage2_score(base, None, 0.0) == 85.0
-    assert stage2_score(base, None, 65_000.0) == 115.0
+def test_stage2_uses_the_engine_weighted_model():
+    """The old product-local tariff-drag heuristic is gone (Wave 3 item 2):
+    scoring delegates to the engine's audited component model via the seam."""
+    from app.services import engine
+
+    scored = engine.score_market_components(
+        [
+            {
+                "iso3": "DEU",
+                "components": {
+                    "market_size": {"value": 900.0, "source": "world_trade"},
+                    "demand_capacity": {"value": 60_000.0, "source": "worldbank"},
+                },
+            },
+            {
+                "iso3": "IND",
+                "components": {"market_size": {"value": 500.0, "source": "world_trade"}},
+            },
+        ]
+    )
+    by = {s["iso3"]: s for s in scored}
+    # Scores are the engine's 0..1 weighted totals; more present components →
+    # higher row confidence. Nothing is fabricated for the missing signals.
+    assert 0.0 <= by["IND"]["total_score"] <= by["DEU"]["total_score"] <= 1.0
+    assert by["DEU"]["confidence"] > by["IND"]["confidence"]
 
 
 def test_enrich_reranks_shortlist_and_persists_stage2(client, db, product, auth_headers):
@@ -124,8 +140,10 @@ def test_enrich_requires_confirmed_hs(client, db, product, auth_headers):
 
 
 def test_enrich_stops_at_the_budget(client, db, product, auth_headers):
-    # A budget smaller than the shortlist enriches only what it can afford; the
-    # rest keep their Stage-1 score (no fabricated signal).
+    # A budget smaller than the shortlist enriches only what it can afford. The
+    # unenriched rest still get an engine cohort score from the components they
+    # DO hold (import volume) — with fewer components and therefore a lower
+    # score confidence, never a fabricated signal (Wave 3 item 2 semantics).
     _seed_world(db)  # 6 markets
     aid = _run_stage1(client, product, auth_headers)
     analysis = db.get(Analysis, uuid.UUID(aid))
@@ -136,7 +154,12 @@ def test_enrich_stops_at_the_budget(client, db, product, auth_headers):
     rows = db.scalars(select(CountryRanking).where(CountryRanking.analysis_id == analysis.id)).all()
     enriched = [r for r in rows if r.stage == 2]
     assert len(enriched) == 2  # budget allowed exactly two enrichment calls
-    assert any(r.stage == 1 and r.stage2_score is None for r in rows)  # rest untouched
+    unreached = [r for r in rows if r.stage == 1]
+    assert unreached  # the rest were never promoted to stage 2
+    for r in unreached:
+        assert r.stage2_score is not None  # scored from persisted components
+        conf = (r.enrichment or {}).get("score_confidence")
+        assert conf is not None and conf < 1.0  # fewer components = lower confidence
 
 
 def test_enrich_market_gap_keeps_stage1_score(client, db, product, auth_headers, monkeypatch):
@@ -160,5 +183,10 @@ def test_enrich_market_gap_keeps_stage1_score(client, db, product, auth_headers,
     rows = db.scalars(select(CountryRanking).where(CountryRanking.analysis_id == analysis.id)).all()
     for r in rows:
         assert r.stage == 1  # never promoted to stage 2 on a gap
-        assert float(r.stage2_score) == float(r.screen_score)  # fell back, not fabricated
+        # The engine cohort score is computed from the components the platform
+        # actually holds (import volume only here — the enrichment gap means no
+        # demand_capacity component was ever fed in, not a fabricated one).
+        assert r.stage2_score is not None and 0.0 <= float(r.stage2_score) <= 1.0
         assert r.enrichment["note"] == "enrichment unavailable"
+        assert "demand_capacity" not in r.enrichment["score_components"]
+        assert r.enrichment["score_confidence"] < 1.0

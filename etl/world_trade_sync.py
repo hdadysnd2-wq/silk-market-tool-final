@@ -216,10 +216,19 @@ def _fetch_world_imports(
     fail-closed guard keeps every offline/CI path from ever calling it. Kept
     deliberately small and defensive.
     """
+    import socket
+
     import comtradeapicall  # (lazy, etl-only — I7)
     import pandas as pd  # (lazy, etl-only — I7)
 
     subscription_key = os.environ.get("COMTRADE_API_KEY", "")
+    # comtradeapicall exposes no timeout parameter, so its socket reads are
+    # unbounded — inside a Celery worker that means hanging until the 660s
+    # hard-limit SIGKILL, which bypasses failure marking and redelivers the
+    # task forever (symptom B #5). Bound every socket in this process for the
+    # duration of the fetch; restore afterwards.
+    _prev_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(float(os.environ.get("COMTRADE_SOCKET_TIMEOUT", "120")))
     imports_usd: dict[str, dict[int, float | None]] = {}
     imports_qty: dict[str, dict[int, float | None]] = {}
 
@@ -227,36 +236,39 @@ def _fetch_world_imports(
         # Comtrade returns NaN for absent figures; keep it a declared gap (I1).
         return None if value is None or pd.isna(value) else _as_float(value)
 
-    for year in years:
-        try:
-            # Imports (flowCode="M"), all reporters, partner=World (0), HS6.
-            df = comtradeapicall.getFinalData(
+    try:
+        for year in years:
+            try:
+                # Imports (flowCode="M"), all reporters, partner=World (0), HS6.
+                df = comtradeapicall.getFinalData(
                 subscription_key,
                 typeCode="C",
-                freqCode="A",
-                clCode="HS",
-                period=str(year),
-                reporterCode=None,  # every reporter
-                cmdCode=hs6,
-                flowCode="M",
-                partnerCode="0",  # World
-                partner2Code="0",
-                customsCode="C00",
-                motCode="0",
-            )
-        except Exception as exc:  # noqa: BLE001 — a failed year is a declared gap (I1)
-            log.warning(
-                "comtrade_bulk_year_failed hs6=%s year=%s error=%s", hs6, year, exc
-            )
-            continue
-        if df is None or getattr(df, "empty", True):
-            continue
-        for _, row in df.iterrows():
-            iso3 = str(row.get("reporterISO") or "").upper()
-            if not iso3 or len(iso3) != 3:
+                    freqCode="A",
+                    clCode="HS",
+                    period=str(year),
+                    reporterCode=None,  # every reporter
+                    cmdCode=hs6,
+                    flowCode="M",
+                    partnerCode="0",  # World
+                    partner2Code="0",
+                    customsCode="C00",
+                    motCode="0",
+                )
+            except Exception as exc:  # noqa: BLE001 — a failed year is a declared gap (I1)
+                log.warning(
+                    "comtrade_bulk_year_failed hs6=%s year=%s error=%s", hs6, year, exc
+                )
                 continue
-            imports_usd.setdefault(iso3, {})[year] = _clean(row.get("primaryValue"))
-            imports_qty.setdefault(iso3, {})[year] = _clean(row.get("qty"))
+            if df is None or getattr(df, "empty", True):
+                continue
+            for _, row in df.iterrows():
+                iso3 = str(row.get("reporterISO") or "").upper()
+                if not iso3 or len(iso3) != 3:
+                    continue
+                imports_usd.setdefault(iso3, {})[year] = _clean(row.get("primaryValue"))
+                imports_qty.setdefault(iso3, {})[year] = _clean(row.get("qty"))
+    finally:
+        socket.setdefaulttimeout(_prev_timeout)
 
     # Mirror-data derivation (reconstructing a non-reporter's imports from partner
     # exports) is a future enhancement; none derived here.

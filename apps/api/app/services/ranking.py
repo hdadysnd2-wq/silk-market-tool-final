@@ -9,6 +9,7 @@ enrichment of the shortlist lands in later increments.
 
 from __future__ import annotations
 
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.logging import get_logger
@@ -46,6 +47,14 @@ def rank_and_persist(
     declared gap (I1).
     """
     result = screen_world(db, hs6, top_n=top_n)
+    # Idempotency (C1): task_acks_late + task_reject_on_worker_lost mean a worker
+    # lost AFTER the commit but BEFORE the Celery ack redelivers run_world_ranking.
+    # With no delete-first and no unique constraint, a second run would INSERT a
+    # full DUPLICATE set of CountryRanking rows — duplicated markets would then flow
+    # into Stage 2, the executive report, and GET /analyses/{id}. Delete any
+    # existing rows for this analysis in the SAME transaction so a redelivery
+    # REPLACES the shortlist rather than duplicating it.
+    db.execute(delete(CountryRanking).where(CountryRanking.analysis_id == analysis.id))
     # Funnel transparency: record the full world count screened, not the shortlist
     # length, so the report can show "screened N → shortlisted M → top 5".
     analysis.total_screened = result.total_screened

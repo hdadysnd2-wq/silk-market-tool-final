@@ -303,6 +303,8 @@ With a token set and `--yes`, the script never prompts.
 - **Local development** is unchanged and offline: `make dev` boots the whole
   stack (Postgres + Redis + MinIO + api + worker + beat + web) on deterministic
   mocks with zero API keys. This doc is only about the managed Railway deploy.
-- **AWS alternative.** `infra/terraform/` sketches the intended production
-  topology on AWS `me-south-1` (RDS + ElastiCache + S3 + ECS Fargate). It is an
-  intentionally incomplete skeleton; Railway is the fast path.
+- **AWS alternative.** The Terraform skeleton was removed (see
+  `docs/adr/0006-terraform-skeleton-removed.md`) — a non-applied skeleton
+  misrepresented the deploy story. The intended AWS `me-south-1` topology (RDS +
+  ElastiCache + S3 + ECS Fargate) is preserved in that ADR for a future effort;
+  Railway is the deploy path today.

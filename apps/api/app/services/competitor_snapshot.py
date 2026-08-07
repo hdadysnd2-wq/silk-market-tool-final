@@ -55,7 +55,7 @@ def build_snapshot(
     # hardcoded "comtrade": an offline/degraded fixture serves as
     # "comtrade_fixture" (audit C7) so the stored snapshot and the executive
     # report never present fixture numbers as genuine live UN Comtrade (I1).
-    origin = (flows or exporters)
+    origin = flows or exporters
     actual_source = origin[0].provider_name if origin else "comtrade"
 
     if snapshot is None:

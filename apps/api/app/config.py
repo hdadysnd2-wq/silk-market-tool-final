@@ -114,8 +114,11 @@ class Settings(BaseSettings):
     # runs end to end with no Google/Microsoft app configured (demos, CI, e2e).
     #
     # Tokens are encrypted at rest with Fernet. ``token_encryption_key`` should be
-    # a url-safe base64 32-byte key (``Fernet.generate_key()``); when blank a key
-    # is deterministically derived from ``secret_key`` so dev/test still encrypt.
+    # a url-safe base64 32-byte key (``Fernet.generate_key()``). Only in
+    # ENVIRONMENT=local may it stay blank (a key is then derived from
+    # ``secret_key`` so dev/test still encrypt); everywhere else startup fails
+    # without an explicit key — a SECRET_KEY rotation would otherwise silently
+    # orphan every stored mailbox token.
     token_encryption_key: str = ""
 
     google_oauth_client_id: str = ""
@@ -199,6 +202,26 @@ class Settings(BaseSettings):
                 f"ENVIRONMENT={self.environment!r} is not 'local'. Set a strong, "
                 "random SECRET_KEY — it signs session tokens and derives the "
                 "mailbox token-encryption key."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _require_token_key_outside_local(self) -> Settings:
+        """Fail closed if TOKEN_ENCRYPTION_KEY is blank outside local.
+
+        The keyless fallback derives the Fernet key from SECRET_KEY, which ties
+        every stored mailbox OAuth token to the signing secret: rotating
+        SECRET_KEY (routine hygiene) would silently orphan them all. Local
+        dev/CI keep the convenience fallback; staging/prod must set an explicit
+        key so the two secrets rotate independently.
+        """
+        if self.environment.strip().lower() != "local" and not self.token_encryption_key.strip():
+            raise ValueError(
+                f"TOKEN_ENCRYPTION_KEY is unset but ENVIRONMENT={self.environment!r} "
+                "is not 'local'. Generate one with "
+                'python -c "from cryptography.fernet import Fernet; '
+                'print(Fernet.generate_key().decode())" and set it — it encrypts '
+                "mailbox OAuth tokens at rest, independently of SECRET_KEY."
             )
         return self
 

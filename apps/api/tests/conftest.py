@@ -53,67 +53,35 @@ from app.models import (  # noqa: E402
 from app.security import create_access_token, hash_password  # noqa: E402
 
 
+def _alembic_config():
+    """Alembic config with absolute paths — independent of pytest's cwd."""
+    from pathlib import Path
+
+    from alembic.config import Config
+
+    api_root = Path(__file__).resolve().parents[1]
+    cfg = Config(str(api_root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(api_root / "alembic"))
+    return cfg
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _schema():
+    # The schema comes from `alembic upgrade head` — the SAME path production
+    # start-api.sh runs — not from Base.metadata.create_all. create_all silently
+    # masked model↔migration drift (and forced a hand-copied duplicate of the
+    # audit-log triggers here; migration 0013 is now their single source).
+    from alembic import command
+
     with engine.begin() as conn:
+        conn.execute(text("DROP SCHEMA public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-    # The audit-log immutability trigger lives in the migration, not the models;
-    # recreate it here so trigger-dependent tests exercise the real behaviour.
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-                CREATE OR REPLACE FUNCTION audit_log_immutable() RETURNS trigger AS $$
-                BEGIN
-                    IF TG_OP = 'UPDATE'
-                       AND NEW.id          IS NOT DISTINCT FROM OLD.id
-                       AND NEW.actor_label IS NOT DISTINCT FROM OLD.actor_label
-                       AND NEW.action      IS NOT DISTINCT FROM OLD.action
-                       AND NEW.entity_type IS NOT DISTINCT FROM OLD.entity_type
-                       AND NEW.entity_id   IS NOT DISTINCT FROM OLD.entity_id
-                       AND NEW.payload     IS NOT DISTINCT FROM OLD.payload
-                       AND NEW.occurred_at IS NOT DISTINCT FROM OLD.occurred_at
-                       AND NEW.created_at  IS NOT DISTINCT FROM OLD.created_at
-                       AND NEW.updated_at  IS NOT DISTINCT FROM OLD.updated_at
-                       AND (NEW.actor_user_id IS NULL
-                            OR NEW.actor_user_id IS NOT DISTINCT FROM OLD.actor_user_id)
-                       AND (NEW.factory_id IS NULL
-                            OR NEW.factory_id IS NOT DISTINCT FROM OLD.factory_id)
-                    THEN
-                        RETURN NEW;  -- privacy-mandated FK null-ing; content untouched
-                    END IF;
-                    RAISE EXCEPTION 'audit_log is append-only: % is not permitted', TG_OP;
-                END;
-                $$ LANGUAGE plpgsql;
-                """
-            )
-        )
-        conn.execute(text("DROP TRIGGER IF EXISTS audit_log_no_update_delete ON audit_log"))
-        conn.execute(
-            text(
-                """
-                CREATE TRIGGER audit_log_no_update_delete
-                BEFORE UPDATE OR DELETE ON audit_log
-                FOR EACH ROW EXECUTE FUNCTION audit_log_immutable();
-                """
-            )
-        )
-        # Mirror the migration's BEFORE TRUNCATE guard (C6) so tests match prod:
-        # the ledger rejects TRUNCATE too, not only UPDATE/DELETE.
-        conn.execute(text("DROP TRIGGER IF EXISTS audit_log_no_truncate ON audit_log"))
-        conn.execute(
-            text(
-                """
-                CREATE TRIGGER audit_log_no_truncate
-                BEFORE TRUNCATE ON audit_log
-                FOR EACH STATEMENT EXECUTE FUNCTION audit_log_immutable();
-                """
-            )
-        )
+    command.upgrade(_alembic_config(), "head")
     yield
-    Base.metadata.drop_all(engine)
+    with engine.begin() as conn:
+        conn.execute(text("DROP SCHEMA public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
 
 
 @pytest.fixture

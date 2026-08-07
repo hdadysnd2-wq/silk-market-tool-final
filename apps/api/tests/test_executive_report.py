@@ -276,6 +276,94 @@ def test_executive_result_with_zero_analyses_declares_the_gap(db, factory, produ
     }
 
 
+# -- rendered docx text (C13) ----------------------------------------------
+
+
+def _executive_docx_text(db, product) -> str:
+    """Render the executive docx through the PRODUCT seam and return all its text.
+
+    Same chain the endpoint uses (``build_executive_result`` →
+    ``silk_render.build_view`` → ``silk_reports.render_executive_docx``), then
+    every paragraph and table cell flattened so a text probe can see leaks the
+    PK-magic endpoint tests structurally cannot.
+    """
+    import os
+    import tempfile
+
+    import silk_reports
+    from silk_render import build_view
+
+    if not hasattr(silk_reports, "render_executive_docx"):
+        import pytest
+
+        pytest.skip("engine render_executive_docx not present in this build")
+
+    from docx import Document
+
+    result = build_executive_result(db, product)
+    view = build_view(result)
+    path = os.path.join(tempfile.mkdtemp(prefix="silk_exec_c13_"), "executive.docx")
+    silk_reports.render_executive_docx(view, path)
+
+    doc = Document(path)
+    parts = [p.text for p in doc.paragraphs]
+    for table in doc.tables:
+        for row in table.rows:
+            parts.extend(cell.text for cell in row.cells)
+    return "\n".join(parts)
+
+
+def test_executive_docx_text_has_no_render_leaks(db, factory, product):
+    """C13 — probe the RENDERED executive docx TEXT for the three render-layer leak
+    classes the PK-magic endpoint tests can't catch, driving the full PRODUCT seam
+    (complements the engine-side unit test which probes a synthetic view):
+
+    * C10 — a report that declares gaps in §5 must NOT open with the misleading
+      "coverage 0/0, no gaps" plumbing; the honest declared-gap why-line replaces
+      it (no second verdict invented).
+    * C11 — the platform analysis status renders in Arabic, never the raw English
+      token.
+    * C12 — internal provider keys render as public Arabic source names wherever
+      they appear (base line, market tables, the §5 provenance trace).
+    """
+    import pytest
+
+    pytest.importorskip("docx")
+
+    _seed_funnel(db, product)
+    _snapshot_with_saudi(db, product.hs_code)  # Saudi share in percent-points (C9 lock)
+    analysis = _latest_analysis(db, product)
+    de = _seed_stage2_on_deu(db, analysis)  # market_size rationale source = 'world_trade'
+    assert de.enrichment["score_components"]["market_size"]["source"] == "world_trade"
+    # The executive screening line reflects the analysis status: exercise the
+    # platform vocabulary (C11) with an 'enriched' run.
+    analysis.status = "enriched"
+    # A price row whose source is a raw provider key (C12), on the DE snapshot.
+    snapshot = db.scalar(
+        select(MarketSnapshot).where(
+            MarketSnapshot.hs_code == product.hs_code,
+            MarketSnapshot.market_iso2 == "DE",
+        )
+    )
+    snapshot.observed_prices = [{**_PRICE_ROW, "source": "serpapi_shopping"}]
+    db.commit()
+
+    text = _executive_docx_text(db, product)
+
+    # C10 — the misleading coverage plumbing is gone; the honest gap why is present.
+    assert "فجوات: لا شيء" not in text
+    assert "تغطية الوكلاء" not in text
+    assert "مرحلة التوليف المرجَّحة لم تُشغَّل" in text
+    # C11 — the status is Arabic, never the raw English 'enriched'.
+    assert "enriched" not in text
+    assert "أُثريت الأسواق" in text
+    # C12 — provider keys render as public Arabic source names, never raw.
+    assert "world_trade" not in text
+    assert "serpapi_shopping" not in text
+    assert "الأمم المتحدة (كومتريد)" in text
+    assert "رصد متاجر إلكترونية" in text
+
+
 # -- endpoint --------------------------------------------------------------
 
 

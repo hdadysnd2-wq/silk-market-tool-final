@@ -6,6 +6,7 @@ import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
+from urllib.parse import urlsplit
 
 import bcrypt
 import jwt
@@ -95,6 +96,42 @@ _CREDENTIALS_ERROR = HTTPException(
 
 SESSION_COOKIE = "silk_token"
 
+# CSRF-unsafe (state-changing) HTTP methods. A cookie is an ambient credential
+# the browser attaches automatically, so a cookie-authenticated request using one
+# of these methods must additionally prove its Origin (below).
+_UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+_CSRF_ERROR = HTTPException(
+    status_code=status.HTTP_403_FORBIDDEN,
+    detail="Cross-origin request blocked",
+)
+
+
+def _enforce_same_origin(request: Request) -> None:
+    """Reject a state-changing cookie-auth request whose Origin isn't allowlisted.
+
+    Bearer-authenticated calls skip this — an attacker page cannot set the
+    Authorization header cross-site, so ambient-credential CSRF doesn't apply. But
+    the cookie is sent automatically, and ``POST /products`` accepts
+    ``multipart/form-data`` (a CORS-"simple" type a cross-site form can submit with
+    no preflight). Pinning the Origin/Referer to the configured CORS allowlist
+    closes that forged-request path. A browser sends ``Origin`` on every unsafe
+    same-origin request, so a missing/foreign Origin (with no allowlisted Referer
+    fallback) is treated as cross-site and blocked.
+    """
+    allowed = set(get_settings().cors_origin_list)
+    origin = request.headers.get("origin")
+    if origin is not None:
+        if origin not in allowed:
+            raise _CSRF_ERROR
+        return
+    referer = request.headers.get("referer")
+    if referer:
+        parts = urlsplit(referer)
+        if parts.scheme and parts.netloc and f"{parts.scheme}://{parts.netloc}" in allowed:
+            return
+    raise _CSRF_ERROR
+
 
 def get_current_user(
     request: Request,
@@ -104,9 +141,14 @@ def get_current_user(
     # Prefer the Authorization: Bearer header (API clients, tests); fall back to
     # the httpOnly session cookie the browser sends on same-origin /api/v1 calls
     # (C2 — the token is never exposed to client JS).
-    token = token or request.cookies.get(SESSION_COOKIE)
+    header_token = token
+    token = header_token or request.cookies.get(SESSION_COOKIE)
     if not token:
         raise _CREDENTIALS_ERROR
+    # CSRF: only the cookie is ambient. When the request authenticated by cookie
+    # (no explicit Bearer header) and mutates state, require an allowlisted Origin.
+    if header_token is None and request.method in _UNSAFE_METHODS:
+        _enforce_same_origin(request)
     try:
         payload = decode_token(token)
         user_id = uuid.UUID(payload["sub"])

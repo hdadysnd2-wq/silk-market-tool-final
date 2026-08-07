@@ -48,6 +48,7 @@ import httpx
 
 from app.logging import get_logger
 from app.providers.base import OutboundEmail, SendResult
+from app.providers.http_errors import safe_error
 
 log = get_logger(__name__)
 
@@ -136,9 +137,13 @@ class SmartleadSendingProvider:
                 raise ValueError(f"unexpected Smartlead response shape: {type(body).__name__}")
             message_id = _lead_ref(body, campaign_id, message.to_email)
         except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as exc:
-            log.error("smartlead_send_failed", to=message.to_email, error=str(exc))
+            # The key rides in the query string, so httpx error text embeds it.
+            # Use a status/type-only rendering for BOTH the log and the persisted
+            # SendResult.error, or the live key leaks into logs and Email state.
+            err = safe_error(exc)
+            log.error("smartlead_send_failed", to=message.to_email, error=err)
             return SendResult(
-                accepted=False, provider_message_id=None, provider_name=self.name, error=str(exc)
+                accepted=False, provider_message_id=None, provider_name=self.name, error=err
             )
         return SendResult(accepted=True, provider_message_id=message_id, provider_name=self.name)
 

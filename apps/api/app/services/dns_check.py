@@ -12,8 +12,22 @@ so the suite stays hermetic and offline.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
+
+#: A syntactically valid DNS hostname: 1–253 chars, dot-separated labels of
+#: 1–63 chars, no leading/trailing hyphen, at least one dot. Rejects schemes,
+#: ports, paths, and whitespace so a tenant-set ``sending_domain`` can't steer
+#: resolution at arbitrary junk (a narrow SSRF-style guard on the DNS seam).
+_HOSTNAME_RE = re.compile(
+    r"^(?=.{1,253}$)(?!-)[A-Za-z0-9-]{1,63}(?<!-)(?:\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))+$"
+)
+
+
+def is_valid_domain(domain: str) -> bool:
+    """True if ``domain`` is a syntactically valid DNS hostname."""
+    return bool(_HOSTNAME_RE.match(domain.strip()))
 
 
 @dataclass

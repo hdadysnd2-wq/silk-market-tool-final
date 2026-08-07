@@ -51,6 +51,10 @@ def get_owned_email(email_id: uuid.UUID, db: DbDep, user: CurrentUser) -> Email:
     if email is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Email not found")
     campaign = db.get(Campaign, email.campaign_id)
+    # A deleted/missing parent campaign would otherwise AttributeError → 500; the
+    # email is unreachable without its tenant anchor, so treat it as not found.
+    if campaign is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Email not found")
     assert_factory_access(user, campaign.factory_id)
     return email
 

@@ -168,6 +168,8 @@
   "report": {
     "title": "تقرير ذكاء التصدير",
     "download": "تنزيل HTML",
+    "downloadExecutive": "التقرير التنفيذي (Word)",
+    "downloadDeep": "التقرير المفصّل (Word)",
     "markets": "الأسواق",
     "buyers": "المشترون",
     "contacts": "جهات الاتصال",

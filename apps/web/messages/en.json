@@ -168,6 +168,8 @@
   "report": {
     "title": "Export intelligence report",
     "download": "Download HTML",
+    "downloadExecutive": "Executive report (Word)",
+    "downloadDeep": "Deep report (Word)",
     "markets": "Markets",
     "buyers": "Buyers",
     "contacts": "Contacts",

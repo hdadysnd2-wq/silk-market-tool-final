@@ -22,24 +22,33 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
   const locale = useLocale();
   const isAr = locale === "ar";
   const { data: report, loading } = useApi<ProductReport>(`/products/${id}/report?locale=${locale}`);
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
-  async function downloadHtml() {
-    setDownloading(true);
+  async function download(path: string, filename: string, kind: string) {
+    setDownloading(kind);
     try {
-      const blob = await api.blob(`/products/${id}/report.html?locale=${locale}`);
+      const blob = await api.blob(path);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `silk-report-${id}.html`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
     } finally {
-      setDownloading(false);
+      setDownloading(null);
     }
   }
+
+  // The executive multi-market report is the DEFAULT deliverable (Wave 3);
+  // the deep report stays available as the on-demand drill-down.
+  const downloadExecutive = () =>
+    download(`/products/${id}/report/executive`, `silk-executive-${id}.docx`, "executive");
+  const downloadDeep = () =>
+    download(`/products/${id}/report.docx?locale=${locale}`, `silk-report-${id}.docx`, "deep");
+  const downloadHtml = () =>
+    download(`/products/${id}/report.html?locale=${locale}`, `silk-report-${id}.html`, "html");
 
   if (loading) return <p className="text-gray-400">…</p>;
   if (!report) return null;
@@ -54,13 +63,29 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
           <h1 className="text-2xl font-bold text-gray-900">{t("title")}</h1>
           <p className="text-gray-500">{productName}</p>
         </div>
-        <button
-          onClick={downloadHtml}
-          disabled={downloading}
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-        >
-          {t("download")}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={downloadExecutive}
+            disabled={downloading !== null}
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+          >
+            {downloading === "executive" ? "…" : t("downloadExecutive")}
+          </button>
+          <button
+            onClick={downloadDeep}
+            disabled={downloading !== null}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+          >
+            {downloading === "deep" ? "…" : t("downloadDeep")}
+          </button>
+          <button
+            onClick={downloadHtml}
+            disabled={downloading !== null}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+          >
+            {downloading === "html" ? "…" : t("download")}
+          </button>
+        </div>
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">

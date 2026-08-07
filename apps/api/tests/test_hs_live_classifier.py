@@ -17,7 +17,7 @@ from app.services import hs_classifier
 
 
 def _mk_product(db, factory, **kw) -> Product:
-    defaults = dict(factory_id=factory.id, name_ar="منتج", name_en="Widget", currency="USD")
+    defaults = {"factory_id": factory.id, "name_ar": "منتج", "name_en": "Widget", "currency": "USD"}
     defaults.update(kw)
     p = Product(**defaults)
     db.add(p)

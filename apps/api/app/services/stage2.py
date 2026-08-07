@@ -151,15 +151,13 @@ def enrich_shortlist(
     from app.services import engine
 
     scored = engine.score_market_components(component_rows)
-    for r, s, crow in zip(rows, scored, component_rows):
+    for r, s, crow in zip(rows, scored, component_rows, strict=True):
         r.stage2_score = s["total_score"]
         r.enrichment = {
             **(r.enrichment or {}),
             # Score provenance: which components fed the engine model and the
             # per-row confidence (fewer present components = lower confidence).
-            "score_components": {
-                name: {k: v for k, v in c.items()} for name, c in crow["components"].items()
-            },
+            "score_components": {name: dict(c) for name, c in crow["components"].items()},
             "score_confidence": s["confidence"],
             "score_model": "silk_market_ranker",
         }

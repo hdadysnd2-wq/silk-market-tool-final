@@ -3,33 +3,12 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
-// Baseline security headers. The API is same-origin (proxied via rewrites), so
-// connect-src 'self' suffices. 'unsafe-inline' is kept for script/style because
-// the App Router injects inline bootstrap scripts without a nonce; nonce-based
-// hardening is a follow-up. 'unsafe-eval' is added in DEV ONLY — `next dev`
-// (used by the Playwright e2e) relies on eval for React Fast Refresh/HMR; the
-// production bundle does not, so prod keeps the stricter policy. frame-ancestors
-// 'none' + X-Frame-Options block clickjacking; img-src allows https for
-// cross-origin storage (presigned URLs).
-const isDev = process.env.NODE_ENV !== "production";
-const scriptSrc = isDev
-  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-  : "script-src 'self' 'unsafe-inline'";
-const CSP = [
-  "default-src 'self'",
-  scriptSrc,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https:",
-  "font-src 'self' data:",
-  "connect-src 'self'",
-  "frame-ancestors 'none'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join("; ");
-
+// Baseline security headers. The Content-Security-Policy lives in
+// src/middleware.ts, not here: it carries a per-request script nonce, which a
+// static header cannot. Everything below is request-independent. frame-ancestors
+// is enforced by the middleware CSP; X-Frame-Options stays as the legacy
+// belt-and-suspenders for it.
 const SECURITY_HEADERS = [
-  { key: "Content-Security-Policy", value: CSP },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

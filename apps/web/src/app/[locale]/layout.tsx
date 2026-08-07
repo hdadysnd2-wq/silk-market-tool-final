@@ -1,5 +1,6 @@
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { Inter, IBM_Plex_Sans_Arabic } from "next/font/google";
 import { routing, dirFor } from "@/i18n/routing";
@@ -26,6 +27,11 @@ export default async function LocaleLayout({
   if (!routing.locales.includes(locale as (typeof routing.locales)[number])) {
     notFound();
   }
+
+  // Force per-request rendering so Next stamps the middleware's CSP nonce onto
+  // its inline bootstrap scripts. A statically prerendered page would ship
+  // nonce-less inline scripts that the strict script-src policy blocks.
+  await headers();
 
   // Messages must be handed to the client provider explicitly; without this the
   // provider has no messages and every `t(...)` renders the raw key (e.g.

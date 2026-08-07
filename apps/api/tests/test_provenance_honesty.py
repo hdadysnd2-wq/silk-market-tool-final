@@ -12,7 +12,11 @@ from app.models import CountryRanking, MarketSnapshot
 from app.services import engine
 from app.services.buyer_discovery import discover_buyers
 from app.services.competitor_snapshot import build_snapshot
-from app.services.report_view import _executive_buyers, _executive_market_row, build_executive_result
+from app.services.report_view import (
+    _executive_buyers,
+    _executive_market_row,
+    build_executive_result,
+)
 from app.services.stage2 import _components_for
 
 
@@ -43,8 +47,14 @@ def test_offline_comtrade_snapshot_is_labeled_fixture(db, market):
 def test_executive_score_declares_its_model(db, factory, product):
     a = _mk_analysis(db, product)
     # Stage-2 scored row → engine model label.
-    r2 = _mk_ranking(db, a, "DEU", rank=1, stage2_score=0.7,
-                     enrichment={"score_confidence": 0.75, "score_model": "silk_market_ranker"})
+    r2 = _mk_ranking(
+        db,
+        a,
+        "DEU",
+        rank=1,
+        stage2_score=0.7,
+        enrichment={"score_confidence": 0.75, "score_model": "silk_market_ranker"},
+    )
     # Screen-only row → the stage-1 fallback label (different scale).
     r1 = _mk_ranking(db, a, "IND", rank=2, screen_score=1234.0)
     db.commit()
@@ -61,10 +71,18 @@ def test_saudi_share_stored_in_percent_points(db, factory, product):
         market_iso2="IN",
         total_import_usd=900.0,
         top_exporters=[
-            {"exporter_iso2": "SA", "exporter_name": "Saudi Arabia", "share_pct": 30.0,
-             "value_usd": 270.0},
-            {"exporter_iso2": "CN", "exporter_name": "China", "share_pct": 40.0,
-             "value_usd": 360.0},
+            {
+                "exporter_iso2": "SA",
+                "exporter_name": "Saudi Arabia",
+                "share_pct": 30.0,
+                "value_usd": 270.0,
+            },
+            {
+                "exporter_iso2": "CN",
+                "exporter_name": "China",
+                "share_pct": 40.0,
+                "value_usd": 360.0,
+            },
         ],
         source="comtrade",
     )
@@ -94,8 +112,17 @@ def _mk_analysis(db, product):
     return a
 
 
-def _mk_ranking(db, analysis, iso3, *, rank, stage2_score=None, screen_score=0.5,
-                import_usd=100.0, enrichment=None):
+def _mk_ranking(
+    db,
+    analysis,
+    iso3,
+    *,
+    rank,
+    stage2_score=None,
+    screen_score=0.5,
+    import_usd=100.0,
+    enrichment=None,
+):
     r = CountryRanking(
         analysis_id=analysis.id,
         importer_iso3=iso3,

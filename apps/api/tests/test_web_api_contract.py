@@ -73,9 +73,7 @@ def test_every_web_api_call_has_a_backing_route():
     calls = _web_calls()
     assert calls, "no web API calls were extracted — the regex likely broke"
 
-    missing = [
-        (method, raw) for method, canon, raw in calls if (method, canon) not in routes
-    ]
+    missing = [(method, raw) for method, canon, raw in calls if (method, canon) not in routes]
     assert not missing, (
         "web calls with no backing FastAPI route (the /u regression class):\n"
         + "\n".join(f"  {method.upper()} {raw}" for method, raw in sorted(missing))

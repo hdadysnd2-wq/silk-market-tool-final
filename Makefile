@@ -40,6 +40,9 @@ dev: up migrate seed ## One-shot: up + migrate + seed (offline, no keys)
 demo: ## Run the golden-path demo end to end and print each step
 	$(COMPOSE) exec api python -m app.seeds.demo_golden_path
 
+journey: ## Run the Factory Report Journey end to end (intake → world screen → Top 5 → report w/ prices + buyers)
+	$(COMPOSE) exec api python -m app.seeds.demo_factory_report_journey
+
 create-admin: ## Create/promote the first platform admin (make create-admin EMAIL=you@example.com [NAME="Owner"]); prompts for the password
 	$(COMPOSE) exec api python -m app.seeds.create_admin $(EMAIL) $(if $(NAME),--name "$(NAME)")
 
@@ -82,6 +85,15 @@ etl: ## Offline bulk jobs (pandas + comtradeapicall allowed HERE only, I7)
 	@echo "Offline ETL jobs (see etl/README.md). Install deps: pip install -r etl/requirements.txt"
 	@echo "  python -m etl.world_trade_sync --hs6 <code> --years 2021 2022 2023"
 	@echo "  python -m etl.hs_reference_sync"
+
+# One-command live Comtrade sync (audit 2026-08-07 C1). READY, AWAITING KEYS:
+# needs COMTRADE_API_KEY + DATABASE_URL in the environment (docs/LAUNCH_KEYS.md).
+# Runs in the running api container (which now ships etl/), or bare-metal from a
+# checkout with etl deps installed. Usage: make live-sync HS6=392010
+live-sync: ## Live world-trade sync for one HS6 (requires COMTRADE_API_KEY; docs/LAUNCH_KEYS.md)
+	@test -n "$(HS6)" || (echo "Usage: make live-sync HS6=<6-digit code>" && exit 1)
+	$(COMPOSE) exec -e COMTRADE_OFFLINE=0 api python -m etl.world_trade_sync --hs6 $(HS6) \
+		|| PYTHONPATH=. python3 -m etl.world_trade_sync --hs6 $(HS6)
 
 # ---- misc ------------------------------------------------------------------
 

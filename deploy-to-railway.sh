@@ -203,6 +203,34 @@ gen_fernet_key() {
 }
 TOKEN_ENCRYPTION_KEY=$(gen_fernet_key)
 
+# Object storage is MANDATORY on this topology (audit 2026-08-07 C2): api and
+# worker are separate containers, so STORAGE_BACKEND=local silently breaks the
+# vision pass (image written on api's disk, read on worker's) and 404s every
+# executive-report download (written on worker's disk, served from api's). The
+# script therefore fails closed: supply real S3/R2/MinIO credentials via env
+# before running, or explicitly opt into the broken local mode for a throwaway
+# preview with ALLOW_LOCAL_STORAGE=1.
+if [[ "${ALLOW_LOCAL_STORAGE:-0}" == "1" ]]; then
+  warn "ALLOW_LOCAL_STORAGE=1 — deploying with STORAGE_BACKEND=local. Product"
+  warn "images will NOT reach the vision model and report downloads will 404."
+  STORAGE_VARS=$'STORAGE_BACKEND=local'
+else
+  : "${S3_ENDPOINT_URL:?Set S3_ENDPOINT_URL (e.g. https://<accountid>.r2.cloudflarestorage.com) — object storage is required; see docs/LAUNCH_KEYS.md. For a throwaway preview only: ALLOW_LOCAL_STORAGE=1}"
+  : "${S3_BUCKET:?Set S3_BUCKET — object storage is required (docs/LAUNCH_KEYS.md)}"
+  : "${S3_ACCESS_KEY:?Set S3_ACCESS_KEY — object storage is required (docs/LAUNCH_KEYS.md)}"
+  : "${S3_SECRET_KEY:?Set S3_SECRET_KEY — object storage is required (docs/LAUNCH_KEYS.md)}"
+  STORAGE_VARS=$(cat <<EOF
+STORAGE_BACKEND=s3
+REQUIRE_OBJECT_STORAGE=1
+S3_ENDPOINT_URL=${S3_ENDPOINT_URL}
+S3_BUCKET=${S3_BUCKET}
+S3_ACCESS_KEY=${S3_ACCESS_KEY}
+S3_SECRET_KEY=${S3_SECRET_KEY}
+S3_REGION=${S3_REGION:-me-south-1}
+EOF
+)
+fi
+
 confirm "Create project ${BOLD}${PROJECT_NAME}${RESET} and deploy ${BOLD}${REPO}@${BRANCH}${RESET}?" \
   || die "Aborted."
 
@@ -259,13 +287,11 @@ else info "adding Redis…"; rw_soft add --database redis; fi
 #   • ${{Postgres.DATABASE_URL}} / ${{Redis.REDIS_URL}} — provisioned above.
 #   • ${{api.RAILWAY_PUBLIC_DOMAIN}} — resolves once you generate a domain for
 #     the api service (§7). API_BASE_URL/APP_BASE_URL/CORS stay correct after.
-# STORAGE_BACKEND=local is ephemeral without a volume AND cannot serve product
-# images across services: api and worker are separate containers, so a file://
-# image the api writes is invisible to the worker's vision pass (it degrades to a
-# text-only classification). For image classification to work, switch to
-# STORAGE_BACKEND=s3 with real S3/R2/MinIO credentials and set
-# REQUIRE_OBJECT_STORAGE=1 so a local misconfig fails loudly at startup.
-# docs/DEPLOY_RAILWAY.md has the full object-store setup.
+# Object storage vars come from the fail-closed preamble above (S3 by default,
+# REQUIRE_OBJECT_STORAGE=1 so any drift back to local storage aborts startup
+# instead of silently breaking vision + report downloads). COMTRADE stays live
+# by default — the sync is fail-closed without COMTRADE_API_KEY, so keyless
+# deploys degrade loudly instead of being hard-disabled by a leftover flag.
 backend_vars() {
   cat <<EOF
 ENVIRONMENT=production
@@ -276,9 +302,12 @@ REDIS_URL=\${{Redis.REDIS_URL}}
 API_BASE_URL=https://\${{api.RAILWAY_PUBLIC_DOMAIN}}
 APP_BASE_URL=https://\${{web.RAILWAY_PUBLIC_DOMAIN}}
 CORS_ORIGINS=https://\${{web.RAILWAY_PUBLIC_DOMAIN}}
-STORAGE_BACKEND=local
-COMTRADE_OFFLINE=1
+${STORAGE_VARS}
+COMTRADE_API_KEY=${COMTRADE_API_KEY:-}
+SENTRY_DSN=${SENTRY_DSN:-}
 TRUSTED_PROXY_COUNT=1
+SILK_DATA_DIR=/app/data
+SILK_REQUIRE_PERSISTENT_DATA_DIR=1
 EOF
 }
 
@@ -341,9 +370,14 @@ these in the Railway dashboard (Project → each service → Settings):${RESET}
   ${BOLD}c) Secrets & persistence${RESET}   (each service → Variables / Volumes)
      • Real vendor keys (ANTHROPIC_API_KEY, SMARTLEAD_API_KEY, OAuth client
        ids/secrets, …) — all optional; blank keeps the deterministic mock.
-     • STORAGE_BACKEND=local is wiped on redeploy. Attach a Volume at
-       /app/storage on the ${BOLD}api${RESET} service (and worker, if it writes
-       uploads), or set STORAGE_BACKEND=s3 with real S3/R2 credentials.
+     • Object storage (S3/R2/MinIO) was configured from your environment and
+       REQUIRE_OBJECT_STORAGE=1 is set — a drift back to local storage aborts
+       startup instead of silently breaking vision + report downloads.
+     • The engine's paid-spend cap + HS cache live in SQLite under
+       SILK_DATA_DIR=/app/data with SILK_REQUIRE_PERSISTENT_DATA_DIR=1, so
+       startup FAILS unless a Volume is mounted there (audit: otherwise the
+       daily paid-call cap resets to zero on every redeploy). Attach a Volume
+       at ${BOLD}/app/data${RESET} on the api AND worker services.
      • A SECRET_KEY was generated and set on api/worker/beat/web (identical
        across all four, as required — web verifies the session JWT). Rotate it
        in the dashboard for production.

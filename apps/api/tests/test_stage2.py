@@ -162,6 +162,121 @@ def test_enrich_stops_at_the_budget(client, db, product, auth_headers):
         assert conf is not None and conf < 1.0  # fewer components = lower confidence
 
 
+# ── J1: the three new engine components come from REAL persisted data ────────
+
+
+def test_unit_price_component_derived_from_world_trade_qty(client, db, product, auth_headers):
+    # A world_trade row with a positive quantity yields the observed Comtrade
+    # unit value (import_usd / import_qty) as the unit_price_level component.
+    _seed_world(db)
+    deu_row = db.scalar(
+        select(WorldTrade).where(WorldTrade.hs6 == HS6, WorldTrade.importer_iso3 == "DEU")
+    )
+    deu_row.import_qty = 450.0
+    db.commit()
+    aid = _run_stage1(client, product, auth_headers)
+    analysis = db.get(Analysis, uuid.UUID(aid))
+
+    enrich_shortlist(db, analysis, HS6)
+    rows = {
+        r.importer_iso3: r
+        for r in db.scalars(select(CountryRanking).where(CountryRanking.analysis_id == analysis.id))
+    }
+    deu = rows["DEU"].enrichment["score_components"]["unit_price_level"]
+    assert deu["value"] == 900.0 / 450.0
+    assert deu["source"] == "world_trade"
+    assert deu["note"] == "Comtrade unit value USD/qty"
+    # Rows without a quantity OMIT the component — a declared gap (I1), never a
+    # fabricated unit value.
+    assert "unit_price_level" not in rows["IND"].enrichment["score_components"]
+
+
+def test_tariff_access_component_comes_from_the_enrichment_record(
+    client, db, product, auth_headers
+):
+    _seed_world(db)
+    aid = _run_stage1(client, product, auth_headers)
+    analysis = db.get(Analysis, uuid.UUID(aid))
+
+    enrich_shortlist(db, analysis, HS6)
+    rows = list(db.scalars(select(CountryRanking).where(CountryRanking.analysis_id == analysis.id)))
+    enriched = [r for r in rows if (r.enrichment or {}).get("applied_tariff_pct") is not None]
+    assert enriched, "the mock enrichment provider supplies a tariff"
+    for r in enriched:
+        comp = r.enrichment["score_components"]["tariff_access"]
+        # The component's value IS the persisted enrichment tariff; its source is
+        # the enrichment record's provider — no separate/parallel tariff source.
+        assert comp["value"] == r.enrichment["applied_tariff_pct"]
+        assert comp["source"] == r.enrichment["source"]
+        assert comp["note"] == "applied import tariff for HS6"
+
+
+def test_tariff_component_omitted_when_enrichment_is_gated(
+    client, db, product, auth_headers, monkeypatch
+):
+    # Keyless prod: the Gated provider returns None → tariff_access is simply
+    # omitted (a declared gap, I1), never fabricated.
+    _seed_world(db)
+    aid = _run_stage1(client, product, auth_headers)
+    analysis = db.get(Analysis, uuid.UUID(aid))
+
+    import app.services.stage2 as stage2_mod
+    from app.providers.market_enrichment.gated import GatedMarketEnrichmentProvider
+
+    monkeypatch.setattr(
+        stage2_mod, "get_market_enrichment_provider", lambda: GatedMarketEnrichmentProvider()
+    )
+    enrich_shortlist(db, analysis, HS6)
+    rows = list(db.scalars(select(CountryRanking).where(CountryRanking.analysis_id == analysis.id)))
+    for r in rows:
+        assert "tariff_access" not in r.enrichment["score_components"]
+
+
+def test_logistics_proximity_component_from_derived_distance_table(
+    client, db, product, auth_headers
+):
+    from app.providers.countries_distance import DISTANCE_SOURCE, distance_from_jeddah_km
+
+    # The static table covers the major importers the funnel screens.
+    for iso3 in ("DEU", "IND", "CHN"):
+        assert distance_from_jeddah_km(iso3) is not None
+
+    _seed_world(db)
+    aid = _run_stage1(client, product, auth_headers)
+    analysis = db.get(Analysis, uuid.UUID(aid))
+    enrich_shortlist(db, analysis, HS6)
+    rows = {
+        r.importer_iso3: r
+        for r in db.scalars(select(CountryRanking).where(CountryRanking.analysis_id == analysis.id))
+    }
+    for iso3 in ("DEU", "IND"):
+        comp = rows[iso3].enrichment["score_components"]["logistics_proximity"]
+        assert comp["value"] == distance_from_jeddah_km(iso3)
+        assert comp["source"] == DISTANCE_SOURCE
+
+
+def test_top5_rows_carry_a_deterministic_rationale(client, db, product, auth_headers):
+    # J1 transparency: after Stage 2, the API's top-5 rows each carry EN + AR
+    # one-liners naming top components with their real values and sources.
+    _seed_world(db)
+    aid = _run_stage1(client, product, auth_headers)
+    res = client.post(f"/api/v1/analyses/{aid}/enrich", headers=auth_headers)
+    assert res.status_code == 202, res.text
+
+    out = client.get(f"/api/v1/analyses/{aid}", headers=auth_headers).json()
+    top5 = out["rankings"][:5]
+    assert top5
+    for r in top5:
+        assert r["rationale_en"] and r["rationale_ar"]
+        # market_size (weight .30) is present on every seeded row, so it must be
+        # one of the named top contributors — with its real source label.
+        assert "market size" in r["rationale_en"]
+        assert "world_trade" in r["rationale_en"]
+        assert "حجم السوق" in r["rationale_ar"]
+        # The components themselves are exposed for the breakdown UI.
+        assert "score_components" in r["enrichment"]
+
+
 def test_enrich_market_gap_keeps_stage1_score(client, db, product, auth_headers, monkeypatch):
     # I1 — a failed enrichment keeps the Stage-1 score and records the gap, never
     # a fabricated signal.

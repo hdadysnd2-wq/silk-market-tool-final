@@ -11,8 +11,11 @@ from app.models import WorldTrade
 from app.services.world_funnel import (
     MIRROR_TAG,
     NO_DATA_TAG,
+    SHORTLIST_MAX,
+    SHORTLIST_MIN,
     TRANSIT_HUB_TAG,
     screen_world,
+    shortlist_quota,
 )
 
 HS6 = "080410"
@@ -107,3 +110,78 @@ def test_empty_when_no_world_trade_for_hs6(db):
     assert result.year is None
     assert result.total_screened == 0
     assert result.markets == []
+
+
+# ── J1: the top-20% cut ─────────────────────────────────────────────────────
+
+
+def _seed_n(db, n: int, hs6: str = "999888"):
+    for i in range(n):
+        db.add(
+            WorldTrade(
+                hs6=hs6,
+                importer_iso3=f"A{i:02d}",  # synthetic but unique ISO3-shaped codes
+                year=YEAR,
+                import_usd=1000.0 + i,
+                is_transit_hub=False,
+                is_mirror=False,
+                source="UN Comtrade",
+            )
+        )
+    db.commit()
+
+
+def test_shortlist_quota_is_top_20_percent_clamped_5_to_30():
+    assert shortlist_quota(50) == 10  # ceil(20% of 50)
+    assert shortlist_quota(12) == 5  # ceil(2.4)=3 → clamped up to the min
+    assert shortlist_quota(0) == SHORTLIST_MIN
+    assert shortlist_quota(100) == 20
+    assert shortlist_quota(1000) == SHORTLIST_MAX  # 200 → clamped to 30
+    assert shortlist_quota(26) == 6  # ceil(5.2) — the ceil, not the floor
+
+
+def test_screen_world_keeps_20_percent_of_50_covered_markets(db):
+    _seed_n(db, 50)
+    result = screen_world(db, "999888")
+    assert result.total_screened == 50
+    assert result.covered == 50
+    assert result.shortlisted == 10
+    assert len(result.markets) == 10
+
+
+def test_screen_world_small_market_clamps_to_minimum_5(db):
+    _seed_n(db, 12)
+    result = screen_world(db, "999888")
+    assert result.covered == 12
+    assert result.shortlisted == 5
+    assert len(result.markets) == 5
+
+
+def test_no_data_rows_do_not_inflate_the_quota_base(db):
+    # 10 covered + 40 declared no-data gaps (I1): the 20% base is the COVERED
+    # count (quota 5, the clamp floor), not the raw row count (which would be 10).
+    _seed_n(db, 10)
+    for i in range(40):
+        db.add(
+            WorldTrade(
+                hs6="999888",
+                importer_iso3=f"B{i:02d}",
+                year=YEAR,
+                import_usd=None,
+                is_transit_hub=False,
+                is_mirror=False,
+                source="UN Comtrade",
+            )
+        )
+    db.commit()
+    result = screen_world(db, "999888")
+    assert result.total_screened == 50
+    assert result.covered == 10
+    assert result.shortlisted == 5
+
+
+def test_explicit_top_n_still_overrides_the_quota(db):
+    _seed_n(db, 50)
+    result = screen_world(db, "999888", top_n=3)
+    assert len(result.markets) == 3
+    assert result.shortlisted == 3

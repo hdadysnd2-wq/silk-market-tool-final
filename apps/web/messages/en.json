@@ -37,10 +37,8 @@
     "title": "Dashboard",
     "campaigns": "Campaigns",
     "sent": "Sent",
-    "opened": "Opened",
     "replied": "Replied",
     "bounced": "Bounced",
-    "openRate": "Open rate",
     "replyRate": "Reply rate",
     "bounceRate": "Bounce rate",
     "pendingApprovals": "Pending approvals",
@@ -133,7 +131,17 @@
     "refine": "Refine (Stage 2)",
     "refining": "Refining…",
     "refined": "Refined (Stage 2)",
-    "tariffLabel": "tariff"
+    "tariffLabel": "tariff",
+    "scoreBreakdown": "Score breakdown",
+    "components": {
+      "market_size": "Market size (USD imports)",
+      "demand_capacity": "Demand capacity (PPP/capita)",
+      "saudi_position": "Saudi supplier share (%)",
+      "unit_price_level": "Unit price level (USD/unit)",
+      "tariff_access": "Applied tariff (fraction)",
+      "competition": "Supplier concentration",
+      "logistics_proximity": "Distance from Jeddah (km)"
+    }
   },
   "buyers": {
     "title": "Potential buyers",
@@ -170,6 +178,10 @@
     "download": "Download HTML",
     "downloadExecutive": "Executive report (Word)",
     "downloadDeep": "Deep report (Word)",
+    "deepResearch": "Deep research report (Top 5)",
+    "deepResearchPending": "Running deep research across the Top-5 markets — this can take several minutes.",
+    "deepResearchGated": "Deep research is pending an API key (ANTHROPIC_API_KEY). A placeholder report was produced; the full research runs once the key is configured.",
+    "deepResearchFailed": "The deep research report could not be generated. Please try again.",
     "markets": "Markets",
     "buyers": "Buyers",
     "contacts": "Contacts",
@@ -294,7 +306,9 @@
     "next": "Next",
     "close": "Close",
     "error": "Something went wrong",
-    "language": "العربية"
+    "language": "العربية",
+    "loadError": "Couldn't load this — check your connection and try again.",
+    "retry": "Try again"
   },
   "profile": {
     "title": "Profile & account",
@@ -404,5 +418,10 @@
     "repliedBadge": "Replied",
     "empty": "No replies yet. When a buyer replies to your outreach it will show up here.",
     "openMailboxHint": "The reply text lives in your connected sending mailbox — open it to answer the buyer."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications",
+    "markRead": "Mark read"
   }
 }

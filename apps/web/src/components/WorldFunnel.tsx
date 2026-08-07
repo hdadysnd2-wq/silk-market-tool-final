@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { api, ApiError } from "@/lib/api";
 import { pollUntil } from "@/lib/poll";
 import type { Analysis, AnalysisAccepted, FunnelBrief, Product } from "@/lib/types";
@@ -45,6 +45,7 @@ export function WorldFunnel({
   discovering?: boolean;
 }) {
   const t = useTranslations("funnel");
+  const locale = useLocale();
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [brief, setBrief] = useState<FunnelBrief | null>(null);
   const [loading, setLoading] = useState(false);
@@ -279,6 +280,12 @@ export function WorldFunnel({
                   </div>
                 </>
               );
+              // J1 transparency: the deterministic one-line "why this market
+              // ranked" (top-5 only, computed server-side from persisted
+              // components — never invented) plus the expandable per-component
+              // score breakdown (name, value, source).
+              const rationale = locale === "ar" ? r.rationale_ar : r.rationale_en;
+              const components = r.enrichment?.score_components;
               return (
                 <li key={r.importer_iso3}>
                   {clickable ? (
@@ -295,6 +302,32 @@ export function WorldFunnel({
                     </button>
                   ) : (
                     <div className="flex items-center justify-between gap-3 px-2 py-2">{rowInner}</div>
+                  )}
+                  {rationale && <p className="px-2 pb-1 text-xs text-gray-500">{rationale}</p>}
+                  {components && Object.keys(components).length > 0 && (
+                    <details className="px-2 pb-2">
+                      <summary className="cursor-pointer text-xs font-medium text-brand-700">
+                        {t("scoreBreakdown")}
+                      </summary>
+                      <ul className="mt-1 space-y-0.5">
+                        {Object.entries(components).map(([name, c]) => (
+                          <li key={name} className="flex items-baseline justify-between gap-2 text-xs">
+                            <span className="text-gray-600">
+                              {t.has(`components.${name}`) ? t(`components.${name}`) : name}
+                            </span>
+                            <span className="text-end">
+                              <span className="tabular text-gray-900">
+                                {Number(c.value).toLocaleString("en-US", {
+                                  maximumFractionDigits: 2,
+                                })}
+                              </span>
+                              {/* The source line — provenance is never omitted (I1). */}
+                              <span className="block text-gray-400">{c.source}</span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
                   )}
                 </li>
               );

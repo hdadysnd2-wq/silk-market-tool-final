@@ -74,6 +74,16 @@ class Product(UUIDMixin, TimestampMixin, Base):
     #: ``failed`` status so the UI can explain, and offer retry / manual entry).
     failure_reason: Mapped[str | None] = mapped_column(String(500))
 
+    #: Deep-research (Top-5) report status — the paid, key-gated engine pipeline
+    #: (ADR-0007), DISTINCT from the always-available executive report. None until
+    #: first requested, then: pending → ready | gated | failed. ``gated`` is the
+    #: fail-closed "deep research pending API key" terminal state (no key) — its
+    #: stored docx is a declared-gap document, never fabricated (I1).
+    research_status: Mapped[str | None] = mapped_column(String(24))
+    #: Storage key of the rendered deep-research docx (``reports/research/{id}.docx``)
+    #: once a report (real or declared-gap) has been produced. None until then.
+    research_report_key: Mapped[str | None] = mapped_column(String(512))
+
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
 
 

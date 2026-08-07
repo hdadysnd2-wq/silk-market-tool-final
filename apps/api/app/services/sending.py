@@ -149,13 +149,18 @@ def send_email(db: Session, email_id: uuid.UUID, provider: SendingProvider) -> E
     result = provider.send(message)
     if not result.accepted:
         # A rejected message definitively did not go out, so it is safe to return
-        # it to the queue for retry (unlike a mid-flight crash).
+        # it to the queue for retry (unlike a mid-flight crash). The reason is
+        # persisted so the row is not an unexplained forever-queued mystery —
+        # the redispatch sweep retries it and the UI can show why it is waiting
+        # (audit 2026-08-07 C4).
         email.status = EmailStatus.queued
         email.claimed_at = None
+        email.blocked_reason = (result.error or "provider rejected the message")[:255]
         db.commit()
         raise SendBlocked(result.error or "provider rejected the message")
 
     email.status = EmailStatus.sent
+    email.blocked_reason = None
     email.sent_at = utcnow()
     email.provider_name = result.provider_name
     email.provider_message_id = result.provider_message_id

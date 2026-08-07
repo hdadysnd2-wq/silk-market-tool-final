@@ -55,8 +55,12 @@ def _coerce_optional_price(value: str | None, field: str) -> float | None:
         ) from None
 
 
+# A sync `def` route runs in Starlette's threadpool, so its blocking DB commit
+# and boto3 upload never stall the single event loop (audit H2 / H1). It was
+# `async def` doing sync work inline — two concurrent uploads against a slow S3
+# froze every poll request. Read the upload synchronously off `image.file`.
 @router.post("/products", response_model=ProductAccepted, status_code=status.HTTP_202_ACCEPTED)
-async def create_product(
+def create_product(
     db: DbDep,
     user: CurrentUser,
     name_ar: str = Form(...),
@@ -86,8 +90,9 @@ async def create_product(
     image_key = None
     if image is not None:
         # Bounded read: pull at most MAX+1 bytes so an oversized upload is rejected
-        # without buffering the whole body.
-        data = await image.read(MAX_IMAGE_BYTES + 1)
+        # without buffering the whole body. Read off the underlying spooled file
+        # (sync) so the handler stays a threadpool `def`, not an event-loop `async`.
+        data = image.file.read(MAX_IMAGE_BYTES + 1)
         if len(data) > MAX_IMAGE_BYTES:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,

@@ -19,7 +19,7 @@ from app.services.world_funnel import screen_world
 log = get_logger(__name__)
 
 
-def run_product_world_analysis(db: Session, product: Product, top_n: int = 20) -> Analysis:
+def run_product_world_analysis(db: Session, product: Product, top_n: int | None = None) -> Analysis:
     """Create an analysis for a product and persist its world-funnel ranking.
 
     The caller MUST ensure the product's HS code is human-confirmed (I2) — this
@@ -37,11 +37,13 @@ def run_product_world_analysis(db: Session, product: Product, top_n: int = 20) -
 
 
 def rank_and_persist(
-    db: Session, analysis: Analysis, hs6: str, top_n: int = 20
+    db: Session, analysis: Analysis, hs6: str, top_n: int | None = None
 ) -> list[CountryRanking]:
     """Screen the world for ``hs6`` and persist the ranked shortlist to ``analysis``.
 
-    Returns the persisted ``CountryRanking`` rows (rank 1..N). The transit-port
+    Returns the persisted ``CountryRanking`` rows (rank 1..N). ``top_n=None``
+    (the default) applies the top-20% cut (``world_funnel.shortlist_quota`` —
+    ceil(20%) of covered markets, clamped to [5, 30]). The transit-port
     guard (I9) and provenance tags come straight from the screen — a re-export hub
     is stored flagged and penalized, never silently on top; a no-data market is a
     declared gap (I1).
@@ -55,9 +57,10 @@ def rank_and_persist(
     # existing rows for this analysis in the SAME transaction so a redelivery
     # REPLACES the shortlist rather than duplicating it.
     db.execute(delete(CountryRanking).where(CountryRanking.analysis_id == analysis.id))
-    # Funnel transparency: record the full world count screened, not the shortlist
-    # length, so the report can show "screened N → shortlisted M → top 5".
+    # Funnel transparency: record the full world count screened AND how many the
+    # top-20% cut kept, so the report can show "screened N → shortlisted M → top 5".
     analysis.total_screened = result.total_screened
+    analysis.shortlisted = result.shortlisted
     rankings: list[CountryRanking] = []
     for rank, m in enumerate(result.markets, start=1):
         cr = CountryRanking(

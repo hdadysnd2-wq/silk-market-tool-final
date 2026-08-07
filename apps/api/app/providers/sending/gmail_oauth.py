@@ -180,17 +180,30 @@ class GmailOAuthProvider:
         return {"Authorization": f"Bearer {creds.access_token}"}
 
     @staticmethod
+    def _header_safe(value: str) -> str:
+        """Strip CR/LF from header values — header-injection guard (audit H5).
+
+        ``subject`` is user-editable (newlines allowed by the 512-char schema
+        cap) and ``from_name`` is tenant-controlled; embedded CRLF in a raw
+        RFC822 header would let a tenant inject extra headers (silent Bcc,
+        spoofed fields) on the Gmail path. The Graph path sends JSON fields and
+        is not affected.
+        """
+        return value.replace("\r", " ").replace("\n", " ").strip() if value else value
+
+    @staticmethod
     def _build_raw(from_email: str, message: OutboundEmail) -> str:
         mime = MIMEText(
             message.body_html or message.body_text,
             "html" if message.body_html else "plain",
             "utf-8",
         )
-        mime["To"] = message.to_email
-        mime["From"] = f"{message.from_name} <{from_email}>"
-        mime["Subject"] = message.subject
+        safe = GmailOAuthProvider._header_safe
+        mime["To"] = safe(message.to_email)
+        mime["From"] = f"{safe(message.from_name)} <{safe(from_email)}>"
+        mime["Subject"] = safe(message.subject)
         if message.reply_to:
-            mime["Reply-To"] = message.reply_to
+            mime["Reply-To"] = safe(message.reply_to)
         mime["List-Unsubscribe"] = f"<{message.unsubscribe_url}>"
         mime["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
         return base64.urlsafe_b64encode(mime.as_bytes()).decode("ascii")

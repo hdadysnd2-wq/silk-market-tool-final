@@ -27,6 +27,10 @@ def _prod_settings(**overrides) -> Settings:
         environment="production",
         secret_key="a-strong-production-secret-key-32-bytes!",
         token_encryption_key=Fernet.generate_key().decode(),
+        # Safe prod networking defaults (audit H7) — required now that the
+        # config fails closed on trusted_proxy_count=0 / localhost api_base_url.
+        trusted_proxy_count=1,
+        api_base_url="https://api.silk.example",
         **overrides,
     )
 

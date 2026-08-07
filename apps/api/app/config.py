@@ -67,7 +67,12 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-fable-5"
     comtrade_api_key: str = ""
-    comtrade_offline: bool = True
+    # Default ON-line: the sync itself stays fail-closed (it refuses to run
+    # without a real COMTRADE_API_KEY), so flipping this default cannot cause a
+    # network call on keyless deploys — it only stops a by-the-book production
+    # deploy from permanently disabling the world screen (audit 2026-08-07 C1).
+    # Tests and hermetic lanes set COMTRADE_OFFLINE=1 explicitly.
+    comtrade_offline: bool = False
     # Stage-2 market enrichment (applied tariff + PPP). Blank/False keeps the
     # deterministic mock so CI/offline stays green; True selects the LIVE World
     # Bank / WITS adapter, which routes through the engine's hardened data layer.
@@ -87,6 +92,10 @@ class Settings(BaseSettings):
     # registers the providers when a key is present; the engine's PAID/deepen
     # structural guard still applies at call time.
     volza_api_key: str = ""
+    # Volza data-API base URL. The paid host/path can differ per subscription
+    # plan (the engine's silk_volza_agent reads the same env var for the same
+    # reason); the shipments adapter appends its endpoint paths to this base.
+    volza_api_url: str = "https://api.volza.com/v1"
     explee_api_key: str = ""
     zerobounce_api_key: str = ""
     smartlead_api_key: str = ""
@@ -110,6 +119,9 @@ class Settings(BaseSettings):
     dkim_selectors: str = "default,google,selector1,selector2,s1,s2,k1,smartlead,dkim"
 
     sentry_dsn: str = ""
+    # Outside local, /metrics requires this bearer token; unset → the endpoint
+    # 404s (never an open Prometheus scrape surface). Local is always open.
+    metrics_token: str = ""
 
     # Per-tenant mailbox OAuth (multi-tenant email sending).
     #
@@ -149,6 +161,12 @@ class Settings(BaseSettings):
     # A send claimed for egress (status ``sending``) but not resolved within this
     # many seconds is treated as interrupted and reaped (never auto-retried).
     send_claim_stale_seconds: int = 900
+    # Queued-email drain (audit 2026-08-07 C4): an email still ``queued`` after
+    # this many minutes is re-enqueued through the guarded send path…
+    email_redispatch_minutes: int = 10
+    # …and one still queued after this many hours raises a single operator
+    # notification per campaign (deduplicated on the unread notification).
+    email_stuck_notify_hours: int = 6
     # Celery broker visibility timeout — must exceed the longest task so Redis
     # does not redeliver a still-running task. Kept well above send/pipeline work.
     broker_visibility_timeout_seconds: int = 3600
@@ -183,6 +201,11 @@ class Settings(BaseSettings):
     # This is the one explicit escape hatch — a keyless staging demo sets it
     # knowingly; production never should.
     allow_mock_sending: bool = False
+    # Same rule for DATA slots that would otherwise fabricate client-visible
+    # figures (observed prices, Stage-2 tariff/PPP): outside local they fail
+    # closed to declared gaps unless a keyless staging demo opts in knowingly
+    # (audit 2026-08-07 C3). Production never should.
+    allow_mock_data: bool = False
 
     @field_validator("database_url", mode="before")
     @classmethod
@@ -237,6 +260,40 @@ class Settings(BaseSettings):
                 'python -c "from cryptography.fernet import Fernet; '
                 'print(Fernet.generate_key().decode())" and set it — it encrypts '
                 "mailbox OAuth tokens at rest, independently of SECRET_KEY."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _safe_prod_networking_defaults(self) -> Settings:
+        """Fail closed on the two unsafe defaults the audit flagged (H7).
+
+        Outside local:
+        - ``trusted_proxy_count == 0`` behind an edge proxy collapses the per-IP
+          login throttle into ONE global bucket → 20 junk logins lock everyone
+          out. Any real deploy sits behind ≥1 proxy, so 0 is never right there.
+        - ``api_base_url`` still at the localhost default means every outbound
+          email embeds a localhost unsubscribe link — an RFC 8058 / compliance
+          break on the money path.
+        Local/CI keep the convenient defaults.
+        """
+        if self.environment.strip().lower() == "local":
+            return self
+        if self.trusted_proxy_count < 1:
+            raise ValueError(
+                f"TRUSTED_PROXY_COUNT={self.trusted_proxy_count} but "
+                f"ENVIRONMENT={self.environment!r} is not 'local'. A real deploy "
+                "sits behind at least one reverse proxy; 0 makes the per-IP login "
+                "throttle a global lockout (20 bad logins lock out everyone). Set "
+                "it to the number of trusted proxies in front of the API (Railway "
+                "edge = 1)."
+            )
+        if "localhost" in self.api_base_url or "127.0.0.1" in self.api_base_url:
+            raise ValueError(
+                f"API_BASE_URL={self.api_base_url!r} still points at localhost but "
+                f"ENVIRONMENT={self.environment!r} is not 'local'. Every outbound "
+                "email embeds its unsubscribe link under this origin; a localhost "
+                "link is a dead unsubscribe (RFC 8058 / compliance break). Set it "
+                "to the API's public URL."
             )
         return self
 

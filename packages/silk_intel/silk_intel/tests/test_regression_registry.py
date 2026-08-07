@@ -268,9 +268,11 @@ def _guard_export_format_contract():
     api = _read("api.py")
     assert "/analyses/{analysis_id}/report.pdf" in api and \
         'media_type="application/pdf"' in api, "نقطة نهاية report.pdf غائبة/خاطئة"
-    # (٥) محرّك التحويل مثبَّت على النشر (Dockerfile) وفي وظيفة e2e — كي يعمل
-    # الزرّ حيّاً لا في CI فقط (البند ٦ من أمر العمل).
-    dockerfile = _read("Dockerfile")
+    # (٥) محرّك التحويل مثبَّت على النشر وفي وظيفة e2e — كي يعمل الزرّ حيّاً لا
+    # في CI فقط (البند ٦). صورةُ النشر صارت apps/api/Dockerfile في هذا المستودع
+    # الأحادي (حُذِف Dockerfile المحرّك القديم، تدقيق C6) — الحارس يتبع المحرّك
+    # إلى صورته الحيّة الجديدة.
+    dockerfile = _read("../../../apps/api/Dockerfile")
     assert "libreoffice-writer" in dockerfile, \
         "محرّك تحويل PDF غير مثبَّت في صورة النشر — الزرّ سيموت حياً بـ503"
     e2e = _read(".github/workflows/e2e-live-shape.yml")

@@ -37,10 +37,8 @@
     "title": "لوحة التحكم",
     "campaigns": "الحملات",
     "sent": "مُرسلة",
-    "opened": "مفتوحة",
     "replied": "ردود",
     "bounced": "مرتدة",
-    "openRate": "معدل الفتح",
     "replyRate": "معدل الرد",
     "bounceRate": "معدل الارتداد",
     "pendingApprovals": "بانتظار الموافقة",
@@ -133,7 +131,17 @@
     "refine": "تحسين (المرحلة ٢)",
     "refining": "جارٍ التحسين…",
     "refined": "مُحسَّن (المرحلة ٢)",
-    "tariffLabel": "الرسوم"
+    "tariffLabel": "الرسوم",
+    "scoreBreakdown": "تفصيل الدرجة",
+    "components": {
+      "market_size": "حجم السوق (واردات بالدولار)",
+      "demand_capacity": "طاقة الطلب (قوة شرائية للفرد)",
+      "saudi_position": "حصة السعودية (٪)",
+      "unit_price_level": "مستوى سعر الوحدة (دولار/وحدة)",
+      "tariff_access": "الرسوم الجمركية المطبقة (نسبة)",
+      "competition": "تركّز المورّدين",
+      "logistics_proximity": "المسافة من جدة (كم)"
+    }
   },
   "buyers": {
     "title": "المشترون المحتملون",
@@ -170,6 +178,10 @@
     "download": "تنزيل HTML",
     "downloadExecutive": "التقرير التنفيذي (Word)",
     "downloadDeep": "التقرير المفصّل (Word)",
+    "deepResearch": "تقرير البحث العميق (أفضل ٥)",
+    "deepResearchPending": "يجري البحث العميق عبر أفضل ٥ أسواق — قد يستغرق عدّة دقائق.",
+    "deepResearchGated": "البحث العميق بانتظار مفتاح واجهة البرمجة (ANTHROPIC_API_KEY). أُنتج تقرير مبدئي؛ يعمل البحث الكامل بمجرّد ضبط المفتاح.",
+    "deepResearchFailed": "تعذّر إنشاء تقرير البحث العميق. يُرجى المحاولة مرة أخرى.",
     "markets": "الأسواق",
     "buyers": "المشترون",
     "contacts": "جهات الاتصال",
@@ -294,7 +306,9 @@
     "next": "التالي",
     "close": "إغلاق",
     "error": "حدث خطأ ما",
-    "language": "English"
+    "language": "English",
+    "loadError": "تعذّر تحميل هذه البيانات — تحقّق من اتصالك وحاول مجدداً.",
+    "retry": "حاول مجدداً"
   },
   "profile": {
     "title": "الملف الشخصي والحساب",
@@ -404,5 +418,10 @@
     "repliedBadge": "تم الرد",
     "empty": "لا توجد ردود بعد. عندما يرد مشترٍ على رسالتك ستظهر هنا.",
     "openMailboxHint": "نص الرد موجود في صندوق بريد الإرسال المرتبط — افتحه للرد على المشتري."
+  },
+  "notifications": {
+    "title": "الإشعارات",
+    "empty": "لا إشعارات",
+    "markRead": "تحديد كمقروء"
   }
 }

@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { LocaleSwitcher } from "./LocaleSwitcher";
+import { NotificationsBell } from "./NotificationsBell";
 
 const NAV = [
   { href: "/dashboard", key: "dashboard" },
@@ -38,6 +39,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {app("name")}
           </Link>
           <div className="flex items-center gap-3">
+            <NotificationsBell />
             <LocaleSwitcher />
             <button onClick={logout} className="text-sm text-gray-500 hover:text-gray-800">
               {t("logout")}

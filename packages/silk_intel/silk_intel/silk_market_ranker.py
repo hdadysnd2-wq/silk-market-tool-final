@@ -391,13 +391,26 @@ def _tier2_gather_row(hs_code: str, entry: dict, year: int) -> dict:
     }
 
 
-# أوزان المكوّنات — tunable component weights (sum ~1.0). Audit/tune here.
+# أوزان المكوّنات — tunable component weights (sum 1.0, owner's order). Audit/tune here.
+# J1: extended from four to seven components — one audited model, no parallel
+# scorer. A supplier that cannot provide a component simply omits it: the
+# weights renormalize over present components and confidence drops (I1).
 WEIGHTS: dict[str, float] = {
-    "market_size": 0.40,      # how much the market imports of this HS
-    "saudi_position": 0.20,   # Saudi already a supplier? higher = warmer entry
-    "demand_capacity": 0.25,  # income (PPP) x population
-    "competition": 0.15,      # fragmented suppliers => easier => higher
+    "market_size": 0.30,         # how much the market imports of this HS
+    "demand_capacity": 0.20,     # purchasing power (PPP per capita)
+    "saudi_position": 0.15,      # Saudi already a supplier? higher = warmer entry
+    "unit_price_level": 0.10,    # observed unit value — higher = price headroom
+    "tariff_access": 0.10,       # applied import tariff — lower = better (inverted)
+    "competition": 0.10,         # supplier concentration — lower = easier (inverted)
+    "logistics_proximity": 0.05,  # distance from KSA — fewer km = better (inverted)
 }
+
+#: المكوّنات المقلوبة — components where a LOWER raw value is BETTER, so the
+#: normalized value is inverted before weighting. ``unit_price_level`` is NOT
+#: here on purpose: a higher observed unit value means more price headroom.
+_INVERTED_COMPONENTS: frozenset[str] = frozenset(
+    {"competition", "tariff_access", "logistics_proximity"}
+)
 
 # I9 — مراكز إعادة التصدير (ISO3): تستورد بكثافة لأنها تعيد التصدير لا لأنها
 # أسواق نهائية للمصدِّر السعودي. المواصفة تسمّيها صراحةً (AE/NL/SG/HK/BE).
@@ -732,8 +745,9 @@ def score_component_rows(rows: list[dict]) -> list[dict]:
             if dp is None or dp.value is None:
                 continue  # مفقود => يُتخطى، لا قيمة وهمية — skip, no fake value
             norm = _normalize(raw_tables[name], float(dp.value))
-            if name == "competition":
-                norm = 1.0 - norm  # تركّز أعلى = أصعب — invert
+            if name in _INVERTED_COMPONENTS:
+                # تركّز/رسوم/مسافة أعلى = أصعب — invert (lower raw = better).
+                norm = 1.0 - norm
             score += w * norm
             wsum += w
             present += 1

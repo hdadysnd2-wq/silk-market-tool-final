@@ -18,7 +18,7 @@ import time
 from collections.abc import Awaitable, Callable
 
 from fastapi import Request, Response
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import Settings, get_settings
@@ -71,6 +71,21 @@ def check_storage(settings: Settings | None = None) -> str | None:
         return f"{type(exc).__name__}: {exc}"
 
 
+def check_beat(settings: Settings | None = None) -> str | None:
+    """Beat liveness: None when fresh, a reason when stale/never-seen.
+
+    Kept OUT of the hard dependency set below on purpose — the API can serve
+    requests while beat is down — but surfaced in /health so an operator sees a
+    dead scheduler (which would freeze every reaper/sweep) instead of guessing.
+    """
+    age = beat_heartbeat_age(settings)
+    if age is None:
+        return "beat heartbeat not seen yet"
+    if age > BEAT_STALE_SECONDS:
+        return f"beat heartbeat stale ({int(age)}s)"
+    return None
+
+
 def run_health_checks(settings: Settings | None = None) -> dict[str, str]:
     """All checks as a name → "ok"|error map, for /health to render."""
     settings = settings or get_settings()
@@ -114,5 +129,83 @@ class RequestMetricsMiddleware(BaseHTTPMiddleware):
             REQUEST_LATENCY.labels(request.method, path).observe(time.perf_counter() - started)
 
 
-def metrics_response() -> Response:
+# Operational gauges the audit found missing (H4): without these an operator
+# cannot answer "is the pipeline stuck?" or "did beat die?" without shelling
+# into logs. They are refreshed lazily on each /metrics scrape (below) and the
+# beat-liveness age also feeds /health.
+QUEUE_DEPTH = Gauge(
+    "silk_email_queue_depth",
+    "Emails currently in a given non-terminal status.",
+    ["status"],
+)
+STUCK_ROWS = Gauge(
+    "silk_stuck_rows",
+    "Rows a reaper would consider stuck (non-terminal past their SLA).",
+    ["kind"],
+)
+BEAT_HEARTBEAT_AGE = Gauge(
+    "silk_beat_heartbeat_age_seconds",
+    "Seconds since Celery beat last ticked (−1 if never seen).",
+)
+
+#: Redis key beat refreshes every tick; /health + /metrics read its age.
+BEAT_HEARTBEAT_KEY = "silk:beat:heartbeat"
+#: Beat is considered dead if its heartbeat is older than this (beat ticks are
+#: sub-minute; 300s tolerates a slow tick without false alarms).
+BEAT_STALE_SECONDS = 300
+
+
+def beat_heartbeat_age(settings: Settings | None = None) -> float | None:
+    """Seconds since beat last ticked, or None if the heartbeat was never set."""
+    from app.redis_client import get_redis
+
+    try:
+        raw = get_redis().get(BEAT_HEARTBEAT_KEY)
+    except Exception:  # noqa: BLE001 — a Redis blip must not crash /health
+        return None
+    if raw is None:
+        return None
+    try:
+        import time as _t
+
+        return max(0.0, _t.time() - float(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def _refresh_operational_gauges(settings: Settings) -> None:
+    """Populate the queue/stuck/beat gauges from the DB + Redis for a scrape."""
+    from sqlalchemy import func, select
+
+    from app.db import SessionLocal
+    from app.models import Analysis, Email, EmailStatus, Product
+
+    age = beat_heartbeat_age(settings)
+    BEAT_HEARTBEAT_AGE.set(age if age is not None else -1.0)
+    try:
+        with SessionLocal() as db:
+            rows = db.execute(
+                select(Email.status, func.count())
+                .where(Email.status.in_([EmailStatus.queued, EmailStatus.sending]))
+                .group_by(Email.status)
+            ).all()
+            depths = {s.value: n for s, n in rows}
+            for st in ("queued", "sending"):
+                QUEUE_DEPTH.labels(st).set(depths.get(st, 0))
+            stuck_analyses = db.scalar(
+                select(func.count()).select_from(Analysis).where(Analysis.status == "pending")
+            )
+            stuck_products = db.scalar(
+                select(func.count())
+                .select_from(Product)
+                .where(Product.classification_status == "pending")
+            )
+            STUCK_ROWS.labels("analysis_pending").set(stuck_analyses or 0)
+            STUCK_ROWS.labels("product_pending").set(stuck_products or 0)
+    except Exception as exc:  # noqa: BLE001 — metrics must never 500 the scrape
+        log.warning("operational_gauge_refresh_failed", error=str(exc))
+
+
+def metrics_response(settings: Settings | None = None) -> Response:
+    _refresh_operational_gauges(settings or get_settings())
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)

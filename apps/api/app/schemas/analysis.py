@@ -24,8 +24,17 @@ class CountryRankingOut(BaseModel):
     tags: list[str] | None
     stage: int
     #: Stage-2 re-ranking score + enrichment signals (None until Stage 2 runs).
+    #: After Stage 2 the dict also carries ``score_components`` — the per-country
+    #: engine scoring components, each ``{value, source, confidence, note}`` —
+    #: plus ``score_confidence`` and ``score_model`` (transparent scoring, J1).
     stage2_score: float | None = None
     enrichment: dict | None = None
+    #: Deterministic one-line "why this market ranked" (top-5 rows only, J1):
+    #: names the two heaviest present scoring components with their real values
+    #: and sources. None until Stage 2 has produced score components — a
+    #: declared absence, never an invented justification (I1).
+    rationale_en: str | None = None
+    rationale_ar: str | None = None
     #: Stage-3 per-market deep-dive (competitors, requirements, correlation
     #: threads). None until Stage 3 runs; a declared gap for an unmapped market.
     deepdive: dict | None = None
@@ -66,6 +75,9 @@ class AnalysisOut(BaseModel):
     #: Markets screened worldwide in Stage 1 — the real world count behind the
     #: funnel ("screened N → shortlisted M → top 5"). None for older runs.
     total_screened: int | None = None
+    #: How many markets the Stage-1 top-20% cut kept for Stage 2 (J1). None for
+    #: runs predating the proportional shortlist.
+    shortlisted: int | None = None
     #: The world-funnel shortlist ("world screened → top 5"), transit-flagged.
     rankings: list[CountryRankingOut] = []
 

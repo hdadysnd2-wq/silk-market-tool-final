@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from starlette.background import BackgroundTask
 
@@ -254,4 +254,83 @@ def product_report_executive(
         media_type=_DOCX_MEDIA_TYPE,
         filename=filename,
         background=BackgroundTask(shutil.rmtree, tmp_dir, ignore_errors=True),
+    )
+
+
+# -- deep-research report (Top 5): opt-in, key-gated, async (ADR-0007) ------
+
+
+@router.post("/products/{product_id}/report/research", status_code=202)
+def trigger_research_report(
+    db: DbDep,
+    product: Product = Depends(get_owned_product),
+) -> dict:
+    """Kick off the paid, key-gated deep-research report for the Top-5 markets.
+
+    Unlike the always-available executive report, this runs the engine's
+    12-mission deep research per market — paid and slow — so it is asynchronous:
+    this marks the product ``pending`` and enqueues the worker task, which reaches
+    a terminal ``ready`` | ``gated`` (no API key) | ``failed`` status. Poll via the
+    status route, then download. Fail-closed downstream: the worker never spends
+    paid budget without ``ANTHROPIC_API_KEY`` (ADR-0007 / I5).
+    """
+    from app.workers.tasks import render_research_report
+
+    # Regenerate afresh each trigger: clear the prior key so a poll/download can
+    # never serve a stale document while the new run is pending.
+    product.research_status = "pending"
+    product.research_report_key = None
+    db.commit()
+    render_research_report.delay(str(product.id))
+    db.refresh(product)  # eager mode (tests) has already reached a terminal status
+    return {
+        "product_id": str(product.id),
+        "status": product.research_status,
+        "ready": bool(product.research_report_key),
+    }
+
+
+@router.get("/products/{product_id}/report/research/status")
+def research_report_status(
+    db: DbDep,
+    product: Product = Depends(get_owned_product),
+) -> dict:
+    """Poll the deep-research report status (mirrors the pipeline status polls).
+
+    ``status``: ``null`` (never requested) | ``pending`` | ``ready`` | ``gated``
+    (fail-closed, pending API key) | ``failed``. ``ready`` is true once a document
+    (real or declared-gap) is downloadable.
+    """
+    return {
+        "product_id": str(product.id),
+        "status": product.research_status,
+        "ready": bool(product.research_report_key),
+        "failure_reason": product.failure_reason if product.research_status == "failed" else None,
+    }
+
+
+@router.get("/products/{product_id}/report/research.docx")
+def download_research_report(
+    db: DbDep,
+    product: Product = Depends(get_owned_product),
+) -> Response:
+    """Download the rendered deep-research docx (fail-closed before generation).
+
+    409 until the worker has produced a document — even the ``gated`` state stores
+    a real declared-gap "pending API key" docx, so a 200 here is always a coherent
+    file, never a fabricated one (I1).
+    """
+    from app.services.storage import get_storage
+
+    key = product.research_report_key
+    data = get_storage().get_bytes(key) if key else None
+    if data is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Deep research report has not been generated yet",
+        )
+    return Response(
+        content=data,
+        media_type=_DOCX_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="research_{product.id}.docx"'},
     )

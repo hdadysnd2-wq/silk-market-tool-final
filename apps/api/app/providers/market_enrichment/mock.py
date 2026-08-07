@@ -32,7 +32,10 @@ class MockMarketEnrichmentProvider:
                 # PPP GNI per capita proxy for demand quality: $3k–$65k.
                 ppp_gni_per_capita=round(rng.uniform(3_000, 65_000), 0),
             ),
-            source=SourceType.COMTRADE,
+            # ENRICHMENT, not COMTRADE: fabricated demo values must never carry
+            # a real data source's label (audit 2026-08-07 C3 / I1). The
+            # provider_name already says "mock"; the source now agrees.
+            source=SourceType.ENRICHMENT,
             provider_name=self.name,
             confidence=0.7,
         )

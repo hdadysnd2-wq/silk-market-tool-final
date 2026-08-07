@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { ErrorNotice } from "@/components/ErrorNotice";
 import { Link } from "@/i18n/routing";
 import { useApi } from "@/lib/useApi";
 import type { Campaign } from "@/lib/types";
@@ -8,13 +9,15 @@ import type { Campaign } from "@/lib/types";
 export default function CampaignsPage() {
   const t = useTranslations("campaign");
   const nav = useTranslations("nav");
-  const { data, loading } = useApi<Campaign[]>("/campaigns");
+  const { data, loading, error, reload } = useApi<Campaign[]>("/campaigns");
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900">{nav("campaigns")}</h1>
       {loading ? (
         <p className="mt-6 text-gray-400">…</p>
+      ) : error ? (
+        <ErrorNotice message={error} onRetry={reload} />
       ) : !data || data.length === 0 ? (
         <p className="mt-6 rounded-xl bg-white p-8 text-center text-gray-500 ring-1 ring-black/5">
           {t("empty")}

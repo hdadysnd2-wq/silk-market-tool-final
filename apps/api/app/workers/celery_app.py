@@ -79,6 +79,12 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.tasks.reap_stale_sends",
         "schedule": crontab(minute="*/10"),
     },
+    # Every non-terminal email status has an owner (audit 2026-08-07 C4):
+    # `sending` → reap-stale-sends above; `queued` → this drain.
+    "redispatch-queued-emails": {
+        "task": "app.workers.tasks.redispatch_queued_emails",
+        "schedule": crontab(minute="*/10"),
+    },
     "reconcile-stuck-analyses": {
         "task": "app.workers.tasks.reconcile_stuck_analyses",
         "schedule": crontab(minute="*/15"),
@@ -94,5 +100,12 @@ celery_app.conf.beat_schedule = {
     "pdpl-retention-daily": {
         "task": "app.workers.tasks.run_pdpl_retention",
         "schedule": crontab(hour=1, minute=30),
+    },
+    # Beat-liveness canary (audit H4): beat writes a heartbeat every minute;
+    # /health reports 503 and /metrics exposes the age if it goes stale, so a
+    # silently-dead beat (which would stop every reaper/sweep above) is visible.
+    "beat-heartbeat": {
+        "task": "app.workers.tasks.beat_heartbeat",
+        "schedule": crontab(minute="*"),
     },
 }

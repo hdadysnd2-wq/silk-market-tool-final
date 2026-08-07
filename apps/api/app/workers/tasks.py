@@ -37,6 +37,9 @@ _TRANSIENT_EXC = (
 _MAX_RETRIES = 3
 _RETRY_BACKOFF = 5  # seconds, doubled each attempt (5s, 10s, 20s)
 
+#: Word (.docx) media type — shared by the report-render tasks.
+_RESEARCH_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
 
 def _is_transient(exc: Exception) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
@@ -273,7 +276,7 @@ def process_product_intake(self, product_id: str, deepen: bool = False) -> dict:
 
 @celery_app.task(bind=True, name="app.workers.tasks.run_world_ranking", max_retries=_MAX_RETRIES)
 def run_world_ranking(
-    self, analysis_id: str, hs6: str, top_n: int = 20, deepen: bool = False
+    self, analysis_id: str, hs6: str, top_n: int | None = None, deepen: bool = False
 ) -> dict:
     """Screen the world for a confirmed HS6 and persist the country shortlist.
 
@@ -511,6 +514,78 @@ def render_executive_report(product_id: str) -> dict:
     return {"product_id": product_id, "report_key": key}
 
 
+@celery_app.task(name="app.workers.tasks.render_research_report")
+def render_research_report(product_id: str) -> dict:
+    """Render the combined Top-5 DEEP-RESEARCH report to storage (ADR-0007).
+
+    The paid, key-gated counterpart to ``render_executive_report``. Loads the
+    product's persisted Top-5 ``CountryRanking`` markets and, for each, runs the
+    engine's 12-mission deep research through the ONE seam
+    (``engine.run_deep_research``) inside its deepen + budget scope, then composes
+    the per-market findings into one combined docx stored under a stable key.
+
+    Fail-closed (I5 / audit C3): with no ``ANTHROPIC_API_KEY`` the seam returns
+    ``None`` and NO paid work runs — the task renders the declared-gap "deep
+    research pending API key" document instead of fabricating a narrative, and
+    marks the product ``research_status='gated'``. Idempotent, own session scope,
+    terminal-state friendly (status: pending → ready | gated | failed) so the
+    202-reachable trigger/poll flow always reaches a terminal state.
+    """
+    from app.models import Product
+    from app.services import engine, research_report
+    from app.services.storage import get_storage
+
+    key = f"reports/research/{product_id}.docx"
+    with session_scope() as db:
+        product = db.get(Product, uuid.UUID(product_id))
+        if product is None:
+            return {"error": "product not found"}
+        product_name = product.name_en or product.name_ar or ""
+        hs_code = product.hs_code
+        markets = research_report.top5_markets(db, product)
+        allowed = engine.deep_research_allowed()
+
+    # Fail-closed keyless: declared-gap "pending API key" report, ZERO paid calls.
+    if not allowed:
+        data = research_report.render_pending_docx(product_name, hs_code, markets)
+        get_storage().put(key=key, data=data, content_type=_RESEARCH_MEDIA_TYPE)
+        with session_scope() as db:
+            product = db.get(Product, uuid.UUID(product_id))
+            if product is not None:
+                product.research_status = "gated"
+                product.research_report_key = key
+        log.info("research_report_gated", product_id=product_id)
+        return {"product_id": product_id, "status": "gated", "report_key": key}
+
+    # Keyed: run the engine deep research per market (each inside its own deepen +
+    # budget scope, established in run_deep_research). A market that fails to
+    # resolve / returns None is skipped (declared absence), never fabricated.
+    try:
+        per_market: list[dict] = []
+        for _iso3, name in markets:
+            report = engine.run_deep_research(name, product_name, hs_code)
+            if report is not None:
+                per_market.append(report)
+        data = research_report.render_combined_docx(product_name, hs_code, per_market)
+    except Exception as exc:
+        log.error("research_report_failed", product_id=product_id, error=str(exc))
+        with session_scope() as db:
+            product = db.get(Product, uuid.UUID(product_id))
+            if product is not None:
+                product.research_status = "failed"
+                product.failure_reason = f"deep research: {type(exc).__name__}: {exc}"[:500]
+        raise
+
+    get_storage().put(key=key, data=data, content_type=_RESEARCH_MEDIA_TYPE)
+    with session_scope() as db:
+        product = db.get(Product, uuid.UUID(product_id))
+        if product is not None:
+            product.research_status = "ready"
+            product.research_report_key = key
+    log.info("research_report_ready", product_id=product_id, markets=len(per_market))
+    return {"product_id": product_id, "status": "ready", "report_key": key}
+
+
 @celery_app.task(name="app.workers.tasks.draft_campaign_emails")
 def draft_campaign_emails(campaign_id: str) -> dict:
     from app.models import Campaign
@@ -532,7 +607,7 @@ def send_approved_email(email_id: str) -> dict:
     account (refreshing its OAuth token first, and pausing safely if the mailbox
     needs reconnection); otherwise the legacy shared cold-email provider is used.
     """
-    from app.models import Campaign, Email, SenderAccount
+    from app.models import Campaign, Email, EmailStatus, SenderAccount
     from app.providers.registry import get_mailbox_provider
     from app.services import sender_oauth
     from app.services.sending import AccountBoundSender, SendBlocked, send_email
@@ -564,8 +639,14 @@ def send_approved_email(email_id: str) -> dict:
         try:
             email = send_email(db, eid, sender)
         except SendBlocked as exc:
-            log.info("send_blocked", email_id=email_id, reason=str(exc))
-            return {"email_id": email_id, "sent": False, "reason": str(exc)}
+            # Persist WHY the send is waiting (audit 2026-08-07 C4): a blocked
+            # email stays `queued` (the redispatch sweep will retry it), but the
+            # row now carries the reason instead of being silently stuck.
+            reason = str(exc)
+            if email.status == EmailStatus.queued:
+                email.blocked_reason = reason[:255]
+            log.info("send_blocked", email_id=email_id, reason=reason)
+            return {"email_id": email_id, "sent": False, "reason": reason}
         return {"email_id": email_id, "sent": email.status.value == "sent"}
 
 
@@ -612,7 +693,29 @@ def process_followups() -> dict:
             .order_by(Email.sent_at)
             .limit(FOLLOWUP_BATCH_LIMIT)
         ).all()
+        from app.models import Campaign, Factory
+        from app.services.email_drafting import (
+            ensure_compliance_footer,
+            render_html_body,
+            unsubscribe_url,
+        )
+
         for original in candidates:
+            token = secrets.token_urlsafe(24)
+            campaign = db.get(Campaign, original.campaign_id)
+            factory = db.get(Factory, campaign.factory_id) if campaign else None
+            # Build the follow-up body exactly like an initial draft (audit L3):
+            # intro + parent text, then the SAME compliance footer (sender
+            # identity + postal address + unsubscribe line) keyed on THIS row's
+            # own token, then render the HTML from that footed text. Previously
+            # the HTML was a verbatim copy of the parent's — no intro, parent's
+            # token embedded — so the two MIME parts disagreed and the follow-up
+            # lacked its own unsubscribe line.
+            followup_text = _followup_body(original.body_text)
+            if factory is not None:
+                followup_text = ensure_compliance_footer(
+                    followup_text, factory, original.language, unsubscribe_url(token)
+                )
             db.add(
                 Email(
                     campaign_id=original.campaign_id,
@@ -620,17 +723,37 @@ def process_followups() -> dict:
                     buyer_id=original.buyer_id,
                     status=EmailStatus.draft,
                     subject=f"Re: {original.subject}",
-                    body_text=_followup_body(original.body_text),
-                    body_html=original.body_html,
+                    body_text=followup_text,
+                    body_html=render_html_body(followup_text, token, original.language),
                     language=original.language,
                     is_followup=True,
                     followup_number=1,
                     parent_email_id=original.id,
-                    unsubscribe_token=secrets.token_urlsafe(24),
+                    unsubscribe_token=token,
                 )
             )
             created += 1
     return {"followup_drafts_created": created}
+
+
+@celery_app.task(name="app.workers.tasks.beat_heartbeat")
+def beat_heartbeat() -> dict:
+    """Write beat's liveness heartbeat to Redis (audit H4).
+
+    A dead beat silently disables every reaper/sweep/warmup job; this canary
+    lets /health and /metrics see beat's age so the outage is observable.
+    """
+    import time
+
+    from app.observability import BEAT_HEARTBEAT_KEY, BEAT_STALE_SECONDS
+    from app.redis_client import get_redis
+
+    try:
+        get_redis().set(BEAT_HEARTBEAT_KEY, repr(time.time()), ex=BEAT_STALE_SECONDS * 4)
+    except Exception as exc:  # noqa: BLE001 — never let the canary crash beat
+        log.warning("beat_heartbeat_write_failed", error=str(exc))
+        return {"heartbeat": False}
+    return {"heartbeat": True}
 
 
 @celery_app.task(name="app.workers.tasks.evaluate_deliverability")
@@ -818,6 +941,94 @@ def reap_stale_sends() -> dict:
     with session_scope() as db:
         reaped = _reap(db, settings.send_claim_stale_seconds)
     return {"reaped": reaped}
+
+
+#: Cap per redispatch sweep — bounds one run's fan-out; the beat drains any
+#: larger backlog across successive runs.
+REDISPATCH_BATCH_LIMIT = 200
+
+
+@celery_app.task(name="app.workers.tasks.redispatch_queued_emails")
+def redispatch_queued_emails() -> dict:
+    """Drain the ``queued`` backlog — every non-terminal email has an owner (C4).
+
+    Before this sweep, a worker-side ``SendBlocked`` (daily cap reached, mailbox
+    disconnected, transient provider rejection) stranded an approved email in
+    ``queued`` forever: the only dispatch site was the queue route, and nothing
+    ever retried. Now:
+
+    - every email still ``queued`` after ``email_redispatch_minutes`` is
+      re-enqueued through the guarded send path (safe: the two-phase claim and
+      the worker re-checks make redelivery at-most-once, and a still-blocked
+      send just refreshes ``blocked_reason`` and waits for the next sweep);
+    - a campaign with mail stuck longer than ``email_stuck_notify_hours`` gets
+      ONE operator notification (deduplicated on an unread notification of the
+      same kind for the same campaign), so a persistent block is a visible
+      incident instead of a silent one.
+    """
+    from datetime import timedelta
+
+    from app.config import get_settings
+    from app.models import Campaign, Email, EmailStatus, Notification, utcnow
+    from app.services import notifications
+
+    settings = get_settings()
+    now = utcnow()
+    redispatch_cutoff = now - timedelta(minutes=settings.email_redispatch_minutes)
+    stuck_cutoff = now - timedelta(hours=settings.email_stuck_notify_hours)
+    redispatched = 0
+    notified = 0
+    with session_scope() as db:
+        rows = db.scalars(
+            select(Email)
+            .where(
+                Email.status == EmailStatus.queued,
+                Email.queued_at.is_not(None),
+                Email.queued_at < redispatch_cutoff,
+            )
+            .order_by(Email.queued_at)
+            .limit(REDISPATCH_BATCH_LIMIT)
+        ).all()
+        stuck_campaigns: dict[uuid.UUID, int] = {}
+        for email in rows:
+            send_approved_email.delay(str(email.id))
+            redispatched += 1
+            if email.queued_at is not None and email.queued_at < stuck_cutoff:
+                stuck_campaigns[email.campaign_id] = stuck_campaigns.get(email.campaign_id, 0) + 1
+        for campaign_id, count in stuck_campaigns.items():
+            campaign = db.get(Campaign, campaign_id)
+            if campaign is None:
+                continue
+            already = db.scalar(
+                select(func.count())
+                .select_from(Notification)
+                .where(
+                    Notification.factory_id == campaign.factory_id,
+                    Notification.kind == "sends_stuck_queued",
+                    Notification.entity_id == str(campaign_id),
+                    Notification.read_at.is_(None),
+                )
+            )
+            if already:
+                continue
+            notifications.notify(
+                db,
+                factory_id=campaign.factory_id,
+                kind="sends_stuck_queued",
+                title="Approved emails are waiting to send",
+                body=(
+                    f"{count} approved email(s) in campaign '{campaign.name}' have "
+                    f"been waiting more than {settings.email_stuck_notify_hours} "
+                    "hours. Check the sending mailbox, its daily limit, and the "
+                    "campaign status."
+                ),
+                entity_type="campaign",
+                entity_id=str(campaign_id),
+            )
+            notified += 1
+    if redispatched:
+        log.info("queued_emails_redispatched", count=redispatched, notified=notified)
+    return {"redispatched": redispatched, "campaigns_notified": notified}
 
 
 @celery_app.task(name="app.workers.tasks.reconcile_stuck_analyses")

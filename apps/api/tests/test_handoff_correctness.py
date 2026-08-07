@@ -70,14 +70,17 @@ def test_world_ranking_is_idempotent_on_redelivery(db, factory, product):
 
     tasks.run_world_ranking.apply(args=[str(analysis.id), HS6], throw=False)
     first = _ranking_count(db, analysis.id)
-    assert first == 6  # the six seeded markets
+    assert first == 5  # 6 seeded → top-20% shortlist quota floors at 5
 
     # Simulate the redelivery: run the exact same task again for the same analysis.
     tasks.run_world_ranking.apply(args=[str(analysis.id), HS6], throw=False)
     second = _ranking_count(db, analysis.id)
 
     assert second == first  # NOT doubled — the redelivery replaced the shortlist
-    assert second == 6
+    # 6 covered markets → the top-20% shortlist quota floors at SHORTLIST_MIN=5
+    # (J1 transparent-screening change); the idempotency property is `second ==
+    # first` above — this pins the deterministic kept count.
+    assert second == 5
 
 
 def test_rank_and_persist_is_idempotent(db, factory, product):
@@ -94,7 +97,8 @@ def test_rank_and_persist_is_idempotent(db, factory, product):
     rank_and_persist(db, analysis, HS6)
     db.commit()
 
-    assert _ranking_count(db, analysis.id) == 6
+    # Replace-not-append is the point; 6 covered → 5 kept by the shortlist quota.
+    assert _ranking_count(db, analysis.id) == 5
 
 
 # -- C2: Stage 2 must not run before Stage 1 has committed a ranking ------------

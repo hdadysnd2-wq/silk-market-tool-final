@@ -120,7 +120,8 @@ class MicrosoftGraphProvider:
             email=email, provider_account_id=data.get("id"), display_name=data.get("displayName")
         )
 
-    def send(self, creds: MailboxCredentials, message: OutboundEmail) -> SendResult:
+    @staticmethod
+    def _build_send_body(message: OutboundEmail) -> dict:
         body = {
             "message": {
                 "subject": message.subject,
@@ -131,12 +132,20 @@ class MicrosoftGraphProvider:
                 "toRecipients": [{"emailAddress": {"address": message.to_email}}],
                 "internetMessageHeaders": [
                     {"name": "List-Unsubscribe", "value": f"<{message.unsubscribe_url}>"},
+                    # RFC 8058 one-click (audit H8): without this header,
+                    # Gmail/Yahoo will not fire the POST-only /u unsubscribe
+                    # for mail sent via Microsoft mailboxes.
+                    {"name": "List-Unsubscribe-Post", "value": "List-Unsubscribe=One-Click"},
                 ],
             },
             "saveToSentItems": True,
         }
         if message.reply_to:
             body["message"]["replyTo"] = [{"emailAddress": {"address": message.reply_to}}]
+        return body
+
+    def send(self, creds: MailboxCredentials, message: OutboundEmail) -> SendResult:
+        body = self._build_send_body(message)
         try:
             with httpx.Client(timeout=self._timeout) as client:
                 resp = client.post(

@@ -23,6 +23,10 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
   const isAr = locale === "ar";
   const { data: report, loading } = useApi<ProductReport>(`/products/${id}/report?locale=${locale}`);
   const [downloading, setDownloading] = useState<string | null>(null);
+  // Deep research (Top 5): opt-in, key-gated, async (ADR-0007). Distinct from the
+  // always-available executive report — it triggers, polls, then downloads, and
+  // surfaces a visible "pending API key" (gated) state.
+  const [research, setResearch] = useState<string | null>(null);
 
   async function download(path: string, filename: string, kind: string) {
     setDownloading(kind);
@@ -49,6 +53,34 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
     download(`/products/${id}/report.docx?locale=${locale}`, `silk-report-${id}.docx`, "deep");
   const downloadHtml = () =>
     download(`/products/${id}/report.html?locale=${locale}`, `silk-report-${id}.html`, "html");
+
+  // Trigger the paid deep-research report, poll until terminal, then download it
+  // when ready. A ``gated`` status means the slot is fail-closed pending an API
+  // key — surfaced to the user rather than silently doing nothing.
+  async function runDeepResearch() {
+    setResearch("pending");
+    try {
+      await api.post(`/products/${id}/report/research`);
+      for (let i = 0; i < 150; i++) {
+        const s = await api.get<{ status: string | null; ready: boolean }>(
+          `/products/${id}/report/research/status`,
+        );
+        if (s.status === "ready") {
+          setResearch("ready");
+          await download(`/products/${id}/report/research.docx`, `silk-research-${id}.docx`, "research");
+          return;
+        }
+        if (s.status === "gated" || s.status === "failed") {
+          setResearch(s.status);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      setResearch("failed");
+    } catch {
+      setResearch("failed");
+    }
+  }
 
   if (loading) return <p className="text-gray-400">…</p>;
   if (!report) return null;
@@ -85,8 +117,31 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
           >
             {downloading === "html" ? "…" : t("download")}
           </button>
+          <button
+            onClick={runDeepResearch}
+            disabled={research === "pending" || downloading !== null}
+            className="rounded-lg border border-brand-300 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-60"
+          >
+            {research === "pending" ? "…" : t("deepResearch")}
+          </button>
         </div>
       </div>
+
+      {research === "gated" && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800 ring-1 ring-amber-200">
+          {t("deepResearchGated")}
+        </p>
+      )}
+      {research === "failed" && (
+        <p className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700 ring-1 ring-red-200">
+          {t("deepResearchFailed")}
+        </p>
+      )}
+      {research === "pending" && (
+        <p className="mt-3 rounded-lg bg-gray-50 px-4 py-2 text-sm text-gray-600 ring-1 ring-gray-200">
+          {t("deepResearchPending")}
+        </p>
+      )}
 
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat n={s.markets_analyzed} label={t("markets")} />

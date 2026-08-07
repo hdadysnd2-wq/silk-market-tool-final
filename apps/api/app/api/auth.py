@@ -31,7 +31,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterRequest, db: DbDep) -> TokenResponse:
+def register(payload: RegisterRequest, db: DbDep, request: Request) -> TokenResponse:
+    # Register was the one unthrottled auth route (audit): free account
+    # minting is a spam/enumeration vector. Same per-IP window as login.
+    rate_limit.check(f"register:ip:{_client_ip(request)}", limit=10, window_seconds=300)
     user, _factory = auth_service.register_factory_user(
         db,
         email=payload.email,

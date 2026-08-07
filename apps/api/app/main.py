@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -24,7 +24,12 @@ from app.api import (
 )
 from app.config import get_settings
 from app.logging import configure_logging, get_logger
-from app.observability import RequestMetricsMiddleware, metrics_response, run_health_checks
+from app.observability import (
+    RequestMetricsMiddleware,
+    check_beat,
+    metrics_response,
+    run_health_checks,
+)
 from app.providers.registry import active_provider_summary
 
 log = get_logger(__name__)
@@ -45,12 +50,15 @@ def create_app() -> FastAPI:
     configure_logging()
     settings = get_settings()
 
+    # /docs + the OpenAPI dump are dev/staging conveniences: in production they
+    # hand an attacker the full route map for free (audit: gate /docs in prod).
+    is_local = settings.environment.strip().lower() == "local"
     app = FastAPI(
         title="Silk Export Intelligence API",
         version="0.1.0",
         description=DESCRIPTION,
-        openapi_url=f"{API_PREFIX}/openapi.json",
-        docs_url="/docs",
+        openapi_url=f"{API_PREFIX}/openapi.json" if is_local else None,
+        docs_url="/docs" if is_local else None,
     )
 
     app.add_middleware(
@@ -86,17 +94,30 @@ def create_app() -> FastAPI:
         """Real readiness: DB + Redis + storage, 503 when any dependency is down."""
         checks = run_health_checks(settings)
         healthy = all(v == "ok" for v in checks.values())
+        # Beat liveness is informational, not a hard dependency — the API serves
+        # fine while beat is down, but an operator must be able to SEE a dead
+        # scheduler (it freezes every reaper/sweep). Reported, never 503 (H4).
         body = {
             "status": "ok" if healthy else "degraded",
             "environment": settings.environment,
             "providers": active_provider_summary(),
             "checks": checks,
+            "beat": check_beat(settings) or "ok",
         }
         return JSONResponse(body, status_code=200 if healthy else 503)
 
     @app.get("/metrics", tags=["meta"])
-    def metrics() -> Response:
-        return metrics_response()
+    def metrics(request: Request) -> Response:
+        # Unauthenticated route-level traffic/latency intel is free recon
+        # (audit L1/H4): outside local, scraping requires the METRICS_TOKEN
+        # bearer. No token configured → the endpoint does not exist (404),
+        # never an open default.
+        if settings.environment.strip().lower() != "local":
+            expected = settings.metrics_token
+            supplied = request.headers.get("Authorization", "")
+            if not expected or supplied != f"Bearer {expected}":
+                return JSONResponse({"detail": "Not Found"}, status_code=404)
+        return metrics_response(settings)
 
     log.info("app_started", providers=active_provider_summary())
     return app

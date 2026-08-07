@@ -28,10 +28,15 @@ def test_mock_customs_buyers_are_flagged_demo_in_the_report(db, factory, product
 
     buyers = _executive_buyers(db, product, "IN")
     assert buyers, "discovery produced buyers"
-    # Every mock-derived buyer must be marked demo, never presented as observed
-    # customs data (audit C6).
+    # Every sample-derived buyer must be marked demo, never presented as
+    # observed customs data (audit C6). Customs-sourced rows additionally carry
+    # the loud "SAMPLE — " name prefix (J4); maps-sourced long-tail rows come
+    # from the maps mock ("mock" provider) without the prefix.
     assert all(b["is_demo"] for b in buyers)
-    assert all("mock" in (b["provider"] or "") for b in buyers)
+    assert all("mock" in (b["provider"] or "") or "sample" in (b["provider"] or "") for b in buyers)
+    customs_named = [b for b in buyers if "sample" in (b["provider"] or "")]
+    assert customs_named, "customs sample buyers present"
+    assert all(b["name"].startswith("SAMPLE — ") for b in customs_named)
 
 
 def test_offline_comtrade_snapshot_is_labeled_fixture(db, market):

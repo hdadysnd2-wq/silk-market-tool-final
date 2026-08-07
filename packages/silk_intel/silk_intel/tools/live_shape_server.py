@@ -151,6 +151,11 @@ class LiveShapeServer:
                   "SILK_REQUIRE_PERSISTENT_DATA_DIR"):
             env.pop(k, None)
         env.setdefault("SILK_HTTP_MIN_GAP_MS", "0")
+        # هذا خادم فحص شكلي محلي بلا مفتاح عمداً؛ الإغلاق المسبق C6 يتطلب
+        # الاختيار الصريح لوضع التطوير المفتوح.
+        # Keyless by design (a local shape-check harness): the C6 fail-closed
+        # guard requires this explicit open-dev opt-in.
+        env["SILK_ALLOW_OPEN_DEV"] = "1"
         # تدفّق ما قبل التشغيل (Wave 1): فعّل صمّامات التصنيف/الاستشارة كي تظهر
         # نوافذ التأكيد في المتصفّح. مسار التصنيف الحتمي يعمل بلا مفتاح كلود
         # (CSV)، واستشارةُ بلد المنشأ تقرأ المخبأ المبذور (بلا شبكة).

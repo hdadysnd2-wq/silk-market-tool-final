@@ -4060,7 +4060,10 @@ def _exec_market_block(doc, i: int, m: dict) -> None:
                     for p in prices[:8]],
                    caption="أسعار المنافسين المرصودة")
     else:
-        doc.add_paragraph(_EXEC_NO_PRICES_LINE)
+        # J3: ملاحظة جانب المنتج (مصدر أسعار غير مهيّأ => «الأسعار بانتظار
+        # مصدر بيانات») تعلو السطر العام؛ غيابها يُبقي سلسلة العقد القائمة.
+        doc.add_paragraph(_clean_report_text(m.get("prices_note"), 160)
+                          or _EXEC_NO_PRICES_LINE)
     # المنافسون (المصدِّرون) — أعلى ٥.
     comps = m.get("competitors") or []
     if comps:

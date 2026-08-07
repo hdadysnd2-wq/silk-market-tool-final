@@ -8,6 +8,7 @@ importer is never contacted twice.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 
 from rapidfuzz import fuzz
 
@@ -108,11 +109,11 @@ def is_same_company(name_a: str, name_b: str) -> bool:
     return fuzz.token_sort_ratio(a, b) >= DEDUP_THRESHOLD
 
 
-def find_duplicate(name: str, existing: dict[str, str]) -> str | None:
+def find_duplicate(name: str, existing: Mapping[str, object]) -> str | None:
     """Return the normalized key of an existing near-duplicate, if any.
 
-    ``existing`` maps normalized_name -> original name for candidates already in
-    the same country.
+    ``existing`` is any mapping keyed by normalized name (only the keys are
+    consulted) for candidates already in the same country.
     """
     candidate = normalize_name(name)
     if candidate in existing:

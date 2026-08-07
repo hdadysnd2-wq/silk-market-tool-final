@@ -107,6 +107,10 @@ def discover_buyers(
     for rec in shipment_records:
         grouped[rec.data.consignee_name].append(rec)
 
+    #: Buyers this run actually touched (new or deduped-onto) — step 3 is
+    #: scoped to them, insertion-ordered.
+    touched: dict[uuid.UUID, Buyer] = {}
+
     discovered = 0
     for name, records in grouped.items():
         buyer = _upsert_buyer(
@@ -118,6 +122,7 @@ def discover_buyers(
             confidence=records[0].confidence,
         )
         _store_shipments(db, buyer, records)
+        touched[buyer.id] = buyer
         discovered += 1
 
     # --- 2. Maps long-tail (supplementary, flagged for legal review) ---------
@@ -131,6 +136,7 @@ def discover_buyers(
             BuyerSource.maps,
             confidence=rec.confidence,
         )
+        touched[buyer.id] = buyer
         buyer.legal_review_required = True
         if rec.data.website and not buyer.website:
             buyer.website = rec.data.website
@@ -143,9 +149,12 @@ def discover_buyers(
     db.flush()
 
     # --- 3. Enrichment + contacts + scoring per buyer ------------------------
-    buyers = db.scalars(select(Buyer).where(Buyer.country_iso2 == market_iso2)).all()
+    # Scoped to the buyers THIS run touched. Iterating every buyer in the
+    # country (as before) made one discovery click O(country-table): ~3 queries
+    # + scoring per row for thousands of rows another factory discovered — and
+    # minted ProductBuyerMatch rows for buyers unrelated to this fetch (I8).
     scored = 0
-    for buyer in buyers:
+    for buyer in touched.values():
         _enrich(db, buyer, settings_providers["enrichment"])
         _find_contacts(db, buyer, settings_providers["waterfall"])
         _score(db, product, buyer, market_iso2, analysis_id=analysis_id)
@@ -176,7 +185,12 @@ def _upsert_buyer(
     confidence: float,
 ) -> Buyer:
     norm = normalization.normalize_name(name)
-    dup_key = normalization.find_duplicate(name, {k: k for k in index})
+    # Exact hit first — only a miss pays for the O(country-buyers) fuzzy scan
+    # (which previously also rebuilt a throwaway {k: k} dict per candidate).
+    hit = index.get(norm)
+    if hit is not None:
+        return hit
+    dup_key = normalization.find_duplicate(name, index)
     if dup_key and dup_key in index:
         return index[dup_key]
 

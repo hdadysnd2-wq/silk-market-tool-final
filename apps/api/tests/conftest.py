@@ -249,7 +249,7 @@ def product(db, factory, hs_code) -> Product:
 
 
 def make_buyer_with_contact(
-    db, market_iso2: str = "IN", email: str = "buyer@acme.example.in"
+    db, market_iso2: str = "IN", email: str = "buyer@acme.example.in", name: str = "Acme Importers"
 ) -> tuple[Buyer, Contact]:
     if db.get(Market, market_iso2) is None:
         db.add(
@@ -264,8 +264,8 @@ def make_buyer_with_contact(
         )
         db.flush()
     buyer = Buyer(
-        name="Acme Importers",
-        normalized_name="acme importers",
+        name=name,
+        normalized_name=name.lower(),
         country_iso2=market_iso2,
         source=BuyerSource.customs,
         source_confidence=0.85,

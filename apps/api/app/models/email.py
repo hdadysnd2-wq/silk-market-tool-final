@@ -49,6 +49,10 @@ class Email(UUIDMixin, TimestampMixin, Base):
     __table_args__ = (
         CheckConstraint(APPROVAL_CHECK_SQL, name="sent_requires_approval"),
         Index("ix_emails_campaign_status", "campaign_id", "status"),
+        # The hourly follow-up sweep scans by (status, sent_at) and anti-joins
+        # on parent_email_id (migration 0019).
+        Index("ix_emails_status_sent_at", "status", "sent_at"),
+        Index("ix_emails_parent_email_id", "parent_email_id"),
     )
 
     campaign_id: Mapped[uuid.UUID] = mapped_column(

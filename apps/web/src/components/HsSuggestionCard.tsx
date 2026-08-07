@@ -176,7 +176,7 @@ export function HsSuggestionCard({
             disabled={busy || manual.length !== 6}
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
           >
-            {t("confirm")}
+            {t("hsManualConfirm")}
           </button>
         </div>
       </div>

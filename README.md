@@ -13,9 +13,10 @@ outreach campaigns** — there is no ad-campaign (Google/Meta ads) feature, and
 none should be claimed. World-market screening runs on live UN Comtrade
 coverage synced per confirmed HS code (`make live-sync`, requires
 `COMTRADE_API_KEY` — see `docs/LAUNCH_KEYS.md`); offline/local deploys run on
-a clearly demo-labeled 14-importer seed. Open tracking is
-provider-webhook-only and deliberately not surfaced as a headline metric;
-replies and bounces are tracked on every send path.
+a clearly demo-labeled 14-importer seed. Open **and click** tracking are
+provider-webhook-only and deliberately not surfaced as headline metrics (no
+click-through rate is claimed anywhere); replies and bounces are tracked on
+every send path.
 
 This monorepo merges two repositories into one modular monolith:
 

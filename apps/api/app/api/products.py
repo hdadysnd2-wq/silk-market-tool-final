@@ -10,7 +10,7 @@ from app.models import HSCode, Product
 from app.models.product import Product as ProductModel
 from app.schemas.product import HSCodeOut, HSConfirmRequest, ProductAccepted, ProductOut
 from app.security import CurrentUser
-from app.services import engine, hs_classifier
+from app.services import engine, hs_classifier, rate_limit
 from app.services.storage import get_storage, new_image_key
 from app.workers.tasks import process_product_intake
 
@@ -19,6 +19,13 @@ router = APIRouter(tags=["products"])
 # Product images are small photos; cap the upload so a client can't exhaust
 # worker memory by streaming a multi-GB body into an in-memory read.
 MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+# C19 (partial) — both product intake and manual re-classify trigger a paid
+# Anthropic vision call. Rate-limit the intake fan-out per user so it can't be
+# looped to run unbounded paid classifications. (A vision reservation + cache is
+# a documented follow-up; only the endpoint rate limit lands here.)
+PRODUCT_INTAKE_RATE_LIMIT = 30  # intake / re-classify runs per user per hour
+PRODUCT_INTAKE_WINDOW_SECONDS = 3600
 
 # Never store an image under a client-declared active-content type (text/html,
 # image/svg+xml): served from the storage origin it would be stored-XSS. Keep a
@@ -63,6 +70,12 @@ async def create_product(
     classify: bool = Form(True),
     image: UploadFile | None = File(None),
 ) -> ProductAccepted:
+    # C19 — intake runs a paid vision classification; rate-limit per user.
+    rate_limit.check(
+        f"product_intake:{user.id}",
+        limit=PRODUCT_INTAKE_RATE_LIMIT,
+        window_seconds=PRODUCT_INTAKE_WINDOW_SECONDS,
+    )
     factory = resolve_factory(db, user)
 
     price_min_val = _coerce_optional_price(price_min, "price_min")
@@ -137,12 +150,22 @@ def get_product(product: ProductModel = Depends(get_owned_product)) -> ProductOu
     response_model=ProductAccepted,
     status_code=status.HTTP_202_ACCEPTED,
 )
-def classify(product: ProductModel = Depends(get_owned_product)) -> ProductAccepted:
+def classify(
+    user: CurrentUser,
+    product: ProductModel = Depends(get_owned_product),
+) -> ProductAccepted:
     """Re-run the intake pipeline (vision → HS proposal → embedding) in the worker.
 
     Returns 202 immediately; the client polls ``GET /products/{id}`` for the
     refreshed classification once the task finishes.
     """
+    # C19 — the re-classify path triggers the same paid vision call as intake;
+    # share the per-user intake rate limit.
+    rate_limit.check(
+        f"product_intake:{user.id}",
+        limit=PRODUCT_INTAKE_RATE_LIMIT,
+        window_seconds=PRODUCT_INTAKE_WINDOW_SECONDS,
+    )
     accepted = ProductOut.model_validate(product)
     task = process_product_intake.delay(str(product.id), deepen=False)
     return ProductAccepted(task_id=task.id, product=accepted)

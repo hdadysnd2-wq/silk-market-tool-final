@@ -8,19 +8,38 @@ from sqlalchemy import select
 from app.api.deps import DbDep, get_owned_product
 from app.models import Analysis, Contact, Product
 from app.schemas.buyer import BuyerMatchOut, BuyerOut, ContactOut, DiscoverRequest
-from app.services import lead_validity
+from app.security import CurrentUser
+from app.services import lead_validity, rate_limit
 from app.services.buyer_discovery import buyers_for_product
 from app.workers.tasks import run_discovery
 
 router = APIRouter(tags=["buyers"])
+
+# Fan-out guard for buyer discovery (C18). Each market enqueues one paid
+# run_discovery job, so an unbounded/unvalidated markets list lets a single
+# request kick off an arbitrary number of paid runs. Rate-limit per user and cap
+# the list. (Per-provider budget metering inside run_discovery is a documented
+# follow-up owned by app/workers/tasks.py — not attempted here.)
+DISCOVER_RATE_LIMIT = 20  # discovery kickoffs per user per hour
+DISCOVER_WINDOW_SECONDS = 3600
+MAX_DISCOVER_MARKETS = 5  # one paid discovery run enqueued per market
 
 
 @router.post("/products/{product_id}/discover", status_code=status.HTTP_202_ACCEPTED)
 def discover(
     payload: DiscoverRequest,
     db: DbDep,
+    user: CurrentUser,
     product: Product = Depends(get_owned_product),
 ) -> dict:
+    # C18 — discovery enqueues one paid run_discovery per market. Rate-limit per
+    # user so one request (or a loop of them) can't fan out into an unbounded
+    # number of paid runs.
+    rate_limit.check(
+        f"discover:{user.id}",
+        limit=DISCOVER_RATE_LIMIT,
+        window_seconds=DISCOVER_WINDOW_SECONDS,
+    )
     # I2 — buyer discovery fetches buyer PII, so it runs only on a *human-confirmed*
     # HS code. The classifier pre-fills product.hs_code with its top candidate
     # before the user confirms, so checking hs_code alone would let discovery run
@@ -29,6 +48,18 @@ def discover(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="HS code must be confirmed before discovering buyers",
+        )
+    # Normalize (dedupe + upper-case) then cap the fan-out — reject an oversized
+    # list rather than silently truncating it.
+    markets: list[str] = []
+    for raw in payload.markets:
+        m = raw.strip().upper()
+        if m and m not in markets:
+            markets.append(m)
+    if len(markets) > MAX_DISCOVER_MARKETS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many markets (max {MAX_DISCOVER_MARKETS})",
         )
     # Decision #6 / I8 — a lead fetch is bound to a specific analysis, never a
     # free-standing bulk pull. Discovery therefore requires an analysis for this
@@ -44,7 +75,6 @@ def discover(
             status_code=status.HTTP_409_CONFLICT,
             detail="Run a market analysis first — lead discovery is bound to an analysis",
         )
-    markets = [m.upper() for m in payload.markets]
     # Enqueue one discovery job per market. In eager mode (tests / local worker
     # off) these run synchronously.
     for market in markets:

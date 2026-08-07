@@ -37,6 +37,9 @@ _TRANSIENT_EXC = (
 _MAX_RETRIES = 3
 _RETRY_BACKOFF = 5  # seconds, doubled each attempt (5s, 10s, 20s)
 
+#: Word (.docx) media type — shared by the report-render tasks.
+_RESEARCH_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
 
 def _is_transient(exc: Exception) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
@@ -509,6 +512,78 @@ def render_executive_report(product_id: str) -> dict:
         content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
     return {"product_id": product_id, "report_key": key}
+
+
+@celery_app.task(name="app.workers.tasks.render_research_report")
+def render_research_report(product_id: str) -> dict:
+    """Render the combined Top-5 DEEP-RESEARCH report to storage (ADR-0007).
+
+    The paid, key-gated counterpart to ``render_executive_report``. Loads the
+    product's persisted Top-5 ``CountryRanking`` markets and, for each, runs the
+    engine's 12-mission deep research through the ONE seam
+    (``engine.run_deep_research``) inside its deepen + budget scope, then composes
+    the per-market findings into one combined docx stored under a stable key.
+
+    Fail-closed (I5 / audit C3): with no ``ANTHROPIC_API_KEY`` the seam returns
+    ``None`` and NO paid work runs — the task renders the declared-gap "deep
+    research pending API key" document instead of fabricating a narrative, and
+    marks the product ``research_status='gated'``. Idempotent, own session scope,
+    terminal-state friendly (status: pending → ready | gated | failed) so the
+    202-reachable trigger/poll flow always reaches a terminal state.
+    """
+    from app.models import Product
+    from app.services import engine, research_report
+    from app.services.storage import get_storage
+
+    key = f"reports/research/{product_id}.docx"
+    with session_scope() as db:
+        product = db.get(Product, uuid.UUID(product_id))
+        if product is None:
+            return {"error": "product not found"}
+        product_name = product.name_en or product.name_ar or ""
+        hs_code = product.hs_code
+        markets = research_report.top5_markets(db, product)
+        allowed = engine.deep_research_allowed()
+
+    # Fail-closed keyless: declared-gap "pending API key" report, ZERO paid calls.
+    if not allowed:
+        data = research_report.render_pending_docx(product_name, hs_code, markets)
+        get_storage().put(key=key, data=data, content_type=_RESEARCH_MEDIA_TYPE)
+        with session_scope() as db:
+            product = db.get(Product, uuid.UUID(product_id))
+            if product is not None:
+                product.research_status = "gated"
+                product.research_report_key = key
+        log.info("research_report_gated", product_id=product_id)
+        return {"product_id": product_id, "status": "gated", "report_key": key}
+
+    # Keyed: run the engine deep research per market (each inside its own deepen +
+    # budget scope, established in run_deep_research). A market that fails to
+    # resolve / returns None is skipped (declared absence), never fabricated.
+    try:
+        per_market: list[dict] = []
+        for _iso3, name in markets:
+            report = engine.run_deep_research(name, product_name, hs_code)
+            if report is not None:
+                per_market.append(report)
+        data = research_report.render_combined_docx(product_name, hs_code, per_market)
+    except Exception as exc:
+        log.error("research_report_failed", product_id=product_id, error=str(exc))
+        with session_scope() as db:
+            product = db.get(Product, uuid.UUID(product_id))
+            if product is not None:
+                product.research_status = "failed"
+                product.failure_reason = f"deep research: {type(exc).__name__}: {exc}"[:500]
+        raise
+
+    get_storage().put(key=key, data=data, content_type=_RESEARCH_MEDIA_TYPE)
+    with session_scope() as db:
+        product = db.get(Product, uuid.UUID(product_id))
+        if product is not None:
+            product.research_status = "ready"
+            product.research_report_key = key
+    log.info("research_report_ready", product_id=product_id, markets=len(per_market))
+    return {"product_id": product_id, "status": "ready", "report_key": key}
 
 
 @celery_app.task(name="app.workers.tasks.draft_campaign_emails")

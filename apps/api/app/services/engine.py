@@ -233,3 +233,158 @@ def deepen_active() -> bool:
     import silk_context
 
     return silk_context.deepen_active()
+
+
+def _mission_label(key: str) -> str:
+    """Engine's Arabic business name for a mission key, degrading to the key.
+
+    The engine renders ``pricing_scout``/``risk_news`` as public Arabic mission
+    names; reuse that ONE mapping so the product report never leaks a raw
+    ``snake_case`` mission key to a factory reader (a leak the engine tests lock).
+    """
+    try:
+        from silk_render import _mission_label as _label
+
+        return _label(key)
+    except Exception:  # noqa: BLE001 — a missing helper must not break the report
+        return key
+
+
+def _finding_dict(dp: object) -> dict:
+    """One engine ``DataPoint`` finding as a flat, source-carrying dict (I1).
+
+    Keeps the value with its provenance (source + confidence + note) so the
+    combined report can print a source line under every figure. A ``None`` value
+    is a declared gap, never a fabricated zero.
+    """
+    return {
+        "value": getattr(dp, "value", None),
+        "source": getattr(dp, "source", "") or "",
+        "confidence": getattr(dp, "confidence", None),
+        "note": getattr(dp, "note", "") or "",
+        "data_year": getattr(dp, "data_year", None),
+    }
+
+
+def _summarize_research(market_ref: object, research_run: dict) -> dict:
+    """Normalize the engine's raw deep-research run into the product's wire shape.
+
+    The engine returns ``{"reports": {mission_key: AgentReport}, "trace_id": …}``.
+    This flattens it to per-mission sections (label, summary, failed, sourced
+    findings) plus declared-gap lines for failed missions, and a best-effort
+    synthesis verdict — the product renderer reads ONLY this (never the funnel
+    template), keeping the deep-research report distinct from the executive one.
+    """
+    reports = research_run.get("reports") or {}
+    sections: list[dict] = []
+    gaps: list[str] = []
+    for key, rep in reports.items():
+        failed = bool(getattr(rep, "failed", False))
+        summary = getattr(rep, "summary", "") or ""
+        findings = [_finding_dict(f) for f in (getattr(rep, "findings", None) or [])]
+        label = _mission_label(key)
+        sections.append(
+            {
+                "key": key,
+                "label": label,
+                "summary": summary,
+                "failed": failed,
+                "findings": findings,
+            }
+        )
+        if failed:
+            gaps.append(f"{label}: {summary or 'لا نتائج مبنية على استشهاد — no sourced findings'}")
+
+    verdict_text = ""
+    verdict_confidence = None
+    verdict_reasoning = ""
+    try:
+        from silk_synthesis import synthesize
+
+        verdict = synthesize(
+            list(reports.values()),
+            product=research_run.get("product", "") or "",
+            market=getattr(market_ref, "name_en", "") or "",
+            with_ai=True,
+        )
+        ai = verdict.get("ai") if isinstance(verdict, dict) else None
+        if isinstance(ai, dict) and ai.get("verdict"):
+            verdict_text = str(ai.get("verdict") or "")
+            verdict_confidence = ai.get("confidence")
+            verdict_reasoning = str(ai.get("reasoning") or "")
+        elif isinstance(verdict, dict):
+            verdict_text = str(verdict.get("verdict") or "")
+            verdict_confidence = verdict.get("confidence")
+    except Exception:  # noqa: BLE001 — the verdict is additive; a failure is a declared gap
+        verdict_text = ""
+
+    return {
+        "market": {
+            "iso3": getattr(market_ref, "iso3", "") or "",
+            "iso2": getattr(market_ref, "iso2", "") or "",
+            "name_en": getattr(market_ref, "name_en", "") or "",
+            "name_ar": getattr(market_ref, "name_ar", "") or "",
+        },
+        "verdict": verdict_text,
+        "verdict_confidence": verdict_confidence,
+        "verdict_reasoning": verdict_reasoning,
+        "sections": sections,
+        "gaps": gaps,
+        "trace_id": research_run.get("trace_id"),
+    }
+
+
+def deep_research_allowed() -> bool:
+    """Whether the paid deep-research pipeline may run at all (fail-closed, I5/C3).
+
+    Deep research is 12 Claude missions per market — it is paid, so it is gated on
+    a configured ``ANTHROPIC_API_KEY``. Keyless, the slot fails closed: no mission
+    is ever attempted and the report becomes a declared-gap "pending API key"
+    document (I1), never a fabricated narrative.
+    """
+    from app.config import get_settings
+
+    return bool(get_settings().anthropic_api_key)
+
+
+def run_deep_research(
+    market_name: str,
+    product_name: str,
+    hs_code: str | None = None,
+) -> dict | None:
+    """Run the engine's deep-research pipeline for ONE market (the single seam, I5).
+
+    The ONLY entry point from the product body into the engine's 12-mission deep
+    research. Fail-closed and budget/deepen-scoped:
+
+    * Returns ``None`` — making **zero paid calls** — when no ``ANTHROPIC_API_KEY``
+      is configured (the engine mission runner is never invoked) or when the
+      market name cannot be resolved to a real ``MarketRef`` (a declared gap, not
+      a guess — same discipline as ``resolve_market``).
+    * Otherwise runs ``silk_missions.deep_research`` inside
+      ``engine.deepen_scope(True)`` (re-arms the engine's paid agents for this
+      block only, I5) AND an ``api_budget.budget_scope`` (caps + logs the live-call
+      fan-out, decision #5), then normalizes the raw run to the product's wire
+      shape via :func:`_summarize_research`.
+
+    No engine internals leak past this function — callers get plain dicts.
+    """
+    if not deep_research_allowed():
+        return None
+
+    from silk_market_resolver import resolve_market
+
+    market_ref, _suggestions = resolve_market(market_name)
+    if market_ref is None:
+        return None
+
+    import silk_missions
+
+    from app.services.api_budget import budget_scope
+
+    with deepen_scope(True), budget_scope(label=f"deep_research:{market_ref.iso3}"):
+        research_run = silk_missions.deep_research(
+            market_ref, product=product_name, hs_code=hs_code
+        )
+    research_run.setdefault("product", product_name)
+    return _summarize_research(market_ref, research_run)

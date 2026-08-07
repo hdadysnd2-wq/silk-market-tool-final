@@ -10,7 +10,7 @@ send) — that behavior is test-locked.
 
 | Purpose | Env var(s) | Where to get it | Used by |
 |---|---|---|---|
-| LLM (vision, HS classification, drafting) | `ANTHROPIC_API_KEY` | console.anthropic.com | api + worker |
+| LLM (vision, HS classification, drafting, **deep-research report**) | `ANTHROPIC_API_KEY` | console.anthropic.com | api + worker |
 | World-trade coverage sync (Stage 1) | `COMTRADE_API_KEY` | UN Comtrade subscription portal | worker (`sync_world_trade`), `make live-sync` |
 | Object storage (images, report docx) | `S3_ENDPOINT_URL`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` (+ optional `S3_REGION`) | Any S3-compatible store (R2 / S3 / MinIO) | api + worker; **the deploy script refuses to run without these** |
 | Mailbox sending — Google | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | Google Cloud Console OAuth app (scope `gmail.send` + `gmail.readonly`), publish past testing mode | api (OAuth flow) + worker (send/replies) |
@@ -26,6 +26,7 @@ the send path hard-blocks until the built-in DNS check passes.
 | Purpose | Env var(s) | Notes |
 |---|---|---|
 | Observed competitor prices | `LOCALPRICE_API_KEY` (+ `LOCALPRICE_API_URL` if non-default) | SerpApi. Without it, prices are a declared gap in prod (never mock — C3) |
+| Deep-research report (Top 5) | reuses `ANTHROPIC_API_KEY` | ADR-0007. Opt-in, key-gated: 12 Claude missions × Top-5 markets per report — **paid, so it fails closed without the key** (the report renders a "deep research pending API key" declared-gap doc, never fabricated). No NEW key; owner must accept the per-report Claude spend. |
 | Stage-2 live enrichment (tariff/PPP) | `MARKET_ENRICHMENT_LIVE=1` | Keyless (World Bank/WITS public APIs) — just flip it on in prod |
 | Shipment data (buyer lists) | `VOLZA_API_KEY` (+ `VOLZA_API_URL` if the plan's endpoint differs) | Volza recommended first¹. Without a key, buyer discovery's customs step is a declared gap in prod (never sample importers — C3 pattern); the adapter (`providers/shipments/volza.py`) is ready and waiting on the subscription. |
 | Buyer discovery — maps long-tail | `OUTSCRAPER_API_KEY` | |

@@ -79,6 +79,12 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.tasks.reap_stale_sends",
         "schedule": crontab(minute="*/10"),
     },
+    # Every non-terminal email status has an owner (audit 2026-08-07 C4):
+    # `sending` → reap-stale-sends above; `queued` → this drain.
+    "redispatch-queued-emails": {
+        "task": "app.workers.tasks.redispatch_queued_emails",
+        "schedule": crontab(minute="*/10"),
+    },
     "reconcile-stuck-analyses": {
         "task": "app.workers.tasks.reconcile_stuck_analyses",
         "schedule": crontab(minute="*/15"),

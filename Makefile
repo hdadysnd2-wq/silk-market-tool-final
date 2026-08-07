@@ -83,6 +83,15 @@ etl: ## Offline bulk jobs (pandas + comtradeapicall allowed HERE only, I7)
 	@echo "  python -m etl.world_trade_sync --hs6 <code> --years 2021 2022 2023"
 	@echo "  python -m etl.hs_reference_sync"
 
+# One-command live Comtrade sync (audit 2026-08-07 C1). READY, AWAITING KEYS:
+# needs COMTRADE_API_KEY + DATABASE_URL in the environment (docs/LAUNCH_KEYS.md).
+# Runs in the running api container (which now ships etl/), or bare-metal from a
+# checkout with etl deps installed. Usage: make live-sync HS6=392010
+live-sync: ## Live world-trade sync for one HS6 (requires COMTRADE_API_KEY; docs/LAUNCH_KEYS.md)
+	@test -n "$(HS6)" || (echo "Usage: make live-sync HS6=<6-digit code>" && exit 1)
+	$(COMPOSE) exec -e COMTRADE_OFFLINE=0 api python -m etl.world_trade_sync --hs6 $(HS6) \
+		|| PYTHONPATH=. python3 -m etl.world_trade_sync --hs6 $(HS6)
+
 # ---- misc ------------------------------------------------------------------
 
 logs: ## Tail logs from all services

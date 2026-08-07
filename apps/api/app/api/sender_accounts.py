@@ -74,12 +74,20 @@ def disconnect(
     user: CurrentUser,
     account: SenderAccount = Depends(get_owned_sender_account),
 ) -> Response:
-    """Disconnect a mailbox: disable it and wipe its stored tokens."""
+    """Disconnect a mailbox: disable it, wipe tokens, and pause its campaigns.
+
+    Pausing is not optional (audit 2026-08-07 C4): campaigns left active on a
+    disconnected mailbox had every send blocked at the worker and stranded in
+    ``queued`` with no signal to anyone.
+    """
+    from app.services import notifications, sender_oauth
+
     account.verification_status = SenderVerificationStatus.disabled
     account.access_token_encrypted = None
     account.refresh_token_encrypted = None
     account.token_expires_at = None
     db.flush()
+    paused = sender_oauth.pause_campaigns_for_disconnect(db, account)
     audit.record(
         db,
         action="sender_disconnected",
@@ -87,8 +95,22 @@ def disconnect(
         entity_id=account.id,
         actor=user,
         factory_id=account.factory_id,
-        payload={"email": account.email},
+        payload={"email": account.email, "campaigns_paused": paused},
     )
+    if paused:
+        notifications.notify(
+            db,
+            factory_id=account.factory_id,
+            kind="campaigns_paused_disconnect",
+            title="Campaigns paused",
+            body=(
+                f"{paused} campaign(s) were paused because their sending mailbox "
+                f"{account.email} was disconnected. Connect a mailbox and "
+                "reactivate them to resume."
+            ),
+            entity_type="sender_account",
+            entity_id=account.id,
+        )
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

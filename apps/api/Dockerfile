@@ -41,7 +41,20 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY apps/api/ ./
 RUN uv sync --frozen --no-dev
 
-ENV PATH="/app/apps/api/.venv/bin:$PATH"
+# The offline ETL package (pandas + comtradeapicall, I7) ships in the image so
+# the worker's `sync_world_trade` task can actually run `etl.world_trade_sync`
+# in production — without it, world-market coverage for any real HS6 can never
+# be synced and every real analysis fails (CODE_AUDIT_2026-08-07 §5 C1). I7 is
+# an *import* invariant on apps/ and the engine, enforced by
+# tools/check_no_pandas.py — installing the etl distribution alongside them
+# does not violate it; only `etl/` code imports pandas, lazily, inside run().
+COPY etl /app/etl
+RUN uv pip install --python .venv/bin/python -r /app/etl/requirements.txt
+
+# /app on the path so `from etl import world_trade_sync` resolves at runtime
+# exactly as it does from a repo-root checkout.
+ENV PATH="/app/apps/api/.venv/bin:$PATH" \
+    PYTHONPATH="/app"
 
 # Strip any CR line endings (a Windows checkout can introduce them) so the
 # scripts run under /bin/sh, then make them executable.

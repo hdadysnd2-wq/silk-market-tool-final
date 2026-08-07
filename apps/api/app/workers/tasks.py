@@ -532,7 +532,7 @@ def send_approved_email(email_id: str) -> dict:
     account (refreshing its OAuth token first, and pausing safely if the mailbox
     needs reconnection); otherwise the legacy shared cold-email provider is used.
     """
-    from app.models import Campaign, Email, SenderAccount
+    from app.models import Campaign, Email, EmailStatus, SenderAccount
     from app.providers.registry import get_mailbox_provider
     from app.services import sender_oauth
     from app.services.sending import AccountBoundSender, SendBlocked, send_email
@@ -564,8 +564,14 @@ def send_approved_email(email_id: str) -> dict:
         try:
             email = send_email(db, eid, sender)
         except SendBlocked as exc:
-            log.info("send_blocked", email_id=email_id, reason=str(exc))
-            return {"email_id": email_id, "sent": False, "reason": str(exc)}
+            # Persist WHY the send is waiting (audit 2026-08-07 C4): a blocked
+            # email stays `queued` (the redispatch sweep will retry it), but the
+            # row now carries the reason instead of being silently stuck.
+            reason = str(exc)
+            if email.status == EmailStatus.queued:
+                email.blocked_reason = reason[:255]
+            log.info("send_blocked", email_id=email_id, reason=reason)
+            return {"email_id": email_id, "sent": False, "reason": reason}
         return {"email_id": email_id, "sent": email.status.value == "sent"}
 
 
@@ -818,6 +824,94 @@ def reap_stale_sends() -> dict:
     with session_scope() as db:
         reaped = _reap(db, settings.send_claim_stale_seconds)
     return {"reaped": reaped}
+
+
+#: Cap per redispatch sweep — bounds one run's fan-out; the beat drains any
+#: larger backlog across successive runs.
+REDISPATCH_BATCH_LIMIT = 200
+
+
+@celery_app.task(name="app.workers.tasks.redispatch_queued_emails")
+def redispatch_queued_emails() -> dict:
+    """Drain the ``queued`` backlog — every non-terminal email has an owner (C4).
+
+    Before this sweep, a worker-side ``SendBlocked`` (daily cap reached, mailbox
+    disconnected, transient provider rejection) stranded an approved email in
+    ``queued`` forever: the only dispatch site was the queue route, and nothing
+    ever retried. Now:
+
+    - every email still ``queued`` after ``email_redispatch_minutes`` is
+      re-enqueued through the guarded send path (safe: the two-phase claim and
+      the worker re-checks make redelivery at-most-once, and a still-blocked
+      send just refreshes ``blocked_reason`` and waits for the next sweep);
+    - a campaign with mail stuck longer than ``email_stuck_notify_hours`` gets
+      ONE operator notification (deduplicated on an unread notification of the
+      same kind for the same campaign), so a persistent block is a visible
+      incident instead of a silent one.
+    """
+    from datetime import timedelta
+
+    from app.config import get_settings
+    from app.models import Campaign, Email, EmailStatus, Notification, utcnow
+    from app.services import notifications
+
+    settings = get_settings()
+    now = utcnow()
+    redispatch_cutoff = now - timedelta(minutes=settings.email_redispatch_minutes)
+    stuck_cutoff = now - timedelta(hours=settings.email_stuck_notify_hours)
+    redispatched = 0
+    notified = 0
+    with session_scope() as db:
+        rows = db.scalars(
+            select(Email)
+            .where(
+                Email.status == EmailStatus.queued,
+                Email.queued_at.is_not(None),
+                Email.queued_at < redispatch_cutoff,
+            )
+            .order_by(Email.queued_at)
+            .limit(REDISPATCH_BATCH_LIMIT)
+        ).all()
+        stuck_campaigns: dict[uuid.UUID, int] = {}
+        for email in rows:
+            send_approved_email.delay(str(email.id))
+            redispatched += 1
+            if email.queued_at is not None and email.queued_at < stuck_cutoff:
+                stuck_campaigns[email.campaign_id] = stuck_campaigns.get(email.campaign_id, 0) + 1
+        for campaign_id, count in stuck_campaigns.items():
+            campaign = db.get(Campaign, campaign_id)
+            if campaign is None:
+                continue
+            already = db.scalar(
+                select(func.count())
+                .select_from(Notification)
+                .where(
+                    Notification.factory_id == campaign.factory_id,
+                    Notification.kind == "sends_stuck_queued",
+                    Notification.entity_id == str(campaign_id),
+                    Notification.read_at.is_(None),
+                )
+            )
+            if already:
+                continue
+            notifications.notify(
+                db,
+                factory_id=campaign.factory_id,
+                kind="sends_stuck_queued",
+                title="Approved emails are waiting to send",
+                body=(
+                    f"{count} approved email(s) in campaign '{campaign.name}' have "
+                    f"been waiting more than {settings.email_stuck_notify_hours} "
+                    "hours. Check the sending mailbox, its daily limit, and the "
+                    "campaign status."
+                ),
+                entity_type="campaign",
+                entity_id=str(campaign_id),
+            )
+            notified += 1
+    if redispatched:
+        log.info("queued_emails_redispatched", count=redispatched, notified=notified)
+    return {"redispatched": redispatched, "campaigns_notified": notified}
 
 
 @celery_app.task(name="app.workers.tasks.reconcile_stuck_analyses")

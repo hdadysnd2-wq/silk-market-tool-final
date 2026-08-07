@@ -78,34 +78,58 @@ def test_sync_world_trade_fail_closed_offline(monkeypatch):
 
 
 def test_sync_world_trade_runs_when_live(monkeypatch):
+    """The task imports the REAL ``etl.world_trade_sync`` module.
+
+    The pre-remediation version of this test injected a fake ``etl`` module into
+    ``sys.modules``, which passed even though the real package was absent from
+    the production image (audit 2026-08-07 C1). Now the real module must import
+    (its heavy pandas/comtradeapicall deps load lazily inside ``run()``, so the
+    import itself is hermetic) and only the network-touching ``run`` is patched.
+    """
     from app.config import get_settings
 
     get_settings.cache_clear()
     monkeypatch.setenv("COMTRADE_OFFLINE", "0")
     monkeypatch.setenv("COMTRADE_API_KEY", "test-key")
 
-    calls = {}
-
+    # The repo root is on sys.path in production via the image's PYTHONPATH=/app
+    # (locked below); mirror that here so the same real import resolves.
     import sys
-    import types
+    from pathlib import Path
 
-    fake_sync = types.ModuleType("etl.world_trade_sync")
+    repo_root = str(Path(__file__).resolve().parents[3])
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+
+    from etl import world_trade_sync as real_sync
+
+    calls = {}
 
     def _run(code):
         calls["code"] = code
         return 42
 
-    fake_sync.run = _run
-    fake_etl = types.ModuleType("etl")
-    fake_etl.world_trade_sync = fake_sync
-    monkeypatch.setitem(sys.modules, "etl", fake_etl)
-    monkeypatch.setitem(sys.modules, "etl.world_trade_sync", fake_sync)
+    monkeypatch.setattr(real_sync, "run", _run)
     try:
         out = tasks.sync_world_trade.apply(args=["392010"], throw=False).result
     finally:
         get_settings.cache_clear()
     assert out == {"hs6": "392010", "synced": True, "rows": 42}
     assert calls["code"] == "392010"
+
+
+def test_etl_package_ships_in_production_image():
+    """Lock C1: the Dockerfile must COPY etl/ and put /app on PYTHONPATH.
+
+    Without both, ``sync_world_trade`` ImportErrors forever in production and
+    the world screen permanently fails for every real HS6.
+    """
+    from pathlib import Path
+
+    dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text()
+    assert "COPY etl /app/etl" in dockerfile, "etl/ must ship in the production image (C1)"
+    assert "etl/requirements.txt" in dockerfile, "etl deps must install in the image (C1)"
+    assert 'PYTHONPATH="/app"' in dockerfile, "/app must be importable so `from etl import …` works"
 
 
 def test_refresh_world_trade_requests_stale_and_missing(db, factory, product, monkeypatch):

@@ -359,7 +359,9 @@ def mark_needs_reauth(db: Session, account: SenderAccount, *, reason: str) -> No
     )
 
 
-def _pause_account_campaigns(db: Session, account: SenderAccount) -> int:
+def _pause_account_campaigns(
+    db: Session, account: SenderAccount, *, reason: str = REAUTH_PAUSE_REASON
+) -> int:
     """Pause the account's live campaigns so nothing tries to send while broken."""
     live = db.scalars(
         select(Campaign).where(
@@ -370,11 +372,23 @@ def _pause_account_campaigns(db: Session, account: SenderAccount) -> int:
     count = 0
     for campaign in live:
         campaign.status = CampaignStatus.paused
-        campaign.paused_reason = REAUTH_PAUSE_REASON
+        campaign.paused_reason = reason
         count += 1
     if count:
         db.flush()
     return count
+
+
+#: Reason used when the OPERATOR disconnects a mailbox (audit 2026-08-07 C4).
+#: Distinct from REAUTH_PAUSE_REASON on purpose: reauth-paused campaigns
+#: auto-resume on reconnect; deliberately-disconnected ones stay paused until
+#: the user reactivates them.
+DISCONNECT_PAUSE_REASON = "Sender mailbox disconnected"
+
+
+def pause_campaigns_for_disconnect(db: Session, account: SenderAccount) -> int:
+    """Public seam for the disconnect route: pause everything bound to the account."""
+    return _pause_account_campaigns(db, account, reason=DISCONNECT_PAUSE_REASON)
 
 
 def _resume_reauth_paused_campaigns(db: Session, account: SenderAccount) -> int:

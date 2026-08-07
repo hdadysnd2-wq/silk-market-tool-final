@@ -67,7 +67,12 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-fable-5"
     comtrade_api_key: str = ""
-    comtrade_offline: bool = True
+    # Default ON-line: the sync itself stays fail-closed (it refuses to run
+    # without a real COMTRADE_API_KEY), so flipping this default cannot cause a
+    # network call on keyless deploys — it only stops a by-the-book production
+    # deploy from permanently disabling the world screen (audit 2026-08-07 C1).
+    # Tests and hermetic lanes set COMTRADE_OFFLINE=1 explicitly.
+    comtrade_offline: bool = False
     # Stage-2 market enrichment (applied tariff + PPP). Blank/False keeps the
     # deterministic mock so CI/offline stays green; True selects the LIVE World
     # Bank / WITS adapter, which routes through the engine's hardened data layer.
@@ -149,6 +154,12 @@ class Settings(BaseSettings):
     # A send claimed for egress (status ``sending``) but not resolved within this
     # many seconds is treated as interrupted and reaped (never auto-retried).
     send_claim_stale_seconds: int = 900
+    # Queued-email drain (audit 2026-08-07 C4): an email still ``queued`` after
+    # this many minutes is re-enqueued through the guarded send path…
+    email_redispatch_minutes: int = 10
+    # …and one still queued after this many hours raises a single operator
+    # notification per campaign (deduplicated on the unread notification).
+    email_stuck_notify_hours: int = 6
     # Celery broker visibility timeout — must exceed the longest task so Redis
     # does not redeliver a still-running task. Kept well above send/pipeline work.
     broker_visibility_timeout_seconds: int = 3600
@@ -183,6 +194,11 @@ class Settings(BaseSettings):
     # This is the one explicit escape hatch — a keyless staging demo sets it
     # knowingly; production never should.
     allow_mock_sending: bool = False
+    # Same rule for DATA slots that would otherwise fabricate client-visible
+    # figures (observed prices, Stage-2 tariff/PPP): outside local they fail
+    # closed to declared gaps unless a keyless staging demo opts in knowingly
+    # (audit 2026-08-07 C3). Production never should.
+    allow_mock_data: bool = False
 
     @field_validator("database_url", mode="before")
     @classmethod

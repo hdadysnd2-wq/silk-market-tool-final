@@ -276,7 +276,33 @@ try {
 
     # Shared backend variables. The Railway reference tokens are built with
     # RailwayRef so no dollar-then-brace sequence ever appears in this source.
+    #
+    # Object storage is MANDATORY on this topology (audit 2026-08-07 C2):
+    # api and worker are separate containers, so STORAGE_BACKEND=local breaks
+    # the vision pass and 404s report downloads. Fail closed unless the
+    # operator explicitly opts into the broken local mode for a throwaway
+    # preview (ALLOW_LOCAL_STORAGE=1).
     $tokenKey = New-FernetKey
+    if ($env:ALLOW_LOCAL_STORAGE -eq '1') {
+        Write-Warn 'ALLOW_LOCAL_STORAGE=1 - deploying with STORAGE_BACKEND=local. Product images will NOT reach the vision model and report downloads will 404.'
+        $storageVars = @('STORAGE_BACKEND=local')
+    } else {
+        foreach ($required in 'S3_ENDPOINT_URL', 'S3_BUCKET', 'S3_ACCESS_KEY', 'S3_SECRET_KEY') {
+            if (-not (Get-Item "env:$required" -ErrorAction SilentlyContinue)) {
+                throw "Set $required - object storage is required (docs/LAUNCH_KEYS.md). For a throwaway preview only: ALLOW_LOCAL_STORAGE=1"
+            }
+        }
+        $s3Region = if ($env:S3_REGION) { $env:S3_REGION } else { 'me-south-1' }
+        $storageVars = @(
+            'STORAGE_BACKEND=s3',
+            'REQUIRE_OBJECT_STORAGE=1',
+            "S3_ENDPOINT_URL=$($env:S3_ENDPOINT_URL)",
+            "S3_BUCKET=$($env:S3_BUCKET)",
+            "S3_ACCESS_KEY=$($env:S3_ACCESS_KEY)",
+            "S3_SECRET_KEY=$($env:S3_SECRET_KEY)",
+            "S3_REGION=$s3Region"
+        )
+    }
     $backend = @(
         'ENVIRONMENT=production',
         "SECRET_KEY=$secret",
@@ -286,10 +312,10 @@ try {
         ('API_BASE_URL=https://' + (RailwayRef 'api.RAILWAY_PUBLIC_DOMAIN')),
         ('APP_BASE_URL=https://' + (RailwayRef 'web.RAILWAY_PUBLIC_DOMAIN')),
         ('CORS_ORIGINS=https://' + (RailwayRef 'web.RAILWAY_PUBLIC_DOMAIN')),
-        'STORAGE_BACKEND=local',
-        'COMTRADE_OFFLINE=1',
+        "COMTRADE_API_KEY=$($env:COMTRADE_API_KEY)",
+        "SENTRY_DSN=$($env:SENTRY_DSN)",
         'TRUSTED_PROXY_COUNT=1'
-    )
+    ) + $storageVars
 
     # api - public HTTP; runs migrations + seed on boot (RUN_SEED handled by start-api.sh).
     Add-RailwayService -Name 'api' -RepoSlug $Repo -BranchName $Branch -Variables (

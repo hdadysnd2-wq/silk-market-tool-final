@@ -11,6 +11,12 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# الاختبارات المحكمة تبني التطبيق بلا مفتاح خدمة عمداً؛ الإغلاق المسبق الجديد
+# (تدقيق 2026-08-07 C6) يتطلب الاختيار الصريح لوضع التطوير المفتوح.
+# The hermetic suite builds the app keyless on purpose; the C6 fail-closed
+# guard requires this explicit open-dev opt-in (production never sets it).
+os.environ.setdefault("SILK_ALLOW_OPEN_DEV", "1")
+
 
 @contextlib.contextmanager
 def block_network():

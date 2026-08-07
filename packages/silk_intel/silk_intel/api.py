@@ -156,6 +156,21 @@ def create_app():
     import silk_storage
     import silk_usage
 
+    # إغلاق مسبق (تدقيق 2026-08-07 C6): خدمة بلا SILK_API_KEY كانت تعمل
+    # "وضع تطوير مفتوح" افتراضياً — أي نشرٍ عرضي لهذا الخادم القديم يصبح
+    # سطح هجوم عاماً. القاعدة الآن كقاعدة SECRET_KEY في المنتج: المفتاح
+    # إلزامي، والوضع المفتوح لا يكون إلا باختيار صريح.
+    # Fail closed: serving without SILK_API_KEY now requires the explicit
+    # SILK_ALLOW_OPEN_DEV=1 opt-in (set by the hermetic test suite and local
+    # dev only). An accidental deployment without a key refuses to boot
+    # instead of running an unauthenticated public analysis service.
+    if not _api_key_expected() and os.environ.get("SILK_ALLOW_OPEN_DEV", "").strip() != "1":
+        raise RuntimeError(
+            "SILK_API_KEY is not set. The engine API refuses to serve "
+            "unauthenticated (audit 2026-08-07 C6). Set SILK_API_KEY, or "
+            "SILK_ALLOW_OPEN_DEV=1 for a local development shell only."
+        )
+
     app = FastAPI(title="Silk Market Intelligence API",
                   description="Real public-data export-market analysis "
                               "(UN Comtrade + World Bank). Preliminary, never fabricated.")

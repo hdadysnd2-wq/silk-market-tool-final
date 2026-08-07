@@ -160,9 +160,24 @@ def queue(db: Session, email: Email, actor: User) -> Email:
     campaign = db.get(Campaign, email.campaign_id)
     _assert_lia_if_eu(db, campaign)
 
-    check = deliverability.can_send(db, campaign)
-    if not check.ok:
-        raise TransitionError(check.reason or "Sending is currently blocked")
+    # Governance must match what the send worker will actually enforce
+    # (audit 2026-08-07 C4): an account-bound campaign is governed by the
+    # MAILBOX's counters/warm-up, not the factory-domain legacy path — the old
+    # factory-only check here waved sends through that the worker then blocked,
+    # stranding them in `queued`.
+    if campaign is not None and campaign.sender_account_id:
+        from app.models import SenderAccount
+        from app.services import sender_accounts
+
+        account = db.get(SenderAccount, campaign.sender_account_id)
+        gov = sender_accounts.can_send_from(db, account) if account is not None else None
+        if account is None or gov is None or not gov.ok:
+            reason = (gov.reason if gov else None) or "sender mailbox unavailable"
+            raise TransitionError(reason)
+    else:
+        check = deliverability.can_send(db, campaign)
+        if not check.ok:
+            raise TransitionError(check.reason or "Sending is currently blocked")
 
     email.status = EmailStatus.queued
     email.queued_at = utcnow()

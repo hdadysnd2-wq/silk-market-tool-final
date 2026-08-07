@@ -18,12 +18,13 @@ export default function DashboardPage() {
   // Until then, surface a callout that routes straight to the connect flow.
   const needsSender = senders !== null && !senders.some((s) => s.verification_status === "verified");
 
+  // No open-rate tile (audit 2026-08-07 C7): opens are webhook-only, and the
+  // production mailbox path has no open tracking — the rate would honestly
+  // read ~0% and look broken. Replies and bounces ARE tracked on every path.
   const tiles: { label: string; value: string; href?: string; hint?: string }[] = [
     { label: t("campaigns"), value: String(data.campaigns) },
     { label: t("sent"), value: String(data.total_sent) },
-    { label: t("opened"), value: String(data.total_opened) },
     { label: t("replied"), value: String(data.total_replied) },
-    { label: t("openRate"), value: pct(data.open_rate) },
     { label: t("replyRate"), value: pct(data.reply_rate) },
     { label: t("bounceRate"), value: pct(data.bounce_rate) },
     {

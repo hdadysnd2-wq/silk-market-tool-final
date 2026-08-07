@@ -397,7 +397,7 @@ _SYMBOL_ANCHORS_EXTRA = [
     (19, "web/index.html", ['dlReport("pdf")', 'kind==="pdf"',
                             'data-act="pdf"']),
     (19, "api.py", ["report.pdf", 'media_type="application/pdf"']),
-    (19, "Dockerfile", ["libreoffice-writer"]),
+    (19, "../../../apps/api/Dockerfile", ["libreoffice-writer"]),
     # البند ٣٢ — إصلاحُ المحرّك لا تحرير التقرير (تدقيق زبدة الفول السوداني/
     # اليمن): كل عائلة عيبٍ تحريريّ صارت قاعدةَ عقدٍ + إنفاذ عرضٍ حتميّ + قفلًا.
     (32, "silk_hs_confirm.py", ["def confirm_hs", "def is_flagged",

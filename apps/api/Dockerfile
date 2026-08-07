@@ -3,6 +3,25 @@ FROM python:3.11-slim
 # uv for fast, lockfile-based dependency installation.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
+# PDF export engine + Arabic fonts (moved here from the deleted engine
+# Dockerfile, audit C6/J2): the executive/deep-research report renders docx
+# via python-docx and converts to PDF via LibreOffice; without
+# libreoffice-writer the PDF endpoint 503s live, and without IBM Plex Sans
+# Arabic (OFL, owner decision §7) LibreOffice silently substitutes the font
+# and the Arabic layout acceptance fails. curl -f fails the build if the font
+# download breaks. The engine's lesson-19 regression guard anchors on this
+# block staying present: libreoffice-writer
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       libreoffice-writer fonts-hosny-amiri fontconfig curl ca-certificates \
+    && mkdir -p /usr/share/fonts/truetype/ibmplex \
+    && for w in Regular Bold SemiBold; do \
+         curl -fsSL -o "/usr/share/fonts/truetype/ibmplex/IBMPlexSansArabic-$w.ttf" \
+           "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsansarabic/IBMPlexSansArabic-$w.ttf"; \
+       done \
+    && fc-cache -f \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     PYTHONUNBUFFERED=1

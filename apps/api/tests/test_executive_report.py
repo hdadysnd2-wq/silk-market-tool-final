@@ -222,6 +222,11 @@ def test_executive_buyers_carry_provenance_and_cap_at_five(db, factory, product)
         "relevance_score": 90,
         "contacts": 1,
         "legal_review_required": False,
+        # C6 — a manually-seeded customs buyer carries no mock/fixture provider
+        # name, so it is honestly NOT flagged demo. The mock-discovery path that
+        # DOES flag demo is covered by test_provenance_honesty.py.
+        "is_demo": False,
+        "provider": None,
     }
     # Ordered by relevance; the bare maps-tier buyers keep their review flag
     # and their real (zero) contact count.

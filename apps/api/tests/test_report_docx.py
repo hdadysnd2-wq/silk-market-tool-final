@@ -77,7 +77,9 @@ def test_build_engine_result_sources_figures_and_declares_gaps(db, factory, prod
 
     de = next(m for m in result["markets"] if m["iso3"] == "DEU")
     ms = de["components"]["market_size"]
-    assert ms["value"] == 900.0 and ms["confidence"] == 0.9  # sourced from the snapshot
+    # Sourced from the snapshot; confidence is honestly "not scored" (None) —
+    # the old uniform 0.9 was synthesized, never a real upstream score (Wave 2).
+    assert ms["value"] == 900.0 and ms["confidence"] is None
     # I1 — demand_capacity has no platform source → declared gap, never a zero.
     dc = de["components"]["demand_capacity"]
     assert dc["value"] is None and dc["confidence"] == 0.0

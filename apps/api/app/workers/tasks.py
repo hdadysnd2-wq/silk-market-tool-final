@@ -460,38 +460,50 @@ def send_approved_email(email_id: str) -> dict:
         return {"email_id": email_id, "sent": email.status.value == "sent"}
 
 
+#: Cap per hourly sweep. The beat drains any backlog across runs; the cap keeps
+#: one run's memory and transaction bounded no matter how much mail history
+#: accumulates.
+FOLLOWUP_BATCH_LIMIT = 500
+
+
 @celery_app.task(name="app.workers.tasks.process_followups")
 def process_followups() -> dict:
     """Create follow-up *drafts* for sent-but-unanswered emails.
 
     Follow-ups are never auto-sent; they enter the same approval queue as any
-    other draft.
+    other draft. One anti-join finds sent-and-past-cutoff emails with no
+    followup-1 child (previously: an unbounded full scan plus one probe query
+    per candidate, over columns with no index — the hourly cost grew with all
+    mail ever sent). Bounded by ``FOLLOWUP_BATCH_LIMIT`` per run.
     """
     import secrets
     from datetime import timedelta
+
+    from sqlalchemy.orm import aliased
 
     from app.models import Email, EmailStatus, utcnow
     from app.services.email_drafting import unsubscribe_url  # noqa: F401 (parity import)
 
     cutoff = utcnow() - timedelta(days=4)
     created = 0
+    child = aliased(Email)
     with session_scope() as db:
         candidates = db.scalars(
-            select(Email).where(
+            select(Email)
+            .outerjoin(
+                child,
+                (child.parent_email_id == Email.id) & (child.followup_number == 1),
+            )
+            .where(
+                child.id.is_(None),
                 Email.status == EmailStatus.sent,
                 Email.sent_at < cutoff,
                 Email.is_followup.is_(False),
             )
+            .order_by(Email.sent_at)
+            .limit(FOLLOWUP_BATCH_LIMIT)
         ).all()
         for original in candidates:
-            already = db.scalar(
-                select(Email.id).where(
-                    Email.parent_email_id == original.id,
-                    Email.followup_number == 1,
-                )
-            )
-            if already:
-                continue
             db.add(
                 Email(
                     campaign_id=original.campaign_id,
@@ -734,6 +746,42 @@ def reconcile_stuck_analyses() -> dict:
             failed += 1
     if failed:
         log.warning("stuck_analyses_reconciled", count=failed)
+    return {"failed": failed}
+
+
+@celery_app.task(name="app.workers.tasks.reconcile_stuck_products")
+def reconcile_stuck_products() -> dict:
+    """Fail products stuck in ``classification_status='pending'`` past the window.
+
+    The intake task marks its own failures, but a worker lost to OOM/SIGKILL dies
+    before ``_mark_product_failed`` runs, leaving the product ``pending`` forever
+    while the UI polls. Mirror of ``reconcile_stuck_analyses`` for the products
+    table, sharing the same staleness window.
+    """
+    from datetime import timedelta
+
+    from app.config import get_settings
+    from app.models import Product, utcnow
+
+    settings = get_settings()
+    cutoff = utcnow() - timedelta(minutes=settings.analysis_stuck_minutes)
+    failed = 0
+    with session_scope() as db:
+        stuck = db.scalars(
+            select(Product).where(
+                Product.classification_status == "pending",
+                Product.updated_at < cutoff,
+            )
+        ).all()
+        for product in stuck:
+            product.classification_status = "failed"
+            product.failure_reason = (
+                f"stalled in 'pending' for over "
+                f"{settings.analysis_stuck_minutes} min (worker lost); please retry"
+            )
+            failed += 1
+    if failed:
+        log.warning("stuck_products_reconciled", count=failed)
     return {"failed": failed}
 
 

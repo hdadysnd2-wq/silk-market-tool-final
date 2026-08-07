@@ -99,12 +99,21 @@ function Invoke-Native {
     try { & $ScriptBlock } finally { $ErrorActionPreference = $prevEap }
 }
 
-# A url-safe 64-char hex secret, shared by api/worker/beat (it signs tokens and
-# derives the mailbox token-encryption key, so it MUST be identical across them).
+# A url-safe 64-char hex secret, shared by api/worker/beat (it signs tokens,
+# so it MUST be identical across them).
 function New-SecretKey {
     $bytes = New-Object 'System.Byte[]' 32
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     return -join ($bytes | ForEach-Object { $_.ToString('x2') })
+}
+
+# A Fernet key (url-safe base64, 32 random bytes) for TOKEN_ENCRYPTION_KEY —
+# mandatory outside ENVIRONMENT=local, generated independently of SECRET_KEY so
+# the two rotate independently.
+function New-FernetKey {
+    $bytes = New-Object 'System.Byte[]' 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    return [System.Convert]::ToBase64String($bytes).Replace('+', '-').Replace('/', '_')
 }
 
 # Build a Railway reference-variable token: RailwayRef 'Postgres.DATABASE_URL'
@@ -267,9 +276,11 @@ try {
 
     # Shared backend variables. The Railway reference tokens are built with
     # RailwayRef so no dollar-then-brace sequence ever appears in this source.
+    $tokenKey = New-FernetKey
     $backend = @(
         'ENVIRONMENT=production',
         "SECRET_KEY=$secret",
+        "TOKEN_ENCRYPTION_KEY=$tokenKey",
         ('DATABASE_URL=' + (RailwayRef 'Postgres.DATABASE_URL')),
         ('REDIS_URL=' + (RailwayRef 'Redis.REDIS_URL')),
         ('API_BASE_URL=https://' + (RailwayRef 'api.RAILWAY_PUBLIC_DOMAIN')),

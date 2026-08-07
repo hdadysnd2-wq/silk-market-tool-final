@@ -85,7 +85,8 @@
     "hsManualTitle": "أدخل الرمز يدوياً",
     "hsSearch": "بحث",
     "hsSearchPlaceholder": "ابحث عن الرموز الجمركية بكلمة مفتاحية",
-    "hsManualPlaceholder": "رمز جمركي من ٦ أرقام"
+    "hsManualPlaceholder": "رمز جمركي من ٦ أرقام",
+    "hsManualConfirm": "استخدم هذا الرمز"
   },
   "markets": {
     "title": "اختر الأسواق المستهدفة",

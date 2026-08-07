@@ -191,6 +191,18 @@ gen_secret() {
 }
 SECRET_KEY=$(gen_secret)
 
+# TOKEN_ENCRYPTION_KEY encrypts mailbox OAuth tokens at rest and is mandatory
+# outside ENVIRONMENT=local — the api refuses to start without it. A Fernet key
+# is url-safe base64 of 32 random bytes; generate it independently of
+# SECRET_KEY so the two rotate independently.
+gen_fernet_key() {
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import base64,secrets;print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())'
+  elif command -v openssl >/dev/null 2>&1; then openssl rand -base64 32 | tr '+/' '-_'
+  else die "No CSPRNG available (need openssl or python3). Set TOKEN_ENCRYPTION_KEY yourself."; fi
+}
+TOKEN_ENCRYPTION_KEY=$(gen_fernet_key)
+
 confirm "Create project ${BOLD}${PROJECT_NAME}${RESET} and deploy ${BOLD}${REPO}@${BRANCH}${RESET}?" \
   || die "Aborted."
 
@@ -258,6 +270,7 @@ backend_vars() {
   cat <<EOF
 ENVIRONMENT=production
 SECRET_KEY=${SECRET_KEY}
+TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY}
 DATABASE_URL=\${{Postgres.DATABASE_URL}}
 REDIS_URL=\${{Redis.REDIS_URL}}
 API_BASE_URL=https://\${{api.RAILWAY_PUBLIC_DOMAIN}}
@@ -334,6 +347,9 @@ these in the Railway dashboard (Project → each service → Settings):${RESET}
      • A SECRET_KEY was generated and set on api/worker/beat/web (identical
        across all four, as required — web verifies the session JWT). Rotate it
        in the dashboard for production.
+     • A TOKEN_ENCRYPTION_KEY was generated for api/worker/beat (encrypts
+       mailbox OAuth tokens at rest; mandatory outside local). Rotating it
+       requires factories to reconnect their mailboxes.
 
 Every push to ${BOLD}${REPO}@${BRANCH}${RESET} now auto-deploys all four services.
 Full runbook: ${BOLD}docs/DEPLOY_RAILWAY.md${RESET}

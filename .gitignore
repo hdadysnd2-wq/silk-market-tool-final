@@ -50,3 +50,6 @@ packages/silk_intel/silk_intel/data/traces/
 
 # OS
 .DS_Store
+
+# Redis persistence dumps from local dev/test servers
+**/dump.rdb

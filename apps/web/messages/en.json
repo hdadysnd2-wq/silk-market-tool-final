@@ -85,7 +85,8 @@
     "hsManualTitle": "Enter the code manually",
     "hsSearch": "Search",
     "hsSearchPlaceholder": "Search HS codes by keyword",
-    "hsManualPlaceholder": "6-digit HS code"
+    "hsManualPlaceholder": "6-digit HS code",
+    "hsManualConfirm": "Use this code"
   },
   "markets": {
     "title": "Select target markets",

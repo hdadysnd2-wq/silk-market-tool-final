@@ -15,6 +15,9 @@ dependencies = [
     "pgvector>=0.3.6",
     "celery[redis]>=5.4.0",
     "redis>=5.2.0",
+    # Ops floor: error reporting + metrics must ship in the --no-dev prod image.
+    "sentry-sdk>=2.19.0",
+    "prometheus-client>=0.21.0",
     "pyjwt>=2.10.0",
     "bcrypt>=4.0.1,<5",
     "cryptography>=41.0.0",
@@ -45,7 +48,6 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "ruff>=0.8.0",
-    "sentry-sdk>=2.19.0",
 ]
 
 # The engine is a sibling package in this monorepo, installed editable from its

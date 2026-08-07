@@ -39,6 +39,11 @@
 packages/silk_intel/silk_intel/data/cache
 packages/silk_intel/silk_intel/data/traces
 
+# The legacy silk_platform product must NEVER ship in a production image: it
+# contains a cold-send queue with no per-email approval gate (ADR-0004). The
+# api Dockerfile additionally fails the build if this reappears in the context.
+packages/silk_intel/silk_intel/silk_platform
+
 # Playwright / test output
 **/playwright-report
 **/test-results

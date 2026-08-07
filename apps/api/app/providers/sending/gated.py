@@ -36,6 +36,17 @@ GATE_REASON = (
     "(see docs/PHASE3_ADAPTER_READINESS.md)."
 )
 
+#: Refusal reason when no real sending provider is configured outside local.
+#: An email the mock "sends" reaches nobody while the row is marked sent —
+#: a compliance-grade lie in production. Name every way out.
+NO_PROVIDER_REASON = (
+    "No real sending provider is configured and ENVIRONMENT is not 'local'. "
+    "Either set SMARTLEAD_API_KEY (and verify the sequence, "
+    "SMARTLEAD_SEQUENCE_VERIFIED=1), connect a mailbox via Google/Microsoft "
+    "OAuth credentials, or — for a keyless demo only — explicitly set "
+    "ALLOW_MOCK_SENDING=1."
+)
+
 
 class GatedSendingProvider:
     """Stands in for a live sending adapter that is not yet cleared to send."""
@@ -57,3 +68,44 @@ class GatedSendingProvider:
 
     def register_webhook_events(self) -> None:
         return None
+
+
+class GatedMailboxProvider:
+    """Fail-closed stand-in for the mailbox slot when no OAuth app is configured.
+
+    Satisfies ``MailboxProvider`` without ever pretending to work: sends are
+    refused with an actionable reason (``send_email`` keeps the row ``queued``),
+    OAuth-flow entry points raise so the connect UI surfaces the misconfiguration
+    loudly, and reply polling reports nothing rather than fabricating traffic.
+    """
+
+    scopes = ""
+
+    def __init__(self, provider_type: str, reason: str = NO_PROVIDER_REASON) -> None:
+        self.name = f"{provider_type} (gated)"
+        self.provider_type = provider_type
+        self._reason = reason
+
+    def authorization_url(self, *, state, redirect_uri, login_hint=None) -> str:
+        raise RuntimeError(self._reason)
+
+    def exchange_code(self, *, code, redirect_uri):
+        raise RuntimeError(self._reason)
+
+    def refresh(self, *, refresh_token):
+        raise RuntimeError(self._reason)
+
+    def verify_mailbox(self, creds):
+        raise RuntimeError(self._reason)
+
+    def send(self, creds, message: OutboundEmail) -> SendResult:
+        log.error("send_blocked_provider_gated", to=message.to_email, reason=self._reason)
+        return SendResult(
+            accepted=False,
+            provider_message_id=None,
+            provider_name=self.name,
+            error=self._reason,
+        )
+
+    def fetch_replies(self, creds, since) -> list:
+        return []

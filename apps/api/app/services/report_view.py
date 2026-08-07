@@ -32,19 +32,25 @@ def _dp(
     source: str,
     note: str = "",
     data_year: int | None = None,
+    *,
+    confidence: float | None = None,
+    retrieved_at: str | None = None,
 ) -> dict:
     """Engine ``DataPoint``-shaped provenance dict.
 
     I1: a ``None`` value is a declared gap — confidence ``0.0`` and a
-    ``no_record`` status, never a fabricated zero.
+    ``no_record`` status, never a fabricated zero. A PRESENT value carries only
+    the provenance the caller actually has: ``confidence`` stays ``None``
+    ("not scored" — ``confidence_phrase`` renders it as such) unless a real
+    upstream score exists; no number is ever synthesized here.
     """
     present = value is not None
     return {
         "value": value,
         "source": source,
-        "confidence": 0.9 if present else 0.0,
+        "confidence": confidence if present else 0.0,
         "note": note,
-        "retrieved_at": None,
+        "retrieved_at": retrieved_at if present else None,
         "status": "" if present else "no_record",
         "data_year": data_year,
     }
@@ -86,16 +92,27 @@ def _market_row(db: Session, product: Product, ranking: CountryRanking) -> dict:
             )
         )
 
+    # Real retrieval provenance, carried through instead of being discarded:
+    # snapshot figures were fetched at snapshot.fetched_at; funnel-screen rows
+    # were computed when the ranking row was written.
+    snapshot_fetched = (
+        snapshot.fetched_at.isoformat() if snapshot is not None and snapshot.fetched_at else None
+    )
+    ranking_written = (ranking.updated_at or ranking.created_at).isoformat()
+
     # market_size — prefer the snapshot's live total, else the funnel screen value.
     if snapshot is not None and snapshot.total_import_usd is not None:
         usd: float | None = float(snapshot.total_import_usd)
         size_source = "comtrade"
+        size_retrieved = snapshot_fetched
     elif ranking.import_usd is not None:
         usd = float(ranking.import_usd)
         size_source = "world_trade"
+        size_retrieved = ranking_written
     else:
         usd = None
         size_source = "world_trade"
+        size_retrieved = None
     if usd is not None:
         note = f"total imports HS{product.hs_code} {ranking.year}"
         tags = [t for t in (ranking.tags or []) if t]
@@ -116,7 +133,7 @@ def _market_row(db: Session, product: Product, ranking: CountryRanking) -> dict:
         "total_score": None,
         "confidence": None,
         "components": {
-            "market_size": _dp(usd, size_source, note, ranking.year),
+            "market_size": _dp(usd, size_source, note, ranking.year, retrieved_at=size_retrieved),
             "saudi_position": _dp(
                 saudi,
                 "comtrade",
@@ -124,6 +141,7 @@ def _market_row(db: Session, product: Product, ranking: CountryRanking) -> dict:
                 if saudi is not None
                 else "Saudi not among the reported top suppliers",
                 ranking.year,
+                retrieved_at=snapshot_fetched,
             ),
             "demand_capacity": _dp(
                 None,
@@ -137,6 +155,7 @@ def _market_row(db: Session, product: Product, ranking: CountryRanking) -> dict:
                 if concentration is not None
                 else "no supplier shares reported",
                 ranking.year,
+                retrieved_at=snapshot_fetched,
             ),
         },
     }

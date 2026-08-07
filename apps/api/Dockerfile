@@ -26,6 +26,12 @@ WORKDIR /app/apps/api
 # Sibling path-dependencies first — they change rarely, so this layer caches well.
 COPY packages /app/packages
 
+# Enforce the .dockerignore exclusion of the legacy silk_platform product at
+# build level: it carries a cold-send queue with no per-email approval gate
+# (ADR-0004), so "not shipped" must not depend on ignore-file drift.
+RUN test ! -e /app/packages/silk_intel/silk_intel/silk_platform \
+    || (echo "silk_platform must not ship in the production image" && exit 1)
+
 # Dependency layer: resolve against the lockfile before app code is copied, so a
 # code-only change does not re-install dependencies.
 COPY apps/api/pyproject.toml apps/api/uv.lock ./

@@ -174,6 +174,14 @@ def draft_campaign(db: Session, campaign: Campaign, llm: LLMProvider) -> int:
 
     Returns the number of drafts created. Idempotent: contacts already drafted
     for this campaign are skipped.
+
+    Each draft is COMMITTED as it is produced. Every draft costs a paid LLM
+    call; under a single end-of-task commit, a crash at contact N rolled back
+    drafts 1..N-1 and the redelivered task re-paid every call. With per-draft
+    commits the ``already`` set on the retry skips finished contacts, so a
+    crash re-pays zero completed calls. (Safe mid-task: the enqueueing route
+    commits the campaign before ``.delay()``, and ``expire_on_commit=False``
+    keeps the loaded rows usable across commits.)
     """
     product = db.get(Product, campaign.product_id)
     factory = db.get(Factory, campaign.factory_id)
@@ -212,6 +220,7 @@ def draft_campaign(db: Session, campaign: Campaign, llm: LLMProvider) -> int:
                 llm=llm,
             )
             created += 1
+            db.commit()  # checkpoint: this draft's LLM spend is never re-paid
 
     campaign.total_emails = _count_emails(db, campaign)
     db.flush()

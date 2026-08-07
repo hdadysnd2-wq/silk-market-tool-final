@@ -176,6 +176,13 @@ def get_sending_provider(settings: Settings | None = None) -> SendingProvider:
         from app.providers.sending.smartlead import SmartleadSendingProvider
 
         return SmartleadSendingProvider(settings.smartlead_api_key)
+    # No key at all: only local (or an explicit demo opt-in) may fall back to
+    # the mock — a mock "send" marks the row sent while reaching nobody, which
+    # in production is a silent compliance lie.
+    if settings.environment.strip().lower() != "local" and not settings.allow_mock_sending:
+        from app.providers.sending.gated import NO_PROVIDER_REASON, GatedSendingProvider
+
+        return GatedSendingProvider("mock-sending", reason=NO_PROVIDER_REASON)
     from app.providers.sending.mock import MockSendingProvider
 
     return MockSendingProvider(
@@ -221,6 +228,13 @@ def get_mailbox_provider(provider_type: str, settings: Settings | None = None) -
             settings.microsoft_oauth_tenant,
         )
 
+    # Same rule as the cold-send slot: no configured OAuth app outside local
+    # (without the explicit demo opt-in) fails closed instead of simulating a
+    # mailbox that marks emails sent.
+    if settings.environment.strip().lower() != "local" and not settings.allow_mock_sending:
+        from app.providers.sending.gated import GatedMailboxProvider
+
+        return GatedMailboxProvider(provider_type)
     from app.providers.sending.mock import MockMailboxProvider
 
     return MockMailboxProvider(provider_type=provider_type)

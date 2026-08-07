@@ -16,8 +16,15 @@ from app.schemas.auth import (
     UpdateMeRequest,
     UserOut,
 )
-from app.security import CurrentUser, create_access_token, hash_password, verify_password
-from app.services import audit, auth_service, rate_limit
+from app.security import (
+    SESSION_COOKIE,
+    CurrentUser,
+    create_access_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
+from app.services import audit, auth_service, rate_limit, sessions
 from app.services.users import normalize_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -126,6 +133,27 @@ def verify_otp(payload: OTPVerifyRequest, request: Request, db: DbDep) -> TokenR
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired code"
         )
     return TokenResponse(access_token=create_access_token(user.id, user.role))
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(request: Request, db: DbDep, user: CurrentUser) -> Response:
+    """Revoke the presented token server-side (jti denylist).
+
+    Before this, logout only cleared the browser cookie — the 12h JWT stayed
+    valid, so a stolen token survived logout. The token is resolved exactly as
+    ``get_current_user`` does (Bearer header, else session cookie); it already
+    authenticated by the time we get here, so decode cannot fail.
+    """
+    token = None
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:]
+    token = token or request.cookies.get(SESSION_COOKIE)
+    if token:
+        sessions.revoke(decode_token(token))
+    audit.record(db, action="auth.logout", entity_type="user", entity_id=user.id, actor=user)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/me", response_model=UserOut)

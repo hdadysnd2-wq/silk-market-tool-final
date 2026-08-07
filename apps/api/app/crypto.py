@@ -5,10 +5,12 @@ database dump must not hand an attacker the ability to send mail as a factory's
 mailbox. Encryption is symmetric (Fernet / AES-128-CBC + HMAC).
 
 The key comes from ``settings.token_encryption_key`` (a url-safe base64 32-byte
-Fernet key). When that is blank — local dev, CI, tests — a key is derived
-deterministically from ``secret_key`` so the whole flow still encrypts without
-extra configuration. Production MUST set an explicit key; rotating ``secret_key``
-would otherwise silently orphan every stored token.
+Fernet key). Only in ENVIRONMENT=local — dev, CI, tests — may it be blank, in
+which case a key is derived deterministically from ``secret_key`` so the whole
+flow still encrypts without extra configuration. Everywhere else the settings
+validator rejects a blank key at startup, and ``_fernet`` refuses the derived
+fallback as defense in depth: rotating ``secret_key`` would otherwise silently
+orphan every stored token.
 """
 
 from __future__ import annotations
@@ -45,6 +47,13 @@ def _fernet() -> Fernet:
         except (ValueError, TypeError):
             key_bytes = _derive_key(key)
     else:
+        if settings.environment.strip().lower() != "local":
+            # The settings validator already rejects this at startup; refuse
+            # here too so no code path can encrypt with the derived key in prod.
+            raise RuntimeError(
+                "TOKEN_ENCRYPTION_KEY is required outside ENVIRONMENT=local; "
+                "refusing the SECRET_KEY-derived fallback."
+            )
         key_bytes = _derive_key(settings.secret_key)
     return Fernet(key_bytes)
 

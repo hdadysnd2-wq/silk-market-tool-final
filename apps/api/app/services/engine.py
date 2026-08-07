@@ -135,6 +135,41 @@ def stage1_screen_score(
     )
 
 
+def score_market_components(rows: list[dict]) -> list[dict]:
+    """Score markets with the engine's audited weighted model (Wave 3 item 2).
+
+    ``rows``: ``[{"iso3": str, "components": {name: {"value", "source",
+    "confidence", "note"}}}]`` where component names are the engine's four
+    (``market_size``, ``saudi_position``, ``demand_capacity``, ``competition``).
+    The platform supplies its OWN synced data; the engine owns the model —
+    weights, per-cohort normalization, renormalization over present components,
+    competition inversion, and the I9 transit-hub demotion. Returns
+    ``[{"iso3", "total_score", "confidence", "transit_hub"}]`` aligned by
+    index. A missing component is skipped and lowers confidence — never a
+    fabricated value (I1).
+    """
+    import silk_market_ranker
+    from silk_data_layer import DataPoint, _today
+
+    engine_rows = [
+        {
+            "iso3": r["iso3"],
+            "components": {
+                name: DataPoint(
+                    c.get("value"),
+                    c.get("source", ""),
+                    c.get("confidence", 0.0),
+                    c.get("note", ""),
+                    c.get("retrieved_at") or _today(),
+                )
+                for name, c in r["components"].items()
+            },
+        }
+        for r in rows
+    ]
+    return silk_market_ranker.score_component_rows(engine_rows)
+
+
 def hs6_reference(hs6: str) -> tuple[bool, str | None]:
     """Validate a manually entered HS6 against the engine's WCO reference.
 

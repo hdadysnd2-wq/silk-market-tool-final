@@ -3,10 +3,17 @@
 Stage 1 screens every market locally (zero calls) and shortlists ~15-20. Stage 2
 enriches that shortlist with budgeted macro/tariff signals (applied tariff, PPP)
 — charging the per-analysis API budget (locked decision #5) and logging spend —
-then re-ranks to the top 5. A tariff-adjusted, demand-weighted score refines the
-raw Stage-1 volume screen: a lower applied tariff and higher purchasing power
-raise a market's fit. A market whose enrichment fails keeps its Stage-1 score (a
-declared gap recorded in ``enrichment``, I1) — never a fabricated signal.
+then re-ranks with the ENGINE's audited weighted component model (Wave 3 item 2:
+``engine.score_market_components`` → ``silk_market_ranker.score_component_rows``
+— weights, per-cohort normalization, renormalization over present components,
+competition inversion, I9 transit-hub demotion). The platform supplies its own
+persisted signals as components: import volume (``world_trade``), PPP GNI/capita
+(demand-capacity proxy), and — when a ``MarketSnapshot`` exists — the Saudi
+supplier share and top-supplier concentration. A missing signal is a skipped
+component that lowers that row's score confidence (I1) — never fabricated. The
+applied tariff stays in ``enrichment`` as display/report data; it is not part of
+the engine's scoring model (the old tariff-drag heuristic was a product-local
+invention the audit flagged).
 """
 
 from __future__ import annotations
@@ -15,30 +22,66 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.logging import get_logger
-from app.models import Analysis, CountryRanking
+from app.models import Analysis, CountryRanking, MarketSnapshot
+from app.providers.countries import iso3_to_iso2
 from app.providers.registry import get_market_enrichment_provider
 from app.services import heartbeat
 from app.services.api_budget import charge
 
 log = get_logger(__name__)
 
-#: PPP anchor used to normalise demand quality into a bounded multiplier.
-_PPP_ANCHOR = 65_000.0
 
+def _components_for(
+    db: Session, hs6: str, r: CountryRanking, ppp: float | None, ppp_source: str
+) -> dict[str, dict]:
+    """The engine's four scoring components from the platform's persisted data.
 
-def stage2_score(screen_score: float, tariff_pct: float | None, ppp: float | None) -> float:
-    """Refine the Stage-1 screen score with tariff drag + a mild PPP lift.
-
-    Tariff is a direct drag (20% applied tariff → ×0.80); PPP nudges the score
-    within ~[0.85, 1.15] around the anchor. Missing signals simply don't apply
-    their factor — a gap lowers confidence, never fabricates a number (I1).
+    Every component carries its source; an absent signal is simply omitted so
+    the engine skips it (renormalizing and lowering confidence) — no fabricated
+    values (I1).
     """
-    factor = 1.0
-    if tariff_pct is not None:
-        factor *= max(0.0, 1.0 - float(tariff_pct))
+    from app.services.report_view import _saudi_share, _top_supplier_share
+
+    components: dict[str, dict] = {}
+    if r.import_usd is not None:
+        components["market_size"] = {
+            "value": float(r.import_usd),
+            "source": "world_trade",
+            "confidence": 0.9,
+            "note": f"total imports HS{hs6} {r.year}",
+        }
     if ppp is not None:
-        factor *= 0.85 + min(0.30, max(0.0, float(ppp)) / _PPP_ANCHOR * 0.30)
-    return round(float(screen_score) * factor, 4)
+        components["demand_capacity"] = {
+            "value": float(ppp),
+            "source": ppp_source,
+            "confidence": 0.9,
+            "note": "PPP GNI/capita (population unavailable — capacity proxy)",
+        }
+    iso2 = iso3_to_iso2(r.importer_iso3)
+    snapshot = None
+    if iso2:
+        snapshot = db.scalar(
+            select(MarketSnapshot).where(
+                MarketSnapshot.hs_code == hs6, MarketSnapshot.market_iso2 == iso2
+            )
+        )
+    saudi = _saudi_share(snapshot)
+    if saudi is not None:
+        components["saudi_position"] = {
+            "value": saudi,
+            "source": snapshot.source or "comtrade",
+            "confidence": 0.9,
+            "note": "Saudi supplier share of this market",
+        }
+    concentration = _top_supplier_share(snapshot)
+    if concentration is not None:
+        components["competition"] = {
+            "value": concentration,
+            "source": snapshot.source or "comtrade",
+            "confidence": 0.9,
+            "note": "largest-supplier concentration",
+        }
+    return components
 
 
 def enrich_shortlist(
@@ -61,6 +104,7 @@ def enrich_shortlist(
     )
     provider = get_market_enrichment_provider()
     enriched = 0
+    ppp_by_iso3: dict[str, tuple[float | None, str]] = {}
     for r in rows:
         # Liveness beat per market: a live enrichment pass can legitimately take
         # minutes; without this the stuck-row reaper cannot tell it from a lost
@@ -75,14 +119,15 @@ def enrich_shortlist(
             break
         record = provider.enrich_market(r.importer_iso3, hs6)
         if record is None:
-            # Declared gap (I1): keep the Stage-1 score, note the missing signal.
+            # Declared gap (I1): note the missing signal; the scorer below skips
+            # the absent components and lowers this row's score confidence.
             r.enrichment = {
                 "applied_tariff_pct": None,
                 "ppp_gni_per_capita": None,
                 "source": provider.name,
                 "note": "enrichment unavailable",
             }
-            r.stage2_score = float(r.screen_score)
+            ppp_by_iso3[r.importer_iso3] = (None, provider.name)
             continue
         e = record.data
         r.enrichment = {
@@ -91,14 +136,35 @@ def enrich_shortlist(
             "source": record.provider_name,
             "note": "",
         }
-        r.stage2_score = stage2_score(
-            float(r.screen_score), e.applied_tariff_pct, e.ppp_gni_per_capita
-        )
+        ppp_by_iso3[r.importer_iso3] = (e.ppp_gni_per_capita, record.provider_name)
         r.stage = 2
         enriched += 1
 
-    # Re-rank the shortlist by the Stage-2 score (fallback to the Stage-1 screen
-    # score for any row the budget didn't reach), stable on ISO3.
+    # Score the WHOLE cohort with the engine's weighted model — normalization is
+    # per-cohort, so every row is scored together (rows the budget didn't reach
+    # simply contribute fewer components).
+    component_rows = []
+    for r in rows:
+        ppp, ppp_source = ppp_by_iso3.get(r.importer_iso3, (None, provider.name))
+        components = _components_for(db, hs6, r, ppp, ppp_source)
+        component_rows.append({"iso3": r.importer_iso3, "components": components})
+    from app.services import engine
+
+    scored = engine.score_market_components(component_rows)
+    for r, s, crow in zip(rows, scored, component_rows):
+        r.stage2_score = s["total_score"]
+        r.enrichment = {
+            **(r.enrichment or {}),
+            # Score provenance: which components fed the engine model and the
+            # per-row confidence (fewer present components = lower confidence).
+            "score_components": {
+                name: {k: v for k, v in c.items()} for name, c in crow["components"].items()
+            },
+            "score_confidence": s["confidence"],
+            "score_model": "silk_market_ranker",
+        }
+
+    # Re-rank the shortlist by the engine score, stable on ISO3.
     def _key(r: CountryRanking) -> tuple[float, str]:
         score = float(r.stage2_score) if r.stage2_score is not None else float(r.screen_score)
         return (-score, r.importer_iso3)

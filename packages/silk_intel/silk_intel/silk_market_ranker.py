@@ -705,6 +705,48 @@ def world_import_totals_resolved(hs_code: str,
     return [], None
 
 
+def score_component_rows(rows: list[dict]) -> list[dict]:
+    """التسجيل الموزون الصِرف — pure weighted scoring over gathered component rows.
+
+    ``rows``: ``[{"iso3", "components": {name: DataPoint}, "tier"?}]``. يعيد
+    ``[{"iso3", "total_score", "confidence", "transit_hub"}]`` بمحاذاة الفهرس.
+
+    مستخرَجة حرفياً من قلب ``rank_markets`` (الخطوتين ٢-٣) كي تسجِّل منصةُ
+    المنتج بياناتِها المتزامنة **بنفس النموذج المدقَّق** — الأوزان، إعادة
+    التطبيع على المكوّنات الحاضرة، قلب المنافسة، سقف ثقة الفئة-٢، وخصم مراكز
+    إعادة التصدير (I9) — لا نموذج تسجيلٍ موازٍ في أي مكان. صِرفة: لا شبكة،
+    لا حالة؛ المكوّن الغائب يُتخطّى ويخفض الثقة، لا قيمة وهمية أبداً.
+    """
+    raw_tables: dict[str, dict[str, float]] = {k: {} for k in WEIGHTS}
+    for row in rows:
+        for name, dp in row["components"].items():
+            if name in raw_tables and dp.value is not None:
+                raw_tables[name][row["iso3"]] = float(dp.value)
+
+    out: list[dict] = []
+    for row in rows:
+        iso3 = row["iso3"]
+        wsum, score, present = 0.0, 0.0, 0
+        for name, w in WEIGHTS.items():
+            dp = row["components"].get(name)
+            if dp is None or dp.value is None:
+                continue  # مفقود => يُتخطى، لا قيمة وهمية — skip, no fake value
+            norm = _normalize(raw_tables[name], float(dp.value))
+            if name == "competition":
+                norm = 1.0 - norm  # تركّز أعلى = أصعب — invert
+            score += w * norm
+            wsum += w
+            present += 1
+        total = round(score / wsum, 4) if wsum else 0.0
+        confidence = round(present / len(WEIGHTS), 2)
+        if row.get("tier", 1) == 2:
+            confidence = round(min(confidence, _TIER2_CONF_CAP), 2)
+        total, is_transit_hub = _transit_hub_adjust(iso3, total)
+        out.append({"iso3": iso3, "total_score": total,
+                    "confidence": confidence, "transit_hub": is_transit_hub})
+    return out
+
+
 def rank_markets(hs_code: str, countries: list[dict] | None = None,
                  year: int = DEFAULT_STUDY_YEAR, max_workers: int = 16,
                  world: bool | None = None) -> list[dict]:
@@ -765,44 +807,19 @@ def rank_markets(hs_code: str, countries: list[dict] | None = None,
             lambda t: (_tier2_gather_row(hs_code, t[1], year) if t[0]
                        else _gather_row(hs_code, t[1], year)), tasks))
 
-    # 2) جداول القيم الخام لكل مكوّن عبر الدول — per-component raw value tables.
-    raw_tables: dict[str, dict[str, float]] = {k: {} for k in WEIGHTS}
-    for row in rows:
-        for name, dp in row["components"].items():
-            if dp.value is not None:
-                raw_tables[name][row["iso3"]] = float(dp.value)
-
-    # 3) طبّع، اقلب المنافسة (أقل تركّز = أفضل)، ثم وزّن — normalize + weight.
+    # 2+3) التطبيع والترجيح وخصم الهاب — عبر المُسجِّل الصِرف الواحد (المستخرَج
+    # أعلاه) فلا نسختان من النموذج تتباعدان. Steps 2-3 via the single pure scorer.
+    scored = score_component_rows(rows)
     out: list[dict] = []
-    for row in rows:
+    for row, s in zip(rows, scored):
         iso3 = row["iso3"]
-        wsum, score, present = 0.0, 0.0, 0
-        for name, w in WEIGHTS.items():
-            dp = row["components"][name]
-            if dp.value is None:
-                continue  # مفقود => يُتخطى، لا قيمة وهمية — skip, no fake value
-            norm = _normalize(raw_tables[name], float(dp.value))
-            if name == "competition":
-                norm = 1.0 - norm  # تركّز أعلى = أصعب — invert: less concentrated better
-            score += w * norm
-            wsum += w
-            present += 1
-        # وزّن على المكوّنات الموجودة فقط — renormalize over present weights.
-        total = round(score / wsum, 4) if wsum else 0.0
-        # ثقة الصف تنخفض بنقص المكوّنات — confidence drops with missing components.
-        confidence = round(present / len(WEIGHTS), 2)
         tier = row.get("tier", 1)
-        if tier == 2:            # الفئة-٢ مُقيَّدة الثقة بنيوياً (بيانات جزئية)
-            confidence = round(min(confidence, _TIER2_CONF_CAP), 2)
-        # I9: علِّم مراكز إعادة التصدير واخصم من نقاطها النهائية (بعد التطبيع
-        # والترجيح) بمعامل مسقوف — تظهر كأكبر مستوردين لأنها تعيد التصدير.
-        total, is_transit_hub = _transit_hub_adjust(iso3, total)
         entry = {
             "country": _name(iso3, row["m49"]),
             "iso3": iso3, "m49": row["m49"],
             "iso2": row.get("iso2"),   # يغذي Trends geo وبحث التسوّق gl (P0-3)
-            "total_score": total, "confidence": confidence,
-            "transit_hub": is_transit_hub,   # I9 — وسم هاب إعادة التصدير
+            "total_score": s["total_score"], "confidence": s["confidence"],
+            "transit_hub": s["transit_hub"],   # I9 — وسم هاب إعادة التصدير
             "components": row["components"],
             "income_ppp": row["income_ppp"],
             "population": row["population"],

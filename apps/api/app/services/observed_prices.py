@@ -53,6 +53,10 @@ def fetch_prices_for_market(db: Session, product: Product, market_iso2: str) -> 
             "url": r.data.url,
             "store": r.data.store,
             "source": r.provider_name,
+            # Full DataPoint provenance persisted with the number (Wave 3
+            # item 3): who said it, how sure, and when it was observed.
+            "confidence": r.confidence,
+            "retrieved_at": r.fetched_at.isoformat() if r.fetched_at else None,
         }
         for r in records
     ]

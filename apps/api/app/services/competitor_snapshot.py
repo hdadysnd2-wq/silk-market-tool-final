@@ -41,6 +41,12 @@ def build_snapshot(
             "exporter_name": r.data.exporter_name,
             "value_usd": r.data.value_usd,
             "share_pct": r.data.share_pct,
+            # Per-row DataPoint provenance (Wave 3 item 3): every competitor
+            # figure carries its own source/confidence/observation time, not
+            # just the snapshot-level fetched_at.
+            "source": r.provider_name,
+            "confidence": r.confidence,
+            "retrieved_at": r.fetched_at.isoformat() if r.fetched_at else None,
         }
         for r in exporters
     ]

@@ -134,7 +134,11 @@ def _seed_n(db, n: int, hs6: str = "999888"):
 def test_shortlist_quota_is_top_20_percent_clamped_5_to_30():
     assert shortlist_quota(50) == 10  # ceil(20% of 50)
     assert shortlist_quota(12) == 5  # ceil(2.4)=3 → clamped up to the min
-    assert shortlist_quota(0) == SHORTLIST_MIN
+    # Zero coverage is the one case the min-5 floor must NOT lift: every candidate
+    # is a declared no-data gap (I1) that scores 0, so shortlisting/enriching 5 of
+    # them just burns the Stage-2 API budget on markets that can never rank.
+    assert shortlist_quota(0) == 0
+    assert shortlist_quota(1) == SHORTLIST_MIN  # thin but real coverage still floors at 5
     assert shortlist_quota(100) == 20
     assert shortlist_quota(1000) == SHORTLIST_MAX  # 200 → clamped to 30
     assert shortlist_quota(26) == 6  # ceil(5.2) — the ceil, not the floor

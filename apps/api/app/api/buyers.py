@@ -96,8 +96,11 @@ def list_buyers(
     # (buyers_for_product already orders by score desc).
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
-    pairs = buyers_for_product(db, product.id, market.upper() if market else None)
-    pairs = pairs[offset : offset + limit]
+    # LIMIT/OFFSET are pushed into SQL (audit H2) — the DB returns just this page
+    # rather than every match row for the market being sliced in Python.
+    pairs = buyers_for_product(
+        db, product.id, market.upper() if market else None, limit=limit, offset=offset
+    )
 
     # Batch-load contacts for the page's buyers in ONE query instead of one per
     # buyer (the N+1 the audit flagged).

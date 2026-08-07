@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hmac
+
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -115,7 +117,9 @@ def create_app() -> FastAPI:
         if settings.environment.strip().lower() != "local":
             expected = settings.metrics_token
             supplied = request.headers.get("Authorization", "")
-            if not expected or supplied != f"Bearer {expected}":
+            # Constant-time compare so the token can't be recovered byte-by-byte
+            # from response timing (matches the webhook HMAC path).
+            if not expected or not hmac.compare_digest(supplied, f"Bearer {expected}"):
                 return JSONResponse({"detail": "Not Found"}, status_code=404)
         return metrics_response(settings)
 

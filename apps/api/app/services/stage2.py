@@ -148,22 +148,22 @@ def enrich_shortlist(
     stops early and logs when the budget is exhausted, leaving the rest on their
     Stage-1 score. Returns the shortlist re-ordered by the Stage-2 score, with
     ``rank`` reassigned so the top-5 the report surfaces reflects Stage 2.
-    ``limit`` defaults to the Stage-1 shortlist ceiling (``SHORTLIST_MAX``) so
-    the whole persisted shortlist is re-ranked as ONE cohort — a partial re-rank
-    would leave stale Stage-1 ranks below the cut line.
+    ``limit`` defaults to the *entire* persisted Stage-1 shortlist so it is
+    re-ranked as ONE cohort — a partial re-rank would leave stale Stage-1 ranks
+    below the cut line. The default no longer caps at ``SHORTLIST_MAX``: Stage 1
+    already clamps its own shortlist, but an explicit ``top_n`` > that ceiling
+    can persist more rows, and a hardcoded 30 here would strand rows 31+ on their
+    Stage-1 rank/stage. The per-analysis API budget still bounds live-enrichment
+    charges independently of this row count.
     """
-    from app.services.world_funnel import SHORTLIST_MAX
-
-    if limit is None:
-        limit = SHORTLIST_MAX
-    rows = list(
-        db.scalars(
-            select(CountryRanking)
-            .where(CountryRanking.analysis_id == analysis.id)
-            .order_by(CountryRanking.rank)
-            .limit(limit)
-        )
+    query = (
+        select(CountryRanking)
+        .where(CountryRanking.analysis_id == analysis.id)
+        .order_by(CountryRanking.rank)
     )
+    if limit is not None:
+        query = query.limit(limit)
+    rows = list(db.scalars(query))
     provider = get_market_enrichment_provider()
     enriched = 0
     ppp_by_iso3: dict[str, tuple[float | None, str]] = {}

@@ -38,12 +38,13 @@ def test_permanent_intake_failure_marks_product_failed(db, factory, monkeypatch)
     db.add(product)
     db.commit()
 
-    class _Boom:
-        def complete_with_image(self, *a, **k):
-            raise ValueError("model exploded")  # permanent → no retry
+    # Vision is best-effort (a vision fault must never block the HS proposal),
+    # so the permanent fault is planted in the embedding step, which the intake
+    # genuinely depends on.
+    def _boom(*a, **k):
+        raise ValueError("model exploded")  # permanent → no retry
 
-    monkeypatch.setattr(tasks, "get_llm_provider", lambda: _Boom(), raising=False)
-    monkeypatch.setattr("app.providers.registry.get_llm_provider", lambda: _Boom(), raising=True)
+    monkeypatch.setattr("app.providers.registry.get_embedding_provider", _boom, raising=True)
 
     res = tasks.process_product_intake.apply(args=[str(product.id)], throw=False)
     assert res.state == "FAILURE"
@@ -52,6 +53,26 @@ def test_permanent_intake_failure_marks_product_failed(db, factory, monkeypatch)
     refreshed = db.get(Product, product.id)
     assert refreshed.classification_status == "failed"
     assert "model exploded" in (refreshed.failure_reason or "")
+
+
+def test_vision_failure_degrades_without_blocking_classification(db, factory, monkeypatch):
+    """A vision LLM fault must never fail the intake — classification is name-based."""
+    product = Product(factory_id=factory.id, name_ar="تمر", name_en="Dates", currency="USD")
+    db.add(product)
+    db.commit()
+
+    class _Boom:
+        def complete_with_image(self, *a, **k):
+            raise ValueError("vision exploded")
+
+    monkeypatch.setattr("app.providers.registry.get_llm_provider", lambda: _Boom(), raising=True)
+
+    res = tasks.process_product_intake.apply(args=[str(product.id)], throw=False)
+    assert res.state == "SUCCESS"
+
+    db.expire_all()
+    refreshed = db.get(Product, product.id)
+    assert refreshed.classification_status == "classified"
 
 
 def test_handle_pipeline_failure_marks_analysis_failed_when_retries_exhausted(db, factory, product):

@@ -146,6 +146,29 @@ def discover_buyers(
         if rec.data.address and not buyer.address:
             buyer.address = rec.data.address
 
+    # --- 2b. Engine importer-intel (Volza / Explee) — additional, fail-closed.
+    # Registered only with a paid key; the wrapped engine agents additionally
+    # refuse to run outside the deepen scope (engine invariant A4), so this
+    # yields nothing on the free path — the customs + maps sources above stay
+    # primary. Surfaced names carry their own BuyerSource.importer_intel
+    # provenance and the platform's usual legal-review flag for outreach.
+    from app.providers.registry import get_importer_intel_providers
+
+    for provider in get_importer_intel_providers():
+        for rec in provider.named_importers(
+            hs_code, market_iso2, product_name=product.name_en or product.name_ar
+        ):
+            buyer = _upsert_buyer(
+                db,
+                existing_index,
+                rec.data.name,
+                market_iso2,
+                BuyerSource.importer_intel,
+                confidence=rec.confidence,
+            )
+            touched[buyer.id] = buyer
+            buyer.legal_review_required = True
+
     db.flush()
 
     # --- 3. Enrichment + contacts + scoring per buyer ------------------------

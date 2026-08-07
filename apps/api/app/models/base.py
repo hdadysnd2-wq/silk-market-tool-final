@@ -98,6 +98,9 @@ class BuyerSource(str, enum.Enum):
     enrichment = "enrichment"
     maps = "maps"
     manual = "manual"
+    #: Named importers from the engine's paid importer-intel agents
+    #: (Volza bills of lading / Explee) — Wave 3 item 4, migration 0020.
+    importer_intel = "importer_intel"
 
 
 class CampaignStatus(str, enum.Enum):

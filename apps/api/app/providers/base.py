@@ -28,6 +28,7 @@ class SourceType(str, enum.Enum):
     ENRICHMENT = "enrichment"
     MAPS = "maps"
     MANUAL = "manual"
+    IMPORTER_INTEL = "importer_intel"
 
 
 #: Relative trust per source, consumed by the relevance scorer. Customs data is
@@ -38,6 +39,10 @@ SOURCE_QUALITY: dict[SourceType, float] = {
     SourceType.ENRICHMENT: 0.55,
     SourceType.MAPS: 0.35,
     SourceType.MANUAL: 0.6,
+    # Named importers from paid bills-of-lading/lead-intel platforms: observed
+    # trade activity by name, slightly below raw customs transactions (no
+    # per-shipment detail travels with the name).
+    SourceType.IMPORTER_INTEL: 0.85,
 }
 
 
@@ -108,6 +113,19 @@ class ObservedPrice:
     currency: str
     url: str | None = None
     store: str | None = None
+
+
+@dataclass(frozen=True)
+class ImporterLead:
+    """A named importer/buyer surfaced by a paid importer-intel platform.
+
+    Only the observed company name travels (plus the platform's note) — no
+    shipment rows, no fabricated volumes. Discovery upserts these as buyers with
+    ``BuyerSource.importer_intel`` provenance.
+    """
+
+    name: str
+    detail: str | None = None
 
 
 @dataclass(frozen=True)

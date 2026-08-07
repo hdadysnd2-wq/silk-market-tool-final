@@ -82,6 +82,12 @@ class Settings(BaseSettings):
     coresignal_api_key: str = ""
     outscraper_api_key: str = ""
     apollo_api_key: str = ""
+    # Engine importer-intel agents (Wave 3 item 4) — the SAME env vars the
+    # engine agents read (VOLZA_API_KEY / EXPLEE_API_KEY). The registry only
+    # registers the providers when a key is present; the engine's PAID/deepen
+    # structural guard still applies at call time.
+    volza_api_key: str = ""
+    explee_api_key: str = ""
     zerobounce_api_key: str = ""
     smartlead_api_key: str = ""
     smartlead_webhook_secret: str = ""

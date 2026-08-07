@@ -206,6 +206,41 @@ railway logs --service api     # boot: migrations → seed → uvicorn on $PORT
 Then push a trivial commit to your production branch and confirm all four
 services redeploy from GitHub automatically.
 
+---
+
+## Troubleshooting a crash-looping `api` service
+
+`start-api.sh` validates configuration first, then runs migrations, and prints a
+diagnosis matched to what actually failed. The three failures seen in practice:
+
+- **`ValidationError: … TOKEN_ENCRYPTION_KEY is unset but ENVIRONMENT='production'`**
+  (or the same for `SECRET_KEY`). The service is missing a required environment
+  variable — the database is fine. This typically happens on services
+  provisioned **before** the variable became mandatory: a re-run of
+  `deploy-to-railway.sh` skips services that already exist, so the new variable
+  is never added. Fix: generate a key
+  (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
+  and set `TOKEN_ENCRYPTION_KEY` to the **same value** on `api`, `worker`, and
+  `beat` (each service → **Variables**), then redeploy. Rotating an existing
+  key requires factories to reconnect their mailboxes.
+
+- **`could not open extension control file … vector.control`** (or
+  `type "vector" does not exist`). The database has no pgvector extension —
+  the first migration runs `CREATE EXTENSION IF NOT EXISTS vector`, which a
+  stock Postgres image fails. Fix: provision Postgres from the
+  `pgvector/pgvector:pg16` image (the deploy script does this) and confirm
+  `DATABASE_URL` points at it.
+
+- **`connection refused` / `could not translate host name` / auth failures.**
+  `DATABASE_URL` points at a database the service cannot reach. On Railway it
+  should be the `${{Postgres.DATABASE_URL}}` reference variable; check the
+  Postgres service is running and the reference resolves.
+
+Anything else: the traceback in the deploy logs (`railway logs --service api`)
+is the actual cause — read it before assuming a database problem.
+
+---
+
 ## First login on production (read this before trying the demo accounts)
 
 The demo accounts (`factory1@demo.silk` … `admin@demo.silk`; the password is

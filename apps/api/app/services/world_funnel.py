@@ -108,7 +108,15 @@ SHORTLIST_MAX = 30
 
 
 def shortlist_quota(covered: int) -> int:
-    """ceil(20% of covered markets), clamped to [5, 30] (bounded Stage-2 budget)."""
+    """ceil(20% of covered markets), clamped to [5, 30] (bounded Stage-2 budget).
+
+    Zero coverage is the one case the [5, 30] clamp must not lift off the floor:
+    with no market carrying import data, every candidate is a declared no-data gap
+    (I1) that scores 0, so shortlisting (and Stage-2-enriching) 5 of them just
+    spends the per-analysis API budget on markets that can never rank. Return 0.
+    """
+    if covered <= 0:
+        return 0
     return max(SHORTLIST_MIN, min(SHORTLIST_MAX, math.ceil(covered * SHORTLIST_FRACTION)))
 
 

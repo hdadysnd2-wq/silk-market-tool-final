@@ -672,7 +672,6 @@ def process_followups() -> dict:
     from sqlalchemy.orm import aliased
 
     from app.models import Email, EmailStatus, utcnow
-    from app.services.email_drafting import unsubscribe_url  # noqa: F401 (parity import)
 
     cutoff = utcnow() - timedelta(days=4)
     created = 0
@@ -704,6 +703,19 @@ def process_followups() -> dict:
             token = secrets.token_urlsafe(24)
             campaign = db.get(Campaign, original.campaign_id)
             factory = db.get(Factory, campaign.factory_id) if campaign else None
+            # No factory → no sender identity / postal address to build the
+            # compliance footer from. Skip rather than draft a follow-up that
+            # would enter the approval queue without an unsubscribe line and with
+            # mismatched text/HTML MIME parts — the exact CAN-SPAM/RFC defect the
+            # footer exists to prevent. This is the rare edge (campaign or factory
+            # row deleted after the original send); log it so it's observable.
+            if factory is None:
+                log.warning(
+                    "followup_skipped_no_factory",
+                    email_id=str(original.id),
+                    campaign_id=str(original.campaign_id),
+                )
+                continue
             # Build the follow-up body exactly like an initial draft (audit L3):
             # intro + parent text, then the SAME compliance footer (sender
             # identity + postal address + unsubscribe line) keyed on THIS row's
@@ -711,11 +723,12 @@ def process_followups() -> dict:
             # the HTML was a verbatim copy of the parent's — no intro, parent's
             # token embedded — so the two MIME parts disagreed and the follow-up
             # lacked its own unsubscribe line.
-            followup_text = _followup_body(original.body_text)
-            if factory is not None:
-                followup_text = ensure_compliance_footer(
-                    followup_text, factory, original.language, unsubscribe_url(token)
-                )
+            followup_text = ensure_compliance_footer(
+                _followup_body(original.body_text),
+                factory,
+                original.language,
+                unsubscribe_url(token),
+            )
             db.add(
                 Email(
                     campaign_id=original.campaign_id,

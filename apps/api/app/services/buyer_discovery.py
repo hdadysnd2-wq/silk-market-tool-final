@@ -413,9 +413,18 @@ def _domain_from_url(url: str) -> str | None:
 
 
 def buyers_for_product(
-    db: Session, product_id: uuid.UUID, market_iso2: str | None = None
+    db: Session,
+    product_id: uuid.UUID,
+    market_iso2: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[tuple[ProductBuyerMatch, Buyer]]:
-    """Ranked (match, buyer) pairs for a product, highest score first."""
+    """Ranked (match, buyer) pairs for a product, highest score first.
+
+    ``limit``/``offset`` are pushed into SQL (audit H2) so a polled buyers view
+    fetches only the requested page from Postgres rather than materializing every
+    match row (~220 per market) and slicing in Python.
+    """
     query = (
         select(ProductBuyerMatch, Buyer)
         .join(Buyer, Buyer.id == ProductBuyerMatch.buyer_id)
@@ -424,4 +433,8 @@ def buyers_for_product(
     )
     if market_iso2:
         query = query.where(ProductBuyerMatch.market_iso2 == market_iso2)
+    if offset:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
     return list(db.execute(query).all())

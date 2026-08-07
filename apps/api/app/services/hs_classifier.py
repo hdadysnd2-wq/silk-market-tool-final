@@ -1,13 +1,19 @@
-"""Product → HS6 classification via the engine's single resolver (``silk_hs_resolver``).
+"""Product → HS6 classification via the engine's general classifier.
 
 The platform keeps NO parallel HS logic: every proposal comes from the engine's
-name-based classifier through :func:`app.services.engine.resolve_hs_candidates`
-(one classifier only). This service only shapes the engine's provenance envelopes
-into ``product.hs_candidates`` and lazily backfills the HS catalogue so a
-resolver-proposed code stays foreign-key-valid and confirmable. It PROPOSES only:
-the committed ``product.hs_code`` + ``hs_confirmed_by_user`` are set solely in
-:func:`confirm_hs_code` (invariant I2). A ``value=None`` resolve is a declared gap
-and is dropped, never invented (invariant I1).
+``classify_general`` through :func:`app.services.engine.classify_hs_general`
+(one classifier only — Wave 3, symptom A). Internally the engine runs its
+deterministic seed analyzer first and escalates to Claude over the FULL WCO
+nomenclature only when that cannot decide, with spend reserved atomically
+against the daily cap and results cached — so the offline CSV path survives as
+the engine's own explicit fallback, and its use is visible in each candidate's
+``provider``/``used_llm`` provenance. This service only shapes the result into
+``product.hs_candidates`` and lazily backfills the HS catalogue so a proposed
+code stays foreign-key-valid and confirmable. It PROPOSES only: the committed
+``product.hs_code`` + ``hs_confirmed_by_user`` are set solely in
+:func:`confirm_hs_code` (invariant I2). A ``tier="manual"`` result is a
+declared gap — status ``failed`` with NO invented candidates (invariant I1);
+the UI's search + manual-entry fallback remains the last resort.
 """
 
 from __future__ import annotations
@@ -67,17 +73,35 @@ def ensure_hs_code(db: Session, code: str) -> HSCode | None:
     if existing is not None:
         return existing
     row = _engine_hs_rows().get(code)
-    if row is None:
+    if row is not None:
+        name_en = (row.get("name_en") or "").strip()
+        name_ar = (row.get("name_ar") or "").strip()
+        hs = HSCode(
+            code=code,
+            description_en=name_en,
+            # The seed leaves most name_ar blank; fall back to the English name so
+            # the NOT NULL column always holds a real description, never an empty
+            # string.
+            description_ar=name_ar or name_en,
+            level=len(code) if len(code) in {2, 4, 6} else 6,
+        )
+        db.add(hs)
+        db.flush()
+        return hs
+    # The general classifier proposes codes from the FULL WCO nomenclature, not
+    # only the seed CSV — backfill those from the engine's official reference
+    # (real sourced data, mirroring the manual-confirm endpoint's backfill).
+    from app.services import engine
+
+    is_valid, description = engine.hs6_reference(code)
+    if not is_valid:
         return None
-    name_en = (row.get("name_en") or "").strip()
-    name_ar = (row.get("name_ar") or "").strip()
     hs = HSCode(
         code=code,
-        description_en=name_en,
-        # The seed leaves most name_ar blank; fall back to the English name so the
-        # NOT NULL column always holds a real description, never an empty string.
-        description_ar=name_ar or name_en,
-        level=len(code) if len(code) in {2, 4, 6} else 6,
+        level=6,
+        parent_code=code[:4],
+        description_en=description or f"HS {code}",
+        description_ar=description or f"رمز {code}",
     )
     db.add(hs)
     db.flush()
@@ -87,49 +111,71 @@ def ensure_hs_code(db: Session, code: str) -> HSCode | None:
 def classify_product(db: Session, product: Product) -> list[dict]:
     """Propose up to three HS6 candidates for ``product`` via the engine (I1, I2).
 
-    The query is the product name enriched with the vision description for extra
-    keyword signal (name first). If that enriched query confirms nothing, it falls
-    back to the bare name — the resolver's confirmation gate penalises unrelated
-    description terms, so a good name match must not be lost to descriptive noise.
-    Every candidate is an engine ``DataContract`` with a real code; a ``value=None``
-    envelope is a declared gap and is dropped, never invented. This only PROPOSES:
+    The query is the BARE product name — vision descriptions measurably lowered
+    the old resolver's match scores (Wave 3 diagnosis, symptom A), so descriptive
+    noise never enters the query; vision attributes instead feed the classifier
+    as explicit hints. The engine's ``classify_general`` decides internally:
+    deterministic seed analysis when it suffices (no LLM call, no spend), Claude
+    over the full WCO nomenclature when it does not, every candidate validated by
+    the engine's no-fabrication gate. ``tier="manual"`` — the classifier cannot
+    decide (or no key) — is a declared gap: status ``failed``, NO candidates
+    invented (the manual search/entry UI is the last resort). This only PROPOSES:
     ``product.hs_code`` is never set here (I2 — committed solely by
-    :func:`confirm_hs_code`), mirroring ``services.analysis.classify_and_persist``.
+    :func:`confirm_hs_code`).
     """
     from app.services import engine
 
-    name_parts = [product.name_en, product.name_ar]
-    enriched = [*name_parts, product.description_en, product.description_ar]
-    query = " ".join(part for part in enriched if part)
-    contracts = engine.resolve_hs_candidates(query)
-    if not any(c.value is not None for c in contracts):
-        name_query = " ".join(part for part in name_parts if part)
-        if name_query and name_query != query:
-            contracts = engine.resolve_hs_candidates(name_query)
+    name_query = " ".join(part for part in (product.name_en, product.name_ar) if part)
+    # Vision attributes ([{name, value}, …]) are hints for the classifier, not
+    # query noise — the engine treats them like ingredient/label signals.
+    hints = [
+        str(a.get("value"))
+        for a in (product.attributes or [])
+        if isinstance(a, dict) and a.get("value")
+    ]
+    result = engine.classify_hs_general(name_query, ingredients=hints or None)
 
+    tier = result.get("tier")
+    provider = f"silk_hs_classifier ({result.get('source')})"
     candidates: list[dict] = []
-    for c in contracts:
-        if c.value is None:
-            continue
-        known = ensure_hs_code(db, c.value)
-        candidates.append(
-            {
-                "code": c.value,
-                "confidence": round(c.confidence, 3),
-                "rationale": c.note,
-                "description_en": known.description_en if known else None,
-                "description_ar": known.description_ar if known else None,
-                "in_catalogue": known is not None,
-            }
-        )
+    if tier in ("auto", "candidates"):
+        for row in result.get("candidates") or []:
+            code = (row.get("hs6") or "").strip()
+            if len(code) != 6 or not code.isdigit():
+                continue
+            known = ensure_hs_code(db, code)
+            candidates.append(
+                {
+                    "code": code,
+                    # The engine's measured overlap/model confidence — None means
+                    # honestly unscored, never a fabricated number (I1).
+                    "confidence": row.get("confidence"),
+                    "rationale": row.get("reason_ar") or result.get("message") or "",
+                    "description_en": known.description_en if known else None,
+                    "description_ar": (known.description_ar if known else None)
+                    or row.get("description_ar"),
+                    "in_catalogue": known is not None,
+                    # Provenance: which engine path produced this proposal, and
+                    # whether a paid LLM call was involved (symptom A fix — the
+                    # offline fallback is visible, never silent).
+                    "provider": provider,
+                    "used_llm": bool(result.get("used_llm")),
+                }
+            )
 
     product.hs_candidates = candidates
     product.classification_status = "classified" if candidates else "failed"
+    if not candidates:
+        product.failure_reason = (
+            result.get("message") or "HS classification could not propose a code"
+        )[:500]
     db.flush()
     log.info(
         "product_classified",
         product_id=str(product.id),
-        provider="silk_hs_resolver",
+        provider=provider,
+        tier=tier,
+        used_llm=bool(result.get("used_llm")),
         status=product.classification_status,
         candidates=[c["code"] for c in candidates],
     )

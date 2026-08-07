@@ -59,6 +59,61 @@ def resolve_hs_candidates(product_name: str, top_n: int = 3) -> list[DataContrac
     ]
 
 
+def hs_ai_allowed() -> bool:
+    """Whether the engine's Claude HS classifier may be invoked.
+
+    Mirrors the engine's own ``/analyze`` predicate: an Anthropic key must be
+    configured. Spend gating (``silk_usage`` daily cap + USD reservation) and
+    result caching live INSIDE ``classify_general`` — no reservation logic
+    belongs on the product side. Keyless the classifier still runs
+    deterministically and returns ``tier="manual"`` (a declared gap, I1),
+    never a mock.
+    """
+    from app.config import get_settings
+
+    return bool(get_settings().anthropic_api_key)
+
+
+def hs_ai_needed(product_name: str) -> bool:
+    """Cheap, network-free check: would the deterministic path suffice?
+
+    Delegates to the engine's ``needs_classifier`` so no paid reservation is
+    ever consumed for a product the offline resolver already handles.
+    """
+    import silk_hs_classifier
+
+    return silk_hs_classifier.needs_classifier(product_name)
+
+
+def classify_hs_general(
+    product_name: str,
+    *,
+    ingredients: list[str] | None = None,
+    category: str | None = None,
+) -> dict:
+    """LLM-backed HS classification over the FULL WCO nomenclature (symptom A fix).
+
+    Delegates to the engine's ``silk_hs_classifier.classify_general`` — Claude
+    proposes, then a deterministic no-fabrication gate validates every candidate
+    (structural chapter check + term-overlap measurement), spend is reserved
+    atomically against ``SILK_PAID_DAILY_CAP`` inside the engine, and repeat
+    products are served from the engine's result cache. Returns the engine's
+    dict verbatim: ``{tier: "auto"|"candidates"|"manual", hs6, confidence,
+    candidates: [{hs6, description_ar, band_ar, reason_ar, verified, ...}],
+    message, source, used_llm}``. ``tier="manual"`` is the honest keyless /
+    can't-decide outcome — the caller must treat it as a declared gap, never
+    surface its raw suggestion rows as proposals.
+    """
+    import silk_hs_classifier
+
+    return silk_hs_classifier.classify_general(
+        product_name,
+        ingredients=ingredients,
+        category=category,
+        allow_claude=hs_ai_allowed(),
+    )
+
+
 def stage1_screen_score(
     import_usd: float | None,
     cagr_3y: float | None = None,

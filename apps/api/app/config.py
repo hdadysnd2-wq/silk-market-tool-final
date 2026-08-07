@@ -168,6 +168,11 @@ class Settings(BaseSettings):
     # Mock behaviour (kept deterministic for demos and tests)
     mock_seed: int = 42
     mock_emit_engagement: bool = True
+    # Outside ENVIRONMENT=local the sending/mailbox slots refuse to fall back to
+    # the mocks (an email a mock "sent" reached nobody while the row said sent).
+    # This is the one explicit escape hatch — a keyless staging demo sets it
+    # knowingly; production never should.
+    allow_mock_sending: bool = False
 
     @field_validator("database_url", mode="before")
     @classmethod

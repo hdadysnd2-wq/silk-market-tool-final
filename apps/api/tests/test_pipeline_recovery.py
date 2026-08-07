@@ -38,13 +38,12 @@ def test_permanent_intake_failure_marks_product_failed(db, factory, monkeypatch)
     db.add(product)
     db.commit()
 
-    # Vision is best-effort (a vision fault must never block the HS proposal),
-    # so the permanent fault is planted in the embedding step, which the intake
-    # genuinely depends on.
     def _boom(*a, **k):
         raise ValueError("model exploded")  # permanent → no retry
 
-    monkeypatch.setattr("app.providers.registry.get_embedding_provider", _boom, raising=True)
+    # Fail the HS classification step: unlike vision (best-effort, skippable),
+    # a classifier fault is fatal to the intake and must reach a terminal state.
+    monkeypatch.setattr("app.services.hs_classifier.classify_product", _boom)
 
     res = tasks.process_product_intake.apply(args=[str(product.id)], throw=False)
     assert res.state == "FAILURE"
@@ -55,15 +54,15 @@ def test_permanent_intake_failure_marks_product_failed(db, factory, monkeypatch)
     assert "model exploded" in (refreshed.failure_reason or "")
 
 
-def test_vision_failure_degrades_without_blocking_classification(db, factory, monkeypatch):
-    """A vision LLM fault must never fail the intake — classification is name-based."""
+def test_vision_failure_degrades_without_blocking_intake(db, factory, monkeypatch):
+    """Vision is best-effort enrichment: an exploding LLM must not fail the intake."""
     product = Product(factory_id=factory.id, name_ar="تمر", name_en="Dates", currency="USD")
     db.add(product)
     db.commit()
 
     class _Boom:
         def complete_with_image(self, *a, **k):
-            raise ValueError("vision exploded")
+            raise ValueError("model exploded")
 
     monkeypatch.setattr("app.providers.registry.get_llm_provider", lambda: _Boom(), raising=True)
 
@@ -72,7 +71,8 @@ def test_vision_failure_degrades_without_blocking_classification(db, factory, mo
 
     db.expire_all()
     refreshed = db.get(Product, product.id)
-    assert refreshed.classification_status == "classified"
+    assert refreshed.classification_status == "classified"  # engine still proposed HS6
+    assert refreshed.failure_reason is None
 
 
 def test_handle_pipeline_failure_marks_analysis_failed_when_retries_exhausted(db, factory, product):

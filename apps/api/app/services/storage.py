@@ -39,6 +39,14 @@ class LocalStorage:
         except OSError:
             return None
 
+    def health_check(self) -> None:
+        """Round-trip one fixed probe key; raises when the disk is unwritable."""
+        probe = self._base / "health" / ".probe"
+        probe.parent.mkdir(parents=True, exist_ok=True)
+        probe.write_bytes(b"ok")
+        if probe.read_bytes() != b"ok":
+            raise RuntimeError("local storage probe readback mismatch")
+
 
 class S3Storage:
     backend = "s3"
@@ -82,6 +90,10 @@ class S3Storage:
         except Exception as exc:  # noqa: BLE001 — a missing/unreadable object is a gap
             log.warning("s3_get_failed", key=key, error=str(exc))
             return None
+
+    def health_check(self) -> None:
+        """head_bucket against our own S3/MinIO; raises when unreachable/denied."""
+        self._client.head_bucket(Bucket=self._bucket)
 
 
 def get_storage(settings: Settings | None = None):

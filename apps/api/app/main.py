@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api import (
     admin,
@@ -23,6 +24,7 @@ from app.api import (
 )
 from app.config import get_settings
 from app.logging import configure_logging, get_logger
+from app.observability import RequestMetricsMiddleware, metrics_response, run_health_checks
 from app.providers.registry import active_provider_summary
 
 log = get_logger(__name__)
@@ -58,6 +60,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(RequestMetricsMiddleware)
 
     for module in (
         auth,
@@ -79,12 +82,21 @@ def create_app() -> FastAPI:
     app.include_router(public.router)
 
     @app.get("/health", tags=["meta"])
-    def health() -> dict:
-        return {
-            "status": "ok",
+    def health() -> Response:
+        """Real readiness: DB + Redis + storage, 503 when any dependency is down."""
+        checks = run_health_checks(settings)
+        healthy = all(v == "ok" for v in checks.values())
+        body = {
+            "status": "ok" if healthy else "degraded",
             "environment": settings.environment,
             "providers": active_provider_summary(),
+            "checks": checks,
         }
+        return JSONResponse(body, status_code=200 if healthy else 503)
+
+    @app.get("/metrics", tags=["meta"])
+    def metrics() -> Response:
+        return metrics_response()
 
     log.info("app_started", providers=active_provider_summary())
     return app

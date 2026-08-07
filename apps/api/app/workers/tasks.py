@@ -737,6 +737,42 @@ def reconcile_stuck_analyses() -> dict:
     return {"failed": failed}
 
 
+@celery_app.task(name="app.workers.tasks.reconcile_stuck_products")
+def reconcile_stuck_products() -> dict:
+    """Fail products stuck in ``classification_status='pending'`` past the window.
+
+    The intake task marks its own failures, but a worker lost to OOM/SIGKILL dies
+    before ``_mark_product_failed`` runs, leaving the product ``pending`` forever
+    while the UI polls. Mirror of ``reconcile_stuck_analyses`` for the products
+    table, sharing the same staleness window.
+    """
+    from datetime import timedelta
+
+    from app.config import get_settings
+    from app.models import Product, utcnow
+
+    settings = get_settings()
+    cutoff = utcnow() - timedelta(minutes=settings.analysis_stuck_minutes)
+    failed = 0
+    with session_scope() as db:
+        stuck = db.scalars(
+            select(Product).where(
+                Product.classification_status == "pending",
+                Product.updated_at < cutoff,
+            )
+        ).all()
+        for product in stuck:
+            product.classification_status = "failed"
+            product.failure_reason = (
+                f"stalled in 'pending' for over "
+                f"{settings.analysis_stuck_minutes} min (worker lost); please retry"
+            )
+            failed += 1
+    if failed:
+        log.warning("stuck_products_reconciled", count=failed)
+    return {"failed": failed}
+
+
 @celery_app.task(name="app.workers.tasks.advance_warmup")
 def advance_warmup() -> dict:
     from app.config import get_settings

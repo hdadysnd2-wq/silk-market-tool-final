@@ -21,14 +21,14 @@ _STRONG_SECRET = "a-strong-production-secret-key-32-bytes!"
 def _prod_kwargs(**overrides) -> dict:
     """Baseline kwargs that satisfy every OTHER prod startup guard, so a test can
     isolate the one validator under test by overriding a single field."""
-    base = dict(
-        environment="production",
-        secret_key=_STRONG_SECRET,
-        token_encryption_key=Fernet.generate_key().decode(),
-        trusted_proxy_count=1,
-        api_base_url="https://api.silk.example",
-        cors_origins="https://app.silk.example",
-    )
+    base = {
+        "environment": "production",
+        "secret_key": _STRONG_SECRET,
+        "token_encryption_key": Fernet.generate_key().decode(),
+        "trusted_proxy_count": 1,
+        "api_base_url": "https://api.silk.example",
+        "cors_origins": "https://app.silk.example",
+    }
     base.update(overrides)
     return base
 

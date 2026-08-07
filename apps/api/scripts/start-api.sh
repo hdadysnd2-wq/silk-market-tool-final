@@ -14,11 +14,34 @@ set -e
 echo "[start-api] validating configuration…"
 if ! python -c "from app.config import get_settings; get_settings()"; then
   echo "[start-api] ERROR: configuration is invalid — the API cannot start." >&2
-  echo "[start-api] The validation error above names the environment variable to fix." >&2
-  echo "[start-api] Set it on THIS service (Railway → service → Variables) and on the" >&2
-  echo "[start-api] worker/beat services, which share the same settings. This is a" >&2
-  echo "[start-api] configuration problem, NOT a database problem. See the" >&2
-  echo "[start-api] Troubleshooting section of docs/DEPLOY_RAILWAY.md." >&2
+  # Show which of the relevant variables actually reach this container — names,
+  # blank/set state, and length only, NEVER values. "Set in the dashboard" and
+  # "visible to the process" are different things (staged-but-unapplied changes,
+  # the wrong service/environment, an unreferenced shared variable, a typo in
+  # the name); this makes the gap visible in the deploy log itself.
+  echo "[start-api] variables visible to this container (names only, never values):" >&2
+  python - <<'PYEOF' >&2
+import os
+
+interesting = sorted(
+    k for k in os.environ
+    if "TOKEN" in k.upper() or "SECRET" in k.upper() or k.upper() == "ENVIRONMENT"
+)
+if not interesting:
+    print("[start-api]   (none of ENVIRONMENT / *SECRET* / *TOKEN* are visible at all)")
+for k in interesting:
+    value = os.environ[k]
+    state = "EMPTY" if not value.strip() else f"set, {len(value)} chars"
+    # repr() exposes hidden whitespace or lookalike characters in the NAME.
+    print(f"[start-api]   {k!r}: {state}")
+PYEOF
+  echo "[start-api] If the variable named in the validation error is missing or EMPTY" >&2
+  echo "[start-api] above, it is not reaching THIS service: check for a pending" >&2
+  echo "[start-api] 'Apply changes' banner in Railway, that it is set on this exact" >&2
+  echo "[start-api] service (api / worker / beat each need it) in this exact" >&2
+  echo "[start-api] environment, and that a shared variable has a reference added on" >&2
+  echo "[start-api] the service. This is a configuration problem, NOT a database" >&2
+  echo "[start-api] problem. See the Troubleshooting section of docs/DEPLOY_RAILWAY.md." >&2
   exit 1
 fi
 

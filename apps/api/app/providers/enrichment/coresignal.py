@@ -33,6 +33,15 @@ class CoresignalProvider:
     def enrich_company(
         self, name: str, country_iso2: str, domain: str | None = None
     ) -> ProviderRecord[CompanyFirmographics] | None:
+        # Per-analysis paid-call budget (locked decision #5): one enrichment call
+        # per buyer. A spent budget is a declared gap (I1), never a fabricated
+        # firmographic — and it caps the per-market fan-out so a large market
+        # can't run the key dry. Unmetered (returns True) outside a budget scope.
+        from app.services.api_budget import charge
+
+        if not charge(1, source="enrichment"):
+            log.warning("coresignal_budget_exhausted", company=name)
+            return None
         try:
             with httpx.Client(timeout=self._timeout) as client:
                 search = client.post(

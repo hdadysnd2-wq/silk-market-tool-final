@@ -150,6 +150,69 @@ def test_callback_rejects_tampered_state(client, db, factory, factory_user):
     assert db.scalar(select(SenderAccount)) is None
 
 
+def test_connect_sets_state_binding_cookie(client, db, factory, factory_user):
+    """Initiate must set an HttpOnly state cookie that binds the flow (M1)."""
+    token = create_access_token(factory_user.id, factory_user.role)
+    initiated = client.post(
+        "/api/v1/sender-accounts/connect/gmail", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert initiated.status_code == 200
+    set_cookie = initiated.headers.get("set-cookie", "")
+    lowered = set_cookie.lower()
+    assert "silk_sender_oauth_state=" in set_cookie
+    assert "httponly" in lowered
+    assert "samesite=lax" in lowered
+
+
+def test_callback_rejects_state_from_a_different_browser(db, factory, factory_user):
+    """The M1 attack: a state minted for the attacker's factory must not be
+    completable in a victim's browser that lacks the matching state cookie."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    token = create_access_token(factory_user.id, factory_user.role)
+    attacker = TestClient(app)  # holds the state cookie in its own jar
+    initiated = attacker.post(
+        "/api/v1/sender-accounts/connect/gmail", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert initiated.status_code == 200
+    qs = parse_qs(urlparse(initiated.json()["authorization_url"]).query)
+
+    victim = TestClient(app)  # a fresh browser: no state cookie
+    resp = victim.get(
+        "/api/v1/sender-accounts/callback/gmail",
+        params={"code": qs["code"][0], "state": qs["state"][0]},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert "error=invalid_state" in resp.headers["location"]
+    # No mailbox was bound to anyone's factory.
+    assert db.scalar(select(SenderAccount)) is None
+
+
+def test_callback_succeeds_only_with_matching_state_cookie(db, factory, factory_user):
+    """Positive control for the bind: the SAME browser (cookie present) completes."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    token = create_access_token(factory_user.id, factory_user.role)
+    browser = TestClient(app)
+    initiated = browser.post(
+        "/api/v1/sender-accounts/connect/gmail", headers={"Authorization": f"Bearer {token}"}
+    )
+    qs = parse_qs(urlparse(initiated.json()["authorization_url"]).query)
+    # Same client carries the state cookie automatically.
+    resp = browser.get(
+        "/api/v1/sender-accounts/callback/gmail",
+        params={"code": qs["code"][0], "state": qs["state"][0]},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert "connected=1" in resp.headers["location"]
+
+
 # -- tenant isolation ------------------------------------------------------
 
 
@@ -349,12 +412,16 @@ def test_reconnect_resumes_reauth_paused_campaigns(db, factory, product, factory
     assert campaign.status == CampaignStatus.paused
 
     # Reconnect through the (mock) OAuth flow with the same mailbox.
-    url = sender_oauth.initiate_connect(
+    initiation = sender_oauth.initiate_connect(
         db, factory=factory, provider_type="mock", user=factory_user, account=account
     )
-    qs = parse_qs(urlparse(url).query)
+    qs = parse_qs(urlparse(initiation.authorization_url).query)
     sender_oauth.complete_callback(
-        db, provider_type="mock", code=qs["code"][0], state=qs["state"][0]
+        db,
+        provider_type="mock",
+        code=qs["code"][0],
+        state=qs["state"][0],
+        state_cookie=initiation.state_nonce,
     )
 
     db.refresh(account)

@@ -15,8 +15,10 @@ callback needs no session cookie (the browser returns from Google/Microsoft).
 
 from __future__ import annotations
 
+import hmac
 import secrets
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -67,10 +69,30 @@ class ConnectError(Exception):
     """A mailbox could not be connected/verified during the callback."""
 
 
+@dataclass(frozen=True)
+class ConnectInitiation:
+    """Result of starting a connect flow: the consent URL plus the nonce that
+    binds it to the initiating browser.
+
+    The caller (the route) must set ``state_nonce`` as an HttpOnly cookie on the
+    response; the callback re-presents it and ``complete_callback`` requires it
+    to match the nonce carried inside the signed ``state``.
+    """
+
+    authorization_url: str
+    state_nonce: str
+
+
 # -- state ----------------------------------------------------------------
 
 
 def _redirect_uri(provider_type: str) -> str:
+    # DEPLOYMENT REQUIREMENT (M1 state-binding): the callback must be same-site
+    # with the SPA so the HttpOnly state cookie set at initiate is present here.
+    # The web app proxies /api/v1/* to this backend, so set
+    # OAUTH_REDIRECT_BASE_URL to the PUBLIC WEB ORIGIN (not the bare api origin)
+    # on any split web/api deployment; otherwise the browser returns to the api
+    # origin without the cookie and every connect fails closed with invalid_state.
     settings = get_settings()
     base = (settings.oauth_redirect_base_url or settings.api_base_url).rstrip("/")
     return f"{base}/api/v1/sender-accounts/callback/{provider_type}"
@@ -82,6 +104,7 @@ def _sign_state(
     provider_type: str,
     user_id: uuid.UUID | None,
     account_id: uuid.UUID | None,
+    nonce: str,
 ) -> str:
     settings = get_settings()
     now = datetime.now(UTC)
@@ -91,7 +114,10 @@ def _sign_state(
         "provider_type": provider_type,
         "user_id": str(user_id) if user_id else None,
         "account_id": str(account_id) if account_id else None,
-        "nonce": secrets.token_urlsafe(8),
+        # Bound to an HttpOnly cookie set on the initiating browser; the callback
+        # must present the same value (see complete_callback). Prevents an
+        # attacker-initiated state from being completed in a victim's browser.
+        "nonce": nonce,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=settings.oauth_state_ttl_minutes)).timestamp()),
     }
@@ -121,15 +147,21 @@ def initiate_connect(
     provider_type: str,
     user: User,
     account: SenderAccount | None = None,
-) -> str:
-    """Return the provider consent URL to redirect the browser to."""
+) -> ConnectInitiation:
+    """Return the provider consent URL plus the nonce binding it to this browser.
+
+    The caller must set ``state_nonce`` as an HttpOnly cookie on the response so
+    the callback can prove the returning browser is the one that initiated.
+    """
     _validate_provider(provider_type)
     provider = get_mailbox_provider(provider_type)
+    nonce = secrets.token_urlsafe(24)
     state = _sign_state(
         factory_id=factory.id,
         provider_type=provider_type,
         user_id=user.id,
         account_id=account.id if account else None,
+        nonce=nonce,
     )
     # For reconnect keep the same mailbox; for a fresh connect give the mock a
     # deterministic, plausible address (real providers ignore the hint).
@@ -153,16 +185,33 @@ def initiate_connect(
         factory_id=factory.id,
         payload={"provider_type": provider_type, "reconnect": account is not None},
     )
-    return url
+    return ConnectInitiation(authorization_url=url, state_nonce=nonce)
 
 
 # -- callback -------------------------------------------------------------
 
 
-def complete_callback(db: Session, *, provider_type: str, code: str, state: str) -> SenderAccount:
-    """Exchange the code, verify the mailbox, and activate the account."""
+def complete_callback(
+    db: Session, *, provider_type: str, code: str, state: str, state_cookie: str | None
+) -> SenderAccount:
+    """Exchange the code, verify the mailbox, and activate the account.
+
+    ``state_cookie`` is the value of the HttpOnly cookie set at initiate. It must
+    match the nonce carried in the signed ``state``; otherwise the returning
+    browser is not the one that started the flow. Without this bind, an attacker
+    could initiate a connect scoped to THEIR factory and lure a victim into
+    completing consent, binding the victim's mailbox to the attacker's tenant
+    (OAuth login-CSRF / cross-tenant mailbox binding — audit M1).
+    """
     _validate_provider(provider_type)
     payload = _verify_state(state, provider_type)
+    expected_nonce = payload.get("nonce") or ""
+    if (
+        not state_cookie
+        or not expected_nonce
+        or not hmac.compare_digest(str(state_cookie), str(expected_nonce))
+    ):
+        raise OAuthStateError("OAuth state is not bound to this browser session")
     factory_id = uuid.UUID(payload["factory_id"])
     user_id = uuid.UUID(payload["user_id"]) if payload.get("user_id") else None
     provider = get_mailbox_provider(provider_type)

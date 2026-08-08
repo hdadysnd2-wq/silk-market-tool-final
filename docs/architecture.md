@@ -1,7 +1,8 @@
 # Silk United — Monorepo Architecture
 
 One product, one repo. A factory uploads a product image → the system proposes an
-HS code (human confirms) → scans every world market and funnels to the top 5
+HS code (auto-committed on the engine's strict unambiguous verdict, ADR-0009;
+human confirms otherwise, and can always override) → scans every world market and funnels to the top 5
 export countries → lists competitors with observed prices per country → produces
 verified buyer lists → drafts outreach in the buyer's language → sends **only**
 after explicit human approval, with tracking.
@@ -74,7 +75,7 @@ drift:
   engine's `DataPoint` already embodies this; `contracts` unifies it with Repo
   B's `ProviderRecord`.
 - **I7 — pandas confined to `etl/`.** CI job `guard-pandas` runs on every push.
-- Invariants I2 (HS human-confirm), I3 (3-layer send approval), I4 (suppression +
+- Invariants I2 (HS human-confirm supremacy; strict-auto commit per ADR-0009), I3 (3-layer send approval), I4 (suppression +
   audit), I5 (paid agents only in deepen), I6 (no cold email via transactional
   ESP), I8 (consent basis), I9 (transit-port guard), I10 (Arabic RTL) are
   implemented in the platform and covered by tests (`apps/api/tests/` plus the

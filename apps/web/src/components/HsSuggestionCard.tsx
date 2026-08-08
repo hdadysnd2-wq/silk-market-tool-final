@@ -67,6 +67,12 @@ export function HsSuggestionCard({
     <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-black/5">
       <h3 className="font-semibold text-gray-900">{t("hsSuggestions")}</h3>
 
+      {product.hs_auto_classified && product.hs_code && (
+        <div className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
+          {t("hsAutoCommitted", { code: product.hs_code })}
+        </div>
+      )}
+
       {failed && (
         <div className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
           <p className="font-medium">{t("hsFailedTitle")}</p>

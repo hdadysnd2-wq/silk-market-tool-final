@@ -673,6 +673,18 @@ _SYMBOL_ANCHORS_EXTRA = [
     (78, "tests/test_m1_store.py",
      ["def test_explicit_data_dir_wins_over_platform_database_url",
       "def test_database_url_alone_still_selects_postgres_loudly"]),
+    # البند ٧٩ — لا حكم «تلقائي» فوق أدلةِ ملصقٍ حاضرةٍ لم تُفحَص: تعذُّرُ
+    # الاستشارة يُخفِّض الحكم إلى «مرشّحين» ويُسجَّل، لا يمرّ باسم السلعة وحده.
+    (79, "silk_hs_classifier.py",
+     ["llm_consulted", "hs auto downgraded to candidates"]),
+    (79, "tests/test_hs_general_classifier.py",
+     ["def test_incident_label_signals_unconsulted_never_auto"]),
+    # البند ٨٠ — لا مصادقةَ ذاتية: عتبةُ «تلقائي» تُرسى على تداخل مرجعنا
+    # (`seed_overlap`) حصراً، لا على نصٍّ ألّفه النموذجُ ذاته.
+    (80, "silk_hs_classifier.py",
+     ["seed_overlap"]),
+    (80, "tests/test_hs_general_classifier.py",
+     ["def test_incident_model_authored_text_cannot_self_certify_auto"]),
 ]
 
 

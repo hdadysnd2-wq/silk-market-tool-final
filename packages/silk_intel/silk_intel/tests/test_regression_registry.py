@@ -2040,6 +2040,48 @@ def _guard_image_evidence_decides_prepared_form():
                 os.environ[k] = v
 
 
+def _guard_auto_tier_anchors_on_reference_text():
+    """LESSONS ٨٠ — لا مصادقةَ ذاتية: نصٌّ ألّفه النموذجُ (وصف/سبب) يطابق اسمَ
+    المنتج حرفياً لا يعبر بوابةَ «تلقائي» — العتبةُ تُقاس ضد `seed_overlap`
+    (نصّ مرجعنا) حصراً. المرشّح يبقى معروضاً لتأكيد نقرة، والحسمُ المُرسى
+    على البذرة فعلاً (تمور) يبقى تلقائياً."""
+    from unittest import mock as _mock
+
+    import silk_hs_classifier as hsc
+
+    product = "منتج غامض التسمية تجريبي"
+    fake = '{"candidates": [{"hs6": "080410", "description_ar": "%s", ' \
+           '"reason_ar": "%s", "confidence": 0.95}]}' % (product, product)
+    with _mock.patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "1"}), \
+         _mock.patch("silk_ai_judge.available", return_value=True), \
+         _mock.patch("silk_ai_judge._call", return_value=fake), \
+         _mock.patch("silk_usage.try_reserve_paid_calls", return_value=True), \
+         _mock.patch("silk_usage.try_reserve_usd", return_value=True):
+        r = hsc.classify_general(product, allow_claude=True)
+    assert r["tier"] != "auto", f"مصادقةٌ ذاتية مرّت تلقائياً: {r['hs6']}"
+    assert any(c["hs6"] == "080410" for c in r["candidates"])
+    r2 = hsc.classify_general("تمور", allow_claude=False)
+    assert r2["tier"] == "auto" and r2["hs6"] == "080410", r2
+
+
+def _guard_auto_tier_never_claims_unexamined_evidence():
+    """LESSONS ٧٩ — لا حكم «تلقائي» فوق أدلةِ ملصقٍ حاضرةٍ لم تُفحَص. تعذُّرُ
+    استشارة كلود (لا سماح / صمّامٌ مطفأ / حجزٌ مرفوض) مع إشاراتٍ مرفقةٍ يُخفِّض
+    الحكم إلى «مرشّحين» — والمنصّةُ تثبِّت رمزَ «auto» آلياً (ADR-0009)، فمرورُ
+    اسم السلعة وحده كان يثبِّت الرمزَ الخاطئ للحليب المنكّه بصمت. وبلا إشاراتٍ
+    يبقى الاختصارُ الحتميُّ التلقائيُّ الرخيص كما هو (لا عقوبة عامة)."""
+    import silk_hs_classifier as hsc
+
+    hints = ["Sugars 11g", "Strawberry (حليب بالفراولة)"]
+    r = hsc.classify_general("milk حليب", ingredients=hints, allow_claude=False)
+    assert r["tier"] != "auto", (
+        f"حُكم تلقائيًا فوق أدلةٍ غير مفحوصة: {r['hs6']}")
+    assert r["candidates"], "التخفيض أفقد المرشّحين — لا نقطة انطلاق لليدوي"
+
+    r2 = hsc.classify_general("milk حليب", allow_claude=False)
+    assert r2["tier"] == "auto", "الاختصار الحتمي بلا إشارات انكسر"
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -2125,6 +2167,8 @@ _LESSONS = {
     76: _guard_seat_lock_is_load_bearing,  # PR-2 — قفل المقعد وحارسه المُميِّز
     77: _guard_readiness_names_the_offending_variable,  # #197 — تشخيصٌ بلا سبب
     78: _guard_image_evidence_decides_prepared_form,  # حليب الفراولة — أدلة الصورة تحسم
+    79: _guard_auto_tier_never_claims_unexamined_evidence,  # لا «تلقائي» فوق أدلة غير مفحوصة
+    80: _guard_auto_tier_anchors_on_reference_text,  # لا مصادقة ذاتية — العتبة على نص المرجع
 }
 
 _TRAPS = [

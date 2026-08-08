@@ -157,3 +157,103 @@ def test_resolve_columns_qty_optional_when_iso_and_value_present():
     iso, val, qty = wt.resolve_columns(["reporterISO", "primaryValue"])
     assert iso == "reporterISO" and val == "primaryValue"
     assert qty is None  # qty is genuinely optional, not a hard failure
+
+
+# ── the library swallows request errors (print + empty df) — we must not ──────
+# Live incident 2026-08-08: `world_trade_synced rows=0` with NO error line —
+# comtradeapicall print()s "Request error: …" and returns an empty DataFrame
+# instead of raising, so the except-branch never fires. These lock the two
+# defenses: library stdout becomes a structured WARNING, and empty-but-
+# successful years are declared, never silent.
+
+
+def _fake_comtrade_modules(monkeypatch, print_msg: str):
+    import sys
+    import types
+
+    class _EmptyDF:
+        empty = True
+        columns: list[str] = []
+
+    fake_api = types.ModuleType("comtradeapicall")
+
+    def _get_final_data(subscription_key, **kw):
+        if print_msg:
+            print(print_msg)
+        return _EmptyDF()
+
+    fake_api.getFinalData = _get_final_data
+    fake_pd = types.ModuleType("pandas")
+    fake_pd.isna = lambda v: v != v
+    monkeypatch.setitem(sys.modules, "comtradeapicall", fake_api)
+    monkeypatch.setitem(sys.modules, "pandas", fake_pd)
+
+
+def test_swallowed_library_error_is_surfaced_as_structured_warning(
+    monkeypatch, caplog
+):
+    _fake_comtrade_modules(monkeypatch, "Request error: tunnel 403")
+    with caplog.at_level("WARNING", logger="etl.world_trade_sync"):
+        usd, qty, mirrors = wt._fetch_world_imports("040299", [2023])
+    assert usd == {} and qty == {} and mirrors == set()
+    blob = "\n".join(r.getMessage() for r in caplog.records)
+    assert "comtrade_call_output" in blob and "tunnel 403" in blob, blob
+
+
+def test_empty_but_successful_year_is_declared_not_silent(monkeypatch, caplog):
+    _fake_comtrade_modules(monkeypatch, "")
+    with caplog.at_level("WARNING", logger="etl.world_trade_sync"):
+        wt._fetch_world_imports("040299", [2023, 2024])
+    blob = "\n".join(r.getMessage() for r in caplog.records)
+    assert blob.count("comtrade_empty_result") == 2, blob
+    assert "hs6=040299" in blob and "year=2023" in blob and "year=2024" in blob
+
+
+def test_captured_library_output_never_leaks_the_subscription_key(
+    monkeypatch, caplog
+):
+    """Never expose secrets: comtradeapicall sends the key as a query param and
+    its swallowed-error prints (and urllib3 exception strings) embed the full
+    request URL — both log sites must scrub the key value AND the
+    subscription-key=… pattern before anything reaches the log."""
+    import sys
+    import types
+
+    secret = "sk-live-COMTRADE-SECRET"
+    monkeypatch.setenv("COMTRADE_API_KEY", secret)
+
+    fake_api = types.ModuleType("comtradeapicall")
+
+    def _get_final_data(subscription_key, **kw):
+        print(
+            "Request error: HTTPSConnectionPool(host='comtradeapi.un.org'): "
+            f"url: /data/v1/get/C/A/HS?cmdCode=040299&subscription-key={secret}"
+        )
+
+        class _EmptyDF:
+            empty = True
+
+        return _EmptyDF()
+
+    fake_api.getFinalData = _get_final_data
+    fake_pd = types.ModuleType("pandas")
+    fake_pd.isna = lambda v: v != v
+    monkeypatch.setitem(sys.modules, "comtradeapicall", fake_api)
+    monkeypatch.setitem(sys.modules, "pandas", fake_pd)
+
+    with caplog.at_level("WARNING", logger="etl.world_trade_sync"):
+        wt._fetch_world_imports("040299", [2023])
+
+    blob = "\n".join(r.getMessage() for r in caplog.records)
+    assert "comtrade_call_output" in blob, blob
+    assert secret not in blob, "the live key leaked into a log line"
+    assert "subscription-key=***" in blob, blob
+
+
+def test_redact_key_scrubs_both_layers_independently():
+    # Layer 1: the literal value, wherever it appears (no query-param shape).
+    assert "topsecret" not in wt._redact_key("boom topsecret boom", "topsecret")
+    # Layer 2: the query-param pattern even when the value is NOT the known key
+    # (e.g. a rotated key picked up by a different process).
+    out = wt._redact_key("GET /x?subscription-key=abc123&y=1", "")
+    assert "abc123" not in out and "subscription-key=***" in out

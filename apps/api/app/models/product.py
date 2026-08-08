@@ -67,6 +67,21 @@ class Product(UUIDMixin, TimestampMixin, Base):
     #: Top-3 HS6 candidates from the classifier: [{code, confidence, rationale}].
     hs_candidates: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     hs_confirmed_by_user: Mapped[bool] = mapped_column(default=False, nullable=False)
+    #: True when ``hs_code`` was committed by the engine's strict ``tier="auto"``
+    #: gate (owner decision 2026-08-08, ADR-0009) rather than a human. Distinct
+    #: from ``hs_confirmed_by_user`` on purpose — provenance is never blurred: a
+    #: human confirm/override clears this flag and remains supreme (I2).
+    hs_auto_classified: Mapped[bool] = mapped_column(default=False, nullable=False)
+
+    @property
+    def hs_ready(self) -> bool:
+        """The ONE downstream-gate predicate: a committed HS code, whether
+        human-confirmed or strict-auto committed (ADR-0009). Every endpoint or
+        task that used to require ``hs_confirmed_by_user`` gates on this instead
+        — provenance stays visible on the two flags, but readiness is one
+        choke point."""
+        return bool(self.hs_code and (self.hs_confirmed_by_user or self.hs_auto_classified))
+
     classification_status: Mapped[str] = mapped_column(
         String(24), default="pending", nullable=False
     )  # pending | classified | failed

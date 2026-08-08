@@ -56,6 +56,10 @@ export interface Product {
   hs_code: string | null;
   hs_candidates: HSCandidate[] | null;
   hs_confirmed_by_user: boolean;
+  /** hs_code was committed by the engine's strict auto gate (ADR-0009) — badge
+   *  it «تلقائي» and keep the override path prominent. Optional so pre-0023
+   *  payloads and test fixtures without the flag stay type-valid. */
+  hs_auto_classified?: boolean;
   classification_status: string;
   failure_reason: string | null;
   created_at: string;

@@ -52,7 +52,8 @@ def deepen_prices(
         limit=DEEPEN_PRICES_RATE_LIMIT,
         window_seconds=DEEPEN_PRICES_WINDOW_SECONDS,
     )
-    if not (product.hs_code and product.hs_confirmed_by_user):
+    # I2 (ADR-0009) — a committed code (human-confirmed or strict-auto) gates this.
+    if not product.hs_ready:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="HS code must be confirmed before fetching competitor prices",

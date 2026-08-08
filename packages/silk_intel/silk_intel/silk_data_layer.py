@@ -67,6 +67,17 @@ def _timeout_for(host: str) -> float:
 COMTRADE_KEY = os.environ.get("COMTRADE_API_KEY", "").strip()
 
 
+def _redact_comtrade_key(text: str) -> str:
+    """اشطب مفتاح Comtrade من أيّ نصٍّ متّجهٍ للسجلّ — لا كشفَ أسرارٍ أبداً.
+
+    طبقتان مستقلّتان (كلٌّ تُمسِك ما قد يفوت الأخرى): قيمةُ المفتاح الحرفية
+    أينما وردت، ونمطُ `subscription-key=…` — سلاسلُ استثناءات requests تُضمِّن
+    URL الطلب كاملاً بوسائطه والمفتاحُ يسافر وسيطَ استعلام."""
+    if COMTRADE_KEY:
+        text = text.replace(COMTRADE_KEY, "***")
+    return re.sub(r"(subscription-key=)[^&\s'\"]+", r"\1***", text)
+
+
 def _comtrade_url() -> str:
     """اختر سطح كومتريد — full data endpoint when a key is set, else preview."""
     return ENDPOINTS["comtrade_data"] if COMTRADE_KEY else ENDPOINTS["comtrade"]
@@ -524,8 +535,11 @@ def comtrade_trade(
     except Exception as e:  # noqa: BLE001 — never raise to caller
         if _is_worker_time_limit(e):
             raise  # C15: مهلةُ العامل تصعد لمنطق إعادة المحاولة، لا تُبتلَع كفجوة
+        # تنقيحٌ دائم: سلاسلُ استثناءات requests تُضمِّن URL الطلب كاملاً
+        # بوسائطه، والمفتاحُ وسيطُ استعلامٍ (subscription-key) — بلا تنقيحٍ
+        # يُكتَب المفتاحُ الحيّ في السجلّ (نفسُ عائلة إصلاح etl 2026-08-08).
         log.warning("Comtrade fetch failed (%s, reporter=%s, %s): %s",
-                    hs_code, reporter_m49, year, e)
+                    hs_code, reporter_m49, year, _redact_comtrade_key(str(e)))
         return None  # 1b: تعذّر الجلب ≠ لا سجل — المستهلك يميّز
     prov = {"source": "UN Comtrade", "confidence": 0.9, "retrieved_at": _today()}
     for rec in data:

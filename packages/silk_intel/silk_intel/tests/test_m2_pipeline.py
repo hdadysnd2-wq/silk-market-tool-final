@@ -145,3 +145,38 @@ def test_collect_comtrade_budget_is_hard_and_writes_flows():
                                 "source='comtrade' ORDER BY id DESC LIMIT 1"
                                 ).fetchone()[0]
         assert "skipped_budget=1" in note
+
+
+def test_comtrade_fetch_failure_log_never_leaks_the_key(monkeypatch, caplog):
+    """لا كشفَ أسرار (عائلة إصلاح etl 2026-08-08): سلاسلُ استثناءات requests
+    تُضمِّن URL الطلب كاملاً والمفتاحُ وسيطُ استعلام subscription-key — سطرُ
+    «Comtrade fetch failed» يُنقَّح بطبقتين قبل بلوغ السجلّ."""
+    import logging
+
+    import silk_data_layer as dl
+
+    secret = "sk-live-COMTRADE-SECRET"
+    monkeypatch.setattr(dl, "COMTRADE_KEY", secret)
+    boom = OSError(
+        "HTTPSConnectionPool(host='comtradeapi.un.org'): Max retries exceeded "
+        f"with url: /data/v1/get/C/A/HS?cmdCode=040299&subscription-key={secret}"
+    )
+    monkeypatch.setattr(dl, "_cached_get", lambda *a, **k: None)
+    monkeypatch.setattr(dl, "_http_get", mock.Mock(side_effect=boom))
+
+    with caplog.at_level(logging.WARNING, logger=dl.log.name):
+        out = dl.comtrade_trade("040299", "all", 2023)
+
+    assert out is None  # تعذّر الجلب ≠ لا سجل — العقد كما هو
+    blob = "\n".join(r.getMessage() for r in caplog.records)
+    assert "Comtrade fetch failed" in blob, blob
+    assert secret not in blob, "المفتاح الحيّ تسرّب إلى السجلّ"
+    assert "subscription-key=***" in blob, blob
+
+
+def test_redact_comtrade_key_scrubs_pattern_even_without_known_key(monkeypatch):
+    import silk_data_layer as dl
+
+    monkeypatch.setattr(dl, "COMTRADE_KEY", "")
+    out = dl._redact_comtrade_key("GET /x?subscription-key=abc123&y=1")
+    assert "abc123" not in out and "subscription-key=***" in out

@@ -96,7 +96,7 @@
         <dt>{{ t.hs_code }}</dt>
         <dd>
           {% if product.hs_code %}<strong class="num">{{ product.hs_code }}</strong>
-            {% if product.hs_confirmed_by_user %}<span class="pill">{{ t.confirmed }}</span>{% else %}<span class="pill muted">{{ t.suggested }}</span>{% endif %}
+            {% if product.hs_confirmed_by_user %}<span class="pill">{{ t.confirmed }}</span>{% elif product.hs_auto_classified %}<span class="pill">{{ t.auto_classified }}</span>{% else %}<span class="pill muted">{{ t.suggested }}</span>{% endif %}
             {% if product.hs_confidence is not none %}<span class="muted">· {{ (product.hs_confidence * 100) | round | int }}%</span>{% endif %}
           {% else %}<span class="muted">{{ t.not_classified }}</span>{% endif %}
         </dd>

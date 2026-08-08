@@ -130,10 +130,11 @@ def run_discovery(product_id: str, market_iso2: str, analysis_id: str | None = N
         product = db.get(Product, uuid.UUID(product_id))
         if product is None:
             return {"error": "product not found"}
-        # I2 (defense-in-depth) — never run discovery on an unconfirmed HS code,
-        # even for a job enqueued directly (bypassing the API gate). Degrade
-        # gracefully rather than raising, matching the "product not found" style.
-        if not (product.hs_code and product.hs_confirmed_by_user):
+        # I2 (defense-in-depth, ADR-0009) — never run discovery on an uncommitted
+        # HS code (human confirm or strict-auto commit both qualify), even for a
+        # job enqueued directly (bypassing the API gate). Degrade gracefully
+        # rather than raising, matching the "product not found" style.
+        if not product.hs_ready:
             return {"error": "hs code not confirmed"}
         # Re-establish the per-analysis live-call budget inside the worker (I5-style
         # contextvar; does not cross the process boundary) so the competitor
@@ -214,10 +215,11 @@ def process_product_intake(self, product_id: str, deepen: bool = False) -> dict:
     worker. The ``/deepen`` scope is re-established from the explicit ``deepen``
     payload flag (invariant I5 — ``contextvars`` do NOT cross the process boundary,
     and eager mode must not bypass this): the vision pass fills the AR/EN
-    description + attributes (DoD step 1), the engine proposes HS6 candidates
-    (I2 — proposal only, ``product.hs_code`` is never set here), and the product
-    embedding is computed exactly as the inline route did. Opens its own session
-    and commits on success.
+    description + attributes (DoD step 1), the engine proposes HS6 candidates —
+    committing the code itself only on the engine's strict ``tier="auto"``
+    verdict, provenance-tagged and never over a human confirmation (I2 as
+    amended by ADR-0009) — and the product embedding is computed exactly as the
+    inline route did. Opens its own session and commits on success.
 
     On a transient vendor/DB fault it retries with backoff; on a permanent fault
     (or once retries are exhausted) it records a terminal ``failed`` status with a
@@ -932,6 +934,13 @@ def sync_world_trade(hs6: str) -> dict:
     return {"hs6": code, "synced": True, "rows": written}
 
 
+#: Max Comtrade sync dispatches per daily sweep (security review 2026-08-08,
+#: finding 2.1) — bounds the burst a pile of newly committed codes can cause;
+#: later sweeps drain the remainder. Comtrade syncs sit outside
+#: SILK_PAID_DAILY_CAP, so this is their only fan-out bound.
+WORLD_TRADE_SWEEP_LIMIT = 50
+
+
 @celery_app.task(name="app.workers.tasks.refresh_world_trade")
 def refresh_world_trade() -> dict:
     """Scheduled sweep: re-sync world_trade for HS6 codes in active use.
@@ -950,15 +959,30 @@ def refresh_world_trade() -> dict:
     cutoff = utcnow() - timedelta(days=settings.world_trade_refresh_days)
     requested = 0
     with session_scope() as db:
+        # Committed codes — human-confirmed OR strict-auto (ADR-0009): both drive
+        # the world funnel, so both deserve fresh world-trade coverage.
         confirmed_hs6 = set(
             db.scalars(
                 select(func.distinct(Product.hs_code)).where(
                     Product.hs_code.is_not(None),
-                    Product.hs_confirmed_by_user.is_(True),
+                    Product.hs_confirmed_by_user.is_(True) | Product.hs_auto_classified.is_(True),
                 )
             ).all()
         )
-        for hs6 in confirmed_hs6:
+        # Security review 2026-08-08 (finding 2.1): the fan-out is capped per
+        # sweep — auto-classified codes now enter this set with zero human
+        # action (ADR-0009), so an account adding many distinct codes must not
+        # translate into an unbounded burst of Comtrade syncs. The daily beat
+        # catches the remainder on subsequent sweeps (staleness cutoff keeps
+        # already-fresh codes out), and the skip is DECLARED, never silent.
+        for hs6 in sorted(confirmed_hs6):
+            if requested >= WORLD_TRADE_SWEEP_LIMIT:
+                log.warning(
+                    "world_trade_refresh_capped",
+                    limit=WORLD_TRADE_SWEEP_LIMIT,
+                    remaining=len(confirmed_hs6) - requested,
+                )
+                break
             newest = db.scalar(select(func.max(WorldTrade.fetched_at)).where(WorldTrade.hs6 == hs6))
             if newest is None or newest < cutoff:
                 sync_world_trade.delay(hs6)

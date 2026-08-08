@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from app.models import Analysis, WorldTrade, utcnow
+from app.models import Analysis, HSCode, Product, WorldTrade, utcnow
 from app.services import world_funnel
 from app.workers import tasks
 
@@ -212,3 +212,33 @@ def test_refresh_world_trade_skips_fresh_coverage(db, factory, product, monkeypa
 
     tasks.refresh_world_trade.apply(throw=False)
     assert product.hs_code not in requested  # fresh coverage is not re-synced
+
+
+def test_refresh_world_trade_caps_dispatches_per_sweep(db, factory, product, monkeypatch):
+    """Security review 2026-08-08 (finding 2.1): auto-classified codes enter the
+    sweep with zero human action (ADR-0009), and Comtrade syncs live outside
+    SILK_PAID_DAILY_CAP — the per-sweep fan-out must stay bounded, with the
+    skip declared (world_trade_refresh_capped), never silent."""
+    monkeypatch.setattr(tasks, "WORLD_TRADE_SWEEP_LIMIT", 3)
+    for i in range(6):
+        code = f"08041{i}"
+        db.add(HSCode(code=code, level=6, description_en=f"c{i}", description_ar=f"c{i}"))
+        db.add(
+            Product(
+                factory_id=factory.id,
+                name_ar=f"منتج {i}",
+                name_en=f"P{i}",
+                currency="USD",
+                hs_code=code,
+                hs_auto_classified=True,  # machine-committed, no human click
+                classification_status="classified",
+            )
+        )
+    db.commit()
+
+    requested = []
+    monkeypatch.setattr(tasks.sync_world_trade, "delay", lambda hs6: requested.append(hs6))
+
+    out = tasks.refresh_world_trade.apply(throw=False).result
+    assert out["sync_requested"] == 3  # capped, not the full backlog
+    assert len(requested) == 3

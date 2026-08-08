@@ -73,14 +73,13 @@ def discover_buyers(
     """
     if not product.hs_code:
         raise ValueError("Product must be classified before discovery")
-    # I2 (defense-in-depth). Discovery fetches buyer PII and must run only on a
-    # *human-confirmed* HS code. The API route (``api/buyers.discover``) already
-    # checks this, but the classifier pre-fills ``hs_code`` with its top candidate
-    # before the user confirms — so ``hs_code`` alone is not proof of confirmation,
-    # and a direct service/worker invocation would otherwise bypass the gate.
+    # I2 (defense-in-depth, ADR-0009). Discovery fetches buyer PII and must run
+    # only on a COMMITTED HS code — human-confirmed, or the engine's strict auto
+    # commit. The API route (``api/buyers.discover``) already checks this, but a
+    # direct service/worker invocation would otherwise bypass the gate.
     # Re-checking here makes the gate hold on every code path, mirroring the
     # three-layer discipline the send path uses for I3.
-    if not product.hs_confirmed_by_user:
+    if not product.hs_ready:
         raise HsNotConfirmedError("HS code must be confirmed before discovering buyers")
 
     market = db.get(Market, market_iso2)

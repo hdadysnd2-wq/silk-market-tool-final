@@ -331,6 +331,10 @@ def _validated_candidate(product: str, hs6: str, model_desc: str = "",
     # حين يقدّم النموذج وصفاً/سبباً، **الأفضل من المصدرين يفوز** لا مصدرٌ
     # واحد مقفَل: `verified` يبقى صحيحاً (الرمز فعلاً في مرجعنا — حقيقةٌ
     # بنيوية) بمعزلٍ عن أيّ وصفٍ حسم المطابقة فعلياً.
+    # الدرس ٨٠ — تداخلُ المرجع يُحفَظ منفصلاً قبل أن يُتاح لنصّ النموذج أن
+    # يحسّن التداخلَ **المعروض**: درجةُ «تلقائي» تُرسى عليه حصراً (انظر
+    # `_clearly_auto`) كي لا يصادق نصٌّ مُؤلَّفٌ ذاتياً على نفسه للتثبيت الآلي.
+    seed_overlap = (conf.get("overlap") if conf is not None else None)
     model_text = " ".join(t for t in (model_desc, reason_ar) if t).strip()
     if model_text:
         conf_model = confirm_against_description(product, hs6, model_text)
@@ -344,6 +348,7 @@ def _validated_candidate(product: str, hs6: str, model_desc: str = "",
         "code_desc": conf.get("code_desc") or model_desc,
         "reason_ar": reason_ar or conf.get("reason") or "",
         "overlap": conf.get("overlap"),
+        "seed_overlap": seed_overlap,  # مُرسًى على مرجعنا فقط؛ None بلا صفّ بذرة
         "confirmed": conf.get("confirmed"),
         "verified": verified,        # الرمز موجودٌ فعلاً في مرجعنا (حقيقةٌ بنيوية)
         "model_confidence": round(float(model_confidence or 0.0), 2),
@@ -438,7 +443,12 @@ def classify_general(product: str, hs_code: str | None = None,
         if not cands:
             return None
         top = cands[0]
-        if not (top.get("verified") and (top.get("overlap") or 0.0)
+        # الدرس ٨٠ (مراجعة أمنية): عتبةُ «تلقائي» تُقاس ضد تداخل **مرجعنا**
+        # (`seed_overlap`) حصراً — التداخلُ المعروض قد يكون قد حُسّن بنصٍّ
+        # ألّفه النموذجُ ذاته، ونصٌّ مسمومٌ يطابق اسمَ المنتج حرفياً كان
+        # سيصادق على نفسه فيُثبَّت آلياً بلا بشر. درجةُ العرض والترتيب لا
+        # تتغيّر؛ التشديدُ يخصّ بوابةَ ما-يمرّ-بلا-تأكيد وحدها.
+        if not (top.get("verified") and (top.get("seed_overlap") or 0.0)
                 >= _AUTO_MIN_OVERLAP):
             return None
         if len(cands) > 1:
@@ -448,6 +458,7 @@ def classify_general(product: str, hs_code: str | None = None,
         return top
 
     used_llm = False
+    llm_consulted = False       # هل فُحصت إشاراتُ الملصق فعلاً (حيّاً أو من الذاكرة)؟
     top = _clearly_auto(candidates)
     # إشارات الصورة/الملصق (ingredients) قد تنقل المنتج إلى بندٍ مختلفٍ عن اسمه
     # المجرّد — الحليب المنكّه/المحلّى ينتمي إلى بندٍ غير بند الحليب العادي مثلاً.
@@ -479,6 +490,7 @@ def classify_general(product: str, hs_code: str | None = None,
         else:
             llm_raw = None
         if llm_raw:
+            llm_consulted = True
             # سجلُّ تشخيصٍ لا حكم: بلا هذا السطر يستحيل التمييز من سجلّ الإنتاج
             # بين «النموذج لم يقترح» و«اقترح فرُفض بنيوياً/دُفن» — وهو عينُ ما
             # أطال تشخيص حادثة حليب الفراولة. والمصدر (حيّ/ذاكرة) مُصرَّحٌ به كي
@@ -498,6 +510,18 @@ def classify_general(product: str, hs_code: str | None = None,
                              c.get("hs6"))
             candidates = _dedupe_candidates(candidates)
             top = _clearly_auto(candidates)
+
+    # الدرس ٧٩ — بوابةُ «تلقائي» لا تدّعي يقيناً فوق أدلةٍ لم تُفحَص: إشاراتُ
+    # ملصقٍ حاضرةٌ والاستشارةُ لم تقع فعلياً (صمّامٌ مطفأ / لا مفتاح / حجزُ
+    # الميزانية مرفوض / فشل النداء) ⇒ تخفيضٌ إلى «مرشّحين». تطابقُ الاسم التامُّ
+    # («milk» → بند الحليب الخام) كان يمرّ تلقائياً بينما أدلةُ الملصق (نكهة،
+    # سكريات) غير مفحوصةٍ أصلاً — والمنصّةُ صارت تثبِّت tier="auto" آلياً
+    # (قرار المالك، ADR رقم ٩ في المنصّة)، فالسكوتُ هنا يعيد إنتاج حادثة
+    # حليب الفراولة بلا أيّ نداء.
+    if top is not None and ingredients and not llm_consulted:
+        log.info("hs auto downgraded to candidates: label signals present but "
+                 "unconsulted (product=%s)", product)
+        top = None
 
     if top is not None:
         return {"tier": "auto", "hs6": top["hs6"],

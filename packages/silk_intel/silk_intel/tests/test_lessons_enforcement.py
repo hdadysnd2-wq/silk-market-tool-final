@@ -659,6 +659,20 @@ _SYMBOL_ANCHORS_EXTRA = [
       "def test_the_platform_prefix_leads_to_the_page_not_a_bare_404"]),
     (77, "tests/test_regression_registry.py",
      ["def _guard_readiness_names_the_offending_variable"]),
+    # البند ٧٨ — أدلةُ الصورة تحسم بندَ الشكل المحضَّر؛ الاقتراحاتُ تُسجَّل؛
+    # ترتيبُ العرض يحفظ فائزَ المحرّك؛ والمخزن لا يختطف DSN المنصّة المضيفة.
+    (78, "silk_hs_classifier.py",
+     ["بيّنةٌ أقوى من الاسم", "SILK_HS_CLASSIFY_MODEL", "hs llm proposed",
+      "rejected by structural gate", "_CLASSIFY_POLICY_VERSION"]),
+    (78, "silk_store.py",
+     ["توجيهٌ صريحٌ للمخزن إلى SQLite"]),
+    (78, "tests/test_hs_general_classifier.py",
+     ["def test_incident_cross_heading_llm_winner_leads_public_candidates",
+      "def test_incident_prompt_declares_image_evidence_priority_and_default_model",
+      "def test_incident_raw_proposals_and_rejections_are_logged"]),
+    (78, "tests/test_m1_store.py",
+     ["def test_explicit_data_dir_wins_over_platform_database_url",
+      "def test_database_url_alone_still_selects_postgres_loudly"]),
 ]
 
 

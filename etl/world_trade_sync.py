@@ -149,6 +149,40 @@ def _default_years(n: int = 3) -> list[int]:
     return list(range(latest - n + 1, latest + 1))
 
 
+#: Column-name aliases tolerated in the Comtrade bulk response. The live schema
+#: has never been confirmed against the paid API (see ``_fetch_world_imports``),
+#: so each field resolves against a small set of documented/observed spellings,
+#: case-insensitively. A genuinely unrecognized schema becomes a LOUD declared
+#: gap (I1) that names the columns actually received — never a silent all-drop
+#: that would read as "the world doesn't import this".
+_ISO_COLS = ("reporterISO", "reporterCodeIsoAlpha3", "ReporterISO", "reporteriso")
+_VALUE_COLS = ("primaryValue", "PrimaryValue", "TradeValue", "cifvalue", "tradeValue")
+_QTY_COLS = ("qty", "Qty", "primaryQty", "primaryqty")
+
+
+def resolve_columns(
+    columns: Sequence[str],
+) -> tuple[str | None, str | None, str | None]:
+    """Map (importer-ISO, import-value, quantity) onto the ACTUAL column names in
+    a Comtrade response, case-insensitively, via :data:`_ISO_COLS` etc.
+
+    Returns ``(iso_col, value_col, qty_col)``; any field whose alias is absent is
+    ``None``. Pure (no pandas) so the schema tolerance is hermetically testable —
+    the reason it exists is the one-time live-verification risk: an unexpected
+    spelling must be diagnosable from a log, not swallowed as empty coverage.
+    """
+    lower = {str(c).lower(): c for c in columns}
+
+    def pick(aliases: tuple[str, ...]) -> str | None:
+        for alias in aliases:
+            hit = lower.get(alias.lower())
+            if hit is not None:
+                return hit
+        return None
+
+    return pick(_ISO_COLS), pick(_VALUE_COLS), pick(_QTY_COLS)
+
+
 def run(
     hs6: str | None = None,
     years: Sequence[int] | None = None,
@@ -261,12 +295,28 @@ def _fetch_world_imports(
                 continue
             if df is None or getattr(df, "empty", True):
                 continue
+            # Resolve the ISO / value / qty columns against the schema actually
+            # returned (tolerant of spelling drift). If the mandatory two are
+            # absent, this year is a DECLARED gap whose log NAMES the columns
+            # received — the exact signal the one-time live-verification needs,
+            # instead of silently dropping every row.
+            iso_col, val_col, qty_col = resolve_columns(list(df.columns))
+            if iso_col is None or val_col is None:
+                log.error(
+                    "comtrade_schema_unrecognized hs6=%s year=%s columns=%s",
+                    hs6,
+                    year,
+                    list(df.columns),
+                )
+                continue
             for _, row in df.iterrows():
-                iso3 = str(row.get("reporterISO") or "").upper()
+                iso3 = str(row.get(iso_col) or "").upper()
                 if not iso3 or len(iso3) != 3:
                     continue
-                imports_usd.setdefault(iso3, {})[year] = _clean(row.get("primaryValue"))
-                imports_qty.setdefault(iso3, {})[year] = _clean(row.get("qty"))
+                imports_usd.setdefault(iso3, {})[year] = _clean(row.get(val_col))
+                imports_qty.setdefault(iso3, {})[year] = (
+                    _clean(row.get(qty_col)) if qty_col else None
+                )
     finally:
         socket.setdefaulttimeout(_prev_timeout)
 

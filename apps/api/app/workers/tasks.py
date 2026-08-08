@@ -304,19 +304,48 @@ def run_world_ranking(
                 return {"error": "analysis not found"}
             # Fail loudly on missing coverage: an empty world_trade for this HS6
             # would otherwise produce a silent empty funnel presented as a real
-            # world screen. Mark the analysis failed with an actionable reason and
-            # request a coverage sync so a retry has data.
+            # world screen. Mark the analysis failed — but tell the TRUTH about
+            # recoverability. A coverage sync is fail-closed on a real Comtrade
+            # key (sync_world_trade), so on a deployment with no live trade-data
+            # source, "retry in a few minutes" is a false promise: retrying can
+            # never populate coverage. Branch the reason (and only enqueue a sync
+            # that can actually do something) on that capability. Never fabricate
+            # a screen either way (I1).
             coverage = world_funnel.coverage_state(db, hs6)
             if coverage == "none":
+                from app.config import get_settings
+
+                settings = get_settings()
+                live_available = bool(settings.comtrade_api_key) and not settings.comtrade_offline
                 analysis.status = "failed"
-                analysis.failure_reason = (
-                    f"No world-trade data for HS {hs6}. A coverage sync has been "
-                    "requested — please retry in a few minutes."
-                )
+                if live_available:
+                    analysis.failure_reason = (
+                        f"No world-trade data for HS {hs6} yet. A live coverage "
+                        "sync has been requested — please retry in a few minutes."
+                    )
+                    sync_world_trade.delay(hs6)
+                else:
+                    analysis.failure_reason = (
+                        f"World-market screening is unavailable for HS {hs6} on "
+                        "this deployment: no live trade-data source is connected, "
+                        "so there is nothing to screen and no figures are "
+                        "invented. Operator: set COMTRADE_API_KEY (UN Comtrade) to "
+                        "enable real world-trade coverage."
+                    )
                 db.flush()
-                sync_world_trade.delay(hs6)
-                log.warning("world_ranking_no_coverage", analysis_id=analysis_id, hs6=hs6)
-                return {"analysis_id": analysis_id, "hs6": hs6, "coverage": "none", "ranked": 0}
+                log.warning(
+                    "world_ranking_no_coverage",
+                    analysis_id=analysis_id,
+                    hs6=hs6,
+                    live_available=live_available,
+                )
+                return {
+                    "analysis_id": analysis_id,
+                    "hs6": hs6,
+                    "coverage": "none",
+                    "ranked": 0,
+                    "live_available": live_available,
+                }
             # Stage 1 is a local SQL screen (no live calls), but the same scope
             # caps the budgeted live enrichment Stages 2-3 add on top (decision
             # #5), and the deepen scope (I5) gates paid engine agents behind

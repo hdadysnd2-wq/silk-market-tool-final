@@ -42,24 +42,74 @@ def test_coverage_state_none_demo_live(db):
 
 
 def test_world_ranking_fails_loudly_on_no_coverage(db, factory, product, monkeypatch):
+    """With a LIVE trade-data source configured, missing coverage is a genuinely
+    transient state: fail loudly, request a sync, and promise a retry."""
+    from app.config import get_settings
+
     analysis = Analysis(product_id=product.id, product_name="Dates", status="classified")
     db.add(analysis)
     db.commit()
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("COMTRADE_OFFLINE", "0")
+    monkeypatch.setenv("COMTRADE_API_KEY", "test-key")
 
     requested = {}
     monkeypatch.setattr(
         tasks.sync_world_trade, "delay", lambda hs6: requested.setdefault("hs6", hs6)
     )
 
-    out = tasks.run_world_ranking.apply(args=[str(analysis.id), "999999"], throw=False).result
+    try:
+        out = tasks.run_world_ranking.apply(args=[str(analysis.id), "999999"], throw=False).result
+    finally:
+        get_settings.cache_clear()
     assert out["coverage"] == "none"
     assert out["ranked"] == 0
+    assert out["live_available"] is True
 
     db.expire_all()
     refreshed = db.get(Analysis, analysis.id)
     assert refreshed.status == "failed"
     assert "999999" in (refreshed.failure_reason or "")
+    assert "retry" in (refreshed.failure_reason or "").lower()
     assert requested.get("hs6") == "999999"  # a coverage sync was requested
+
+
+def test_world_ranking_no_coverage_tells_the_truth_without_a_live_source(
+    db, factory, product, monkeypatch
+):
+    """Regression: the failure message must not promise a retry that can never
+    help. With no live trade-data source (no Comtrade key / offline), missing
+    coverage is PERMANENT until an operator connects one — say so, and do NOT
+    enqueue a fail-closed sync that would no-op. Never fabricate a screen (I1)."""
+    from app.config import get_settings
+
+    analysis = Analysis(product_id=product.id, product_name="Dates", status="classified")
+    db.add(analysis)
+    db.commit()
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("COMTRADE_OFFLINE", "0")
+    monkeypatch.setenv("COMTRADE_API_KEY", "")  # no live source
+
+    requested = []
+    monkeypatch.setattr(tasks.sync_world_trade, "delay", lambda hs6: requested.append(hs6))
+
+    try:
+        out = tasks.run_world_ranking.apply(args=[str(analysis.id), "999999"], throw=False).result
+    finally:
+        get_settings.cache_clear()
+    assert out["coverage"] == "none"
+    assert out["live_available"] is False
+
+    db.expire_all()
+    refreshed = db.get(Analysis, analysis.id)
+    assert refreshed.status == "failed"
+    reason = refreshed.failure_reason or ""
+    assert "999999" in reason
+    assert "unavailable" in reason.lower()
+    assert "retry in a few minutes" not in reason.lower()  # no false promise
+    assert requested == []  # a fail-closed sync would only no-op — don't enqueue it
 
 
 def test_sync_world_trade_fail_closed_offline(monkeypatch):

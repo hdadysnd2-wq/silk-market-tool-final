@@ -156,3 +156,93 @@ def test_legacy_import_moves_analyses_and_outcomes_idempotently():
         stats2 = import_legacy.import_legacy(old)
         assert stats2["imported"] == 0 and stats2["skipped"] == 1
         assert len(store.list_analyses()) == 1
+
+
+# ══════════ أولوية DSN — المخزن لا يختطف DATABASE_URL منصّةٍ مضيفة ═══════════
+#
+# حادثة الإنتاج 2026-08-08: عاملُ منصّةٍ مشتركة يعمل بـDATABASE_URL (قاعدة
+# التطبيق، سائقها psycopg v3) وSILK_DATA_DIR مضبوطٌ على قرصه — فاختطف المخزنُ
+# رابطَ المنصّة وسقطت ذاكرةُ تصنيف HS بصمت («psycopg2 is not installed»).
+# ولو نُصِّب السائقُ لكان أسوأ: ترحيلاتُ المحرّك المستقلة (users/analyses/
+# markets/sessions) كانت ستُبنى داخل قاعدة الإنتاج المشتركة بأسماءٍ متصادمة
+# مع جداول المنصّة نفسها. القاعدة: التوجيهُ الصريح للمخزن (SILK_STORE_DB أو
+# SILK_DATA_DIR) يسبق DATABASE_URL العام — ذاك مِلكُ التطبيق المضيف.
+
+
+def _env_swap(**vals):
+    saved = {k: os.environ.get(k)
+             for k in ("DATABASE_URL", "SILK_DATA_DIR", "SILK_STORE_DB")}
+    for k in saved:
+        os.environ.pop(k, None)
+    for k, v in vals.items():
+        os.environ[k] = v
+    return saved
+
+
+def _env_restore(saved):
+    for k, v in saved.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+
+
+def test_explicit_data_dir_wins_over_platform_database_url():
+    """SILK_DATA_DIR مضبوطٌ => SQLite على القرص المخصّص حتى مع DATABASE_URL
+    مضبوطٍ لقاعدة المنصّة — وذاكرةُ تصنيف HS تعمل فعلاً (كتابة + قراءة)،
+    وهي عينُ ما سقط في الحادثة."""
+    d = tempfile.mkdtemp()
+    saved = _env_swap(
+        DATABASE_URL="postgresql://user:x@postgres.internal:5432/railway",
+        SILK_DATA_DIR=d)
+    try:
+        import silk_store
+        assert silk_store._is_postgres() is False
+        silk_store.cache_hs_classification(
+            "منتج تجريبي|عنصر ملصق", {"candidates": [{"hs6": "000000"}]})
+        got = silk_store.get_cached_hs_classification("منتج تجريبي|عنصر ملصق")
+        assert got == {"candidates": [{"hs6": "000000"}]}
+        assert os.path.exists(os.path.join(d, "silk_store.db")), (
+            "المخزن لم يُكتب على القرص الصريح")
+    finally:
+        _env_restore(saved)
+
+
+def test_explicit_store_db_wins_over_platform_database_url():
+    """SILK_STORE_DB الصريح (بلا SILK_DATA_DIR) يفوز أيضاً — الوعد الموثَّق
+    «Explicit var wins» يصمد أمام DATABASE_URL."""
+    d = tempfile.mkdtemp()
+    path = os.path.join(d, "explicit.db")
+    saved = _env_swap(
+        DATABASE_URL="postgresql://user:x@postgres.internal:5432/railway",
+        SILK_STORE_DB=path)
+    try:
+        import silk_store
+        assert silk_store._is_postgres() is False
+        silk_store.migrate()
+        assert os.path.exists(path)
+    finally:
+        _env_restore(saved)
+
+
+def test_database_url_alone_still_selects_postgres_loudly():
+    """بلا توجيهٍ صريحٍ لـSQLite يبقى العقدُ القديم: DATABASE_URL يعني
+    Postgres، وغيابُ السائق خطأٌ مسموعٌ («psycopg2 is not installed») لا
+    تراجعٌ صامت — لا تغييرَ خلسةً لنشرات المحرّك المستقلة."""
+    saved = _env_swap(DATABASE_URL="postgresql://u:x@h.invalid:5432/db")
+    try:
+        import silk_store
+        assert silk_store._is_postgres() is True
+        try:
+            import psycopg2  # noqa: F401 — بيئة بلا السائق: العقد الصريح يُختبر
+            has_driver = True
+        except ImportError:
+            has_driver = False
+        if not has_driver:
+            try:
+                silk_store.connect()
+                raise AssertionError("connect() نجح بلا سائق — تراجعٌ صامت")
+            except RuntimeError as e:
+                assert "psycopg2" in str(e)
+    finally:
+        _env_restore(saved)

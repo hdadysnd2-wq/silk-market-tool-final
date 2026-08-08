@@ -3,8 +3,10 @@
 قاعدة واحدة تنهي انقسام التخزين: مستخدمون/أدوار + مرجع + **مخزن حقائق**
 (مؤشرات، تدفقات تجارية، سجل جمع) + تحليلات/قرارات/تقارير/نتائج فعلية.
 
-- SQLite افتراضياً (stdlib)؛ جاهز لـ Postgres عبر DATABASE_URL + psycopg2 إن وُجد
-  (محوّل رفيع يترجم مواضع `?` إلى `%s` — نفس SQL المحمول في migrations/).
+- التوجيه الصريح للمخزن (`SILK_STORE_DB` أو `SILK_DATA_DIR`) => SQLite دائماً؛
+  وإلا `DATABASE_URL` => Postgres + psycopg2 إن وُجد (خطأٌ مسموعٌ لا تراجعٌ
+  صامت). المخزن لا يختطف `DATABASE_URL` تطبيقٍ مضيف حين وُجِّه صراحةً لغيره.
+  محوّلٌ رفيعٌ يترجم مواضع `?` إلى `%s` — نفس SQL المحمول في migrations/.
 - ترحيلات متسلسلة من migrations/NNN_*.sql تُتتبَّع في schema_migrations.
 - silk_storage.py القديم يبقى يعمل كما هو أثناء الانتقال (facade يُزال في M5)؛
   الاستيراد منه عبر tools/import_legacy.py.
@@ -45,6 +47,16 @@ def _db_path() -> str:
 
 
 def _is_postgres() -> bool:
+    """`DATABASE_URL` متغيّرُ التطبيق المضيف (قاعدة المنصّة المشتركة) لا
+    ملكيّةَ للمخزن عليه: توجيهٌ صريحٌ للمخزن إلى SQLite — `SILK_STORE_DB` أو
+    `SILK_DATA_DIR` — يسبقه دائماً، وفاءً بوعد `_db_path` («Explicit var
+    wins»). اختطافُ الرابط في نشرٍ مشتركٍ أسقط ذاكرةَ تصنيف HS بصمت (سائقُ
+    المنصّة psycopg v3 لا psycopg2)، ولو حضر السائقُ لبُنيت ترحيلاتُ المحرّك
+    المستقلة (users/analyses/markets/sessions) داخل قاعدة الإنتاج المشتركة
+    بأسماءٍ متصادمة. Postgres للمخزن يبقى متاحاً حيث لا توجيهَ صريحاً لغيره."""
+    if os.environ.get("SILK_STORE_DB", "").strip() or \
+            os.environ.get("SILK_DATA_DIR", "").strip():
+        return False
     url = os.environ.get("DATABASE_URL", "").strip()
     return url.startswith("postgres://") or url.startswith("postgresql://")
 
@@ -56,8 +68,11 @@ def _q(sql: str) -> str:
 
 
 def connect():
-    """اتصال بالمخزن — SQLite by default; Postgres when DATABASE_URL is set and
-    psycopg2 is installed (a clear error otherwise — never a silent fallback)."""
+    """اتصال بالمخزن. الأسبقية (انظر `_is_postgres`): توجيهٌ صريحٌ لـSQLite
+    (`SILK_STORE_DB`/`SILK_DATA_DIR`) => SQLite دائماً — وهو ضبطُ الإنتاج
+    الموصى به (`SILK_DATA_DIR=/data`)؛ وإلا `DATABASE_URL` => Postgres حين
+    وُجِد psycopg2 (خطأٌ واضحٌ لا تراجعٌ صامت). Explicit SQLite vars win over a
+    host platform's DATABASE_URL; only an unrouted DATABASE_URL selects Postgres."""
     if _is_postgres():
         try:
             import psycopg2  # lazy: optional production driver

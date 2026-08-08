@@ -510,3 +510,181 @@ def test_general_classifier_actually_resolves_peanut_butter_with_default_valve()
         f"لم يُحسَم تلقائياً بالإعدادات الافتراضية: {r}")
     assert r["hs6"][:2] in {"20", "21"}, r["hs6"]
     assert r["hs6"] != "040510"
+
+
+# ══════════════ حادثة «حليب الفراولة» — أدلةُ الصورة تحسم لا اسمُ السلعة ═════
+#
+# البلاغ الحيّ (سجلّ عامل الإنتاج 2026-08-08): منتجٌ سمّاه صاحبه «milk حليب»
+# وصورتُه ملصقُ مشروبِ حليبٍ بالفراولة محلّى (سكريات 11غ، نكهة فراولة). عناصر
+# الرؤية الثمانية وصلت إلى نداء كلود فعلاً (used_llm: true) ومع ذلك بقيت
+# القائمة كلّها عائلة بند الحليب الخام. أربعة أسباب متراكبة، كلٌّ له قفله:
+# (١) النداء أُجبر على النموذج السريع فردّد رموزَ الاسم المجرّد متجاهلاً الأدلة؛
+# (٢) الـprompt لم يُعلن قط أن أدلة الملصق أقوى دلالةً من الاسم المُدخل؛
+# (٣) إعادةُ فرزِ العرض بمحور البذرة تدفن أيَّ فائزٍ عبر-البند آخرَ القائمة
+#     (والواجهة/المنصّة تقرآن العنصر [0] اقتراحاً)؛
+# (٤) اقتراحاتُ النموذج الخام لا تُسجَّل، فيستحيل التمييز من السجلّ بين
+#     «لم يقترح» و«اقترح فرُفض/دُفن».
+
+_STRAWBERRY_HINTS = [
+    "125 ml (indicated on side panel)",
+    "Calories 83, Total fat 3g, Sugars 11g, Salt 0.1g",
+    "Cartoon pink furry character with blue eyes",
+    "Pink",
+    "Saudi Made logo",
+    "Saudia",
+    "Strawberry (حليب بالفراولة)",
+    "Tetra pack carton",
+]
+
+# SILK_HS_CLASSIFY_MODEL="" مضمَّنٌ صراحةً كي تصمد أقفالُ «النموذج الافتراضي»
+# حتى في بيئةٍ ضبط فيها المشغّلُ التثبيتَ فعلياً (تقييدٌ مدعوم) — وpatch.dict
+# يستعيد القيمة الأصلية عند الخروج (لا تسريبَ حالةٍ بين الاختبارات).
+_STRAWBERRY_ENV = {"SILK_HS_CLASSIFIER": "1", "SILK_HS_CLASSIFY_MODEL": ""}
+
+
+def _strawberry_patches(call_mock):
+    return (patch.dict(os.environ, _STRAWBERRY_ENV),
+            patch("silk_ai_judge.available", return_value=True),
+            patch("silk_ai_judge._call", call_mock),
+            patch("silk_usage.try_reserve_paid_calls", return_value=True),
+            patch("silk_usage.try_reserve_usd", return_value=True))
+
+
+def test_incident_cross_heading_llm_winner_leads_public_candidates():
+    """(٣) فائزُ كلود عبر-البند (بندُ الشكل المحضَّر من أدلة الملصق) يتصدّر
+    القائمة المعروضة — لا يُدفَن خلف أشقّاء محورِ بندِ الاسم المجرّد. قبل
+    الإصلاح كان فرزُ العرض بنطاق المحور يضع أشقّاءَ بندِ الاسم أولاً فيقرأ
+    مستهلكو القائمة العنصرَ [0] اقتراحاً خاطئاً رغم أن الفائز الداخلي صحيح."""
+    import silk_hs_classifier as hsc
+    from unittest.mock import MagicMock
+    fake = MagicMock(return_value=_fake_llm([
+        {"hs6": "220299",
+         "description_ar": "مشروبات غير كحولية أخرى — مشروب حليب milk "
+                           "منكّه محلّى مهيّأ للشرب المباشر",
+         "reason_ar": "الملصق يُظهر نكهة فراولة وسكريات مضافة — شكلٌ محضَّرٌ "
+                      "للشرب لا سلعة خام",
+         "confidence": 0.9}]))
+    p1, p2, p3, p4, p5 = _strawberry_patches(fake)
+    with p1, p2, p3, p4, p5:
+        r = hsc.classify_general("milk حليب", ingredients=_STRAWBERRY_HINTS,
+                                 allow_claude=True)
+    assert fake.called, "نداء كلود لم يقع أصلاً رغم توفّر عناصر الصورة"
+    codes = [c["hs6"] for c in r["candidates"]]
+    assert r["candidates"][0]["hs6"] == "220299", (
+        f"الفائز عبر-البند لم يتصدّر — الترتيب المعروض: {codes}")
+    assert any(c.startswith("0401") for c in codes), (
+        f"سياق بند الاسم اختفى كلياً من القائمة: {codes}")
+
+
+def test_incident_prompt_declares_image_evidence_priority_and_default_model():
+    """(١)+(٢) نداءُ التصنيف يستعمل نموذجَ الحكم الافتراضي (لا يُجبَر على
+    السريع) وبمهلةٍ تتّسع له، والـprompt يُعلن صراحةً أن عناصر الصورة/الملصق
+    بيّنةٌ أقوى من الاسم المُدخل ويطلب تصنيفَ الشكل المحضَّر/المنكّه لا
+    السلعةَ الخام — مع وصول كل العناصر الثمانية حرفياً وبقاء عدم التقييد
+    بأيّ قائمة."""
+    import silk_hs_classifier as hsc
+    seen = {}
+
+    def _capture(system, user, **kw):
+        seen["user"] = user
+        seen.update(kw)
+        return _fake_llm([{"hs6": "220299", "description_ar": "مشروبات",
+                           "reason_ar": "شكل محضّر", "confidence": 0.8}])
+
+    # _STRAWBERRY_ENV يضبط SILK_HS_CLASSIFY_MODEL="" داخل السياق ويستعيده عند
+    # الخروج — لا حاجة لـpop خام يُسرِّب الحالة (المراجعة الذاتية §58).
+    p1, p2, p3, p4, p5 = _strawberry_patches(_capture)
+    with p1, p2, p3, p4, p5:
+        hsc.classify_general("milk حليب", ingredients=_STRAWBERRY_HINTS,
+                             allow_claude=True)
+    assert seen["model"] is None, (
+        f"النداء ما زال يُجبَر على نموذجٍ بعينه: {seen['model']!r} — "
+        "الافتراضي هو نموذج الحكم القياسي")
+    assert seen["timeout"] >= 60, seen["timeout"]
+    for hint in _STRAWBERRY_HINTS:
+        assert hint in seen["user"], f"عنصر الصورة لم يصل حرفياً: {hint!r}"
+    assert "بيّنةٌ أقوى من الاسم" in seen["user"], (
+        "إعلانُ أولوية أدلة الملصق على الاسم غائب من الـprompt")
+    assert "لا تقتصر" in seen["user"], "عدمُ التقييد بقائمةٍ مرفقة اختفى"
+
+
+def test_incident_model_pin_env_wins():
+    """التثبيت التشغيلي ممكن: SILK_HS_CLASSIFY_MODEL يثبّت نموذجاً بعينه
+    (مثلاً السريع لخفض الكلفة) — قرارُ مشغّلٍ صريح لا افتراضٌ صامت."""
+    import silk_hs_classifier as hsc
+    seen = {}
+
+    def _capture(system, user, **kw):
+        seen.update(kw)
+        return _fake_llm([{"hs6": "220299", "description_ar": "مشروبات",
+                           "reason_ar": "شكل محضّر", "confidence": 0.8}])
+
+    p1, p2, p3, p4, p5 = _strawberry_patches(_capture)
+    with p1, p2, p3, p4, p5, \
+         patch.dict(os.environ,
+                    {"SILK_HS_CLASSIFY_MODEL": "claude-haiku-4-5-20251001"}):
+        hsc.classify_general("milk حليب", ingredients=_STRAWBERRY_HINTS,
+                             allow_claude=True)
+    assert seen["model"] == "claude-haiku-4-5-20251001"
+
+
+def test_incident_raw_proposals_and_rejections_are_logged(caplog):
+    """(٤) اقتراحاتُ النموذج الخام تُسجَّل عند INFO، والمرفوضُ بنيوياً يُسجَّل
+    برمزه — فيميّز سجلُّ الإنتاج بين «لم يقترح» و«اقترح فرُفض» بلا تجارب
+    معملية لاحقة."""
+    import logging as _logging
+
+    import silk_hs_classifier as hsc
+    fake = _fake_llm([
+        {"hs6": "220299", "description_ar": "مشروبات غير كحولية",
+         "reason_ar": "شكل محضّر للشرب", "confidence": 0.8},
+        {"hs6": "999999", "description_ar": "فصل لا وجود له",
+         "reason_ar": "اختبار الرفض البنيوي", "confidence": 0.9},
+    ])
+    from unittest.mock import MagicMock
+    p1, p2, p3, p4, p5 = _strawberry_patches(MagicMock(return_value=fake))
+    with p1, p2, p3, p4, p5, \
+         caplog.at_level(_logging.INFO, logger="silk.hs_classifier"):
+        hsc.classify_general("milk حليب", ingredients=_STRAWBERRY_HINTS,
+                             allow_claude=True)
+    blob = caplog.text
+    assert "hs llm proposed" in blob and "220299" in blob, blob
+    assert "rejected" in blob and "999999" in blob, blob
+
+
+def test_incident_stale_cache_entry_is_not_replayed_after_policy_bump(monkeypatch):
+    """المراجعة الذاتية §58 (ملاحظة متوسطة): ذاكرةُ التصنيف بلا TTL ولا إبطال،
+    فإجابةٌ خُزّنت تحت النموذج/الـprompt القديم كانت ستُعاد للأبد وتُبطِل
+    الإصلاح على أيّ نشرٍ عملت فيه الذاكرة (منصّة المالك تُفعّلها الآن بعد إصلاح
+    توجيه المخزن). مفتاحُ الذاكرة موسومٌ بنسخة السياسة: إدخالٌ قديمٌ تحت المفتاح
+    الخام لا يُقرأ، فتُعاد الحوسبةُ بالسياسة الجديدة؛ ثم تُخزَّن وتُقرأ تحت
+    المفتاح الموسوم (لا إنفاقٌ مكرّر)."""
+    import silk_hs_classifier as hsc
+    import silk_store
+
+    product = "milk حليب"
+    base_key = (product + "|"
+                + "|".join(sorted(str(i) for i in _STRAWBERRY_HINTS)) + "|")
+    # إدخالٌ «مسمومٌ» بصيغة ما قبل الإصلاح (مفتاحٌ خامٌ بلا نسخة) — رمزُ الحليب
+    # الخام الذي أنتجه النموذجُ السريع القديم.
+    silk_store.cache_hs_classification(
+        base_key, {"candidates": [
+            {"hs6": "040120", "description_ar": "حليب وقشدة",
+             "reason_ar": "قديم", "confidence": 0.8}]})
+
+    fake = MagicMock(return_value=_fake_llm([
+        {"hs6": "220299", "description_ar": "مشروب حليب منكّه محلّى",
+         "reason_ar": "شكلٌ محضَّرٌ للشرب بحسب أدلة الملصق", "confidence": 0.9}]))
+    p1, p2, p3, p4, p5 = _strawberry_patches(fake)
+    with p1, p2, p3, p4, p5:
+        r1 = hsc.classify_general(product, ingredients=_STRAWBERRY_HINTS,
+                                  allow_claude=True)
+        # الإدخالُ الخام لم يُخدَم: النموذجُ استُشير (إصابةٌ فائتةٌ على المفتاح
+        # الموسوم) والإجابةُ الطازجةُ الصحيحة تصدّرت.
+        assert fake.call_count == 1, "أُعيد إدخالٌ خامٌ قديمٌ بدل الحوسبة الجديدة"
+        assert r1["candidates"][0]["hs6"] == "220299", r1["candidates"]
+
+        # نداءٌ ثانٍ مطابق: يُخدَم من المفتاح الموسوم — لا نداءَ نموذجٍ ثانٍ.
+        hsc.classify_general(product, ingredients=_STRAWBERRY_HINTS,
+                             allow_claude=True)
+        assert fake.call_count == 1, "المفتاح الموسوم لا يُقرأ — إنفاقٌ مكرّر"

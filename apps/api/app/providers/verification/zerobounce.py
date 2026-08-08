@@ -31,6 +31,17 @@ class ZeroBounceVerifier:
         self._timeout = timeout
 
     def verify(self, email: str) -> VerificationResult:
+        # Per-analysis paid-call budget (locked decision #5): one verification
+        # call per candidate address. A spent budget degrades to `unknown` —
+        # which is not sendable, so it is dropped, exactly like a vendor hiccup
+        # (I1) — never a fabricated verdict. Unmetered outside a budget scope.
+        from app.services.api_budget import charge
+
+        if not charge(1, source="verification"):
+            log.warning("zerobounce_budget_exhausted", email=email)
+            return VerificationResult(
+                email=email, outcome=VerificationOutcome.unknown, provider_name=self.name
+            )
         try:
             with httpx.Client(timeout=self._timeout) as client:
                 response = client.get(

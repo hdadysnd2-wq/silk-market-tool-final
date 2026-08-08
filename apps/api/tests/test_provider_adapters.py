@@ -125,3 +125,78 @@ def test_apollo_drops_masked_and_locked_emails(monkeypatch):
     records = ApolloEmailFinderProvider("key").find_contacts("Acme", "acme.com", "US")
     # Only the genuinely revealed address survives — no dead/masked leads stored.
     assert [r.data.email for r in records] == ["real.buyer@acme.com"]
+
+
+# --- Paid per-buyer vendor calls must charge the analysis budget and degrade
+# --- (never make the call) once the ceiling is reached. Only the LIVE adapters
+# --- meter — mocks/offline are unaffected (mirrors comtrade). Audit finding M3.
+
+from app.services.api_budget import budget_scope  # noqa: E402
+
+
+class _ProbeClient:
+    """Records whether an httpx.Client was constructed and answers get/post."""
+
+    constructed = 0
+
+    def __init__(self, resp):
+        _ProbeClient.constructed += 1
+        self._resp = resp
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def get(self, *a, **k):
+        return self._resp
+
+    def post(self, *a, **k):
+        return self._resp
+
+
+def _probe(monkeypatch, resp):
+    _ProbeClient.constructed = 0
+    monkeypatch.setattr(httpx, "Client", lambda *a, **k: _ProbeClient(resp))
+
+
+def test_coresignal_skips_paid_call_when_budget_exhausted(monkeypatch):
+    _probe(monkeypatch, _Resp(json_value=[]))
+    with budget_scope(limit=0):
+        result = CoresignalProvider("key").enrich_company("Acme", "US")
+    assert result is None
+    assert _ProbeClient.constructed == 0  # the paid HTTP call never happened
+
+
+def test_apollo_skips_paid_call_when_budget_exhausted(monkeypatch):
+    _probe(monkeypatch, _Resp(json_value={"people": []}))
+    with budget_scope(limit=0):
+        assert ApolloEmailFinderProvider("key").find_contacts("Acme", "acme.com", "US") == []
+    assert _ProbeClient.constructed == 0
+
+
+def test_zerobounce_skips_paid_call_when_budget_exhausted(monkeypatch):
+    _probe(monkeypatch, _Resp(json_value={"status": "valid"}))
+    with budget_scope(limit=0):
+        result = ZeroBounceVerifier("key").verify("buyer@example.com")
+    assert result.outcome is VerificationOutcome.unknown  # degraded, not sendable
+    assert not result.is_sendable
+    assert _ProbeClient.constructed == 0
+
+
+def test_paid_adapters_charge_their_source_within_budget(monkeypatch):
+    # Each live adapter, when it does run, records its own budget source so
+    # per-analysis spend stays attributable and capped.
+    with budget_scope(limit=10) as budget:
+        _probe(monkeypatch, _Resp(json_value=[]))  # empty search → None, but charged
+        CoresignalProvider("key").enrich_company("Acme", "US")
+        _probe(monkeypatch, _Resp(json_value={"people": []}))
+        ApolloEmailFinderProvider("key").find_contacts("Acme", "acme.com", "US")
+        _probe(monkeypatch, _Resp(json_value={"status": "valid"}))
+        ZeroBounceVerifier("key").verify("buyer@example.com")
+    assert budget.spent_by_source == {
+        "enrichment": 1,
+        "email_finding": 1,
+        "verification": 1,
+    }

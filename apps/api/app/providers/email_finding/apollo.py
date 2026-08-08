@@ -40,6 +40,15 @@ class ApolloEmailFinderProvider:
     def find_contacts(
         self, company_name: str, domain: str | None, country_iso2: str
     ) -> list[ProviderRecord[FoundContact]]:
+        # Per-analysis paid-call budget (locked decision #5): one email-finding
+        # call per buyer. A spent budget degrades to no finder result (the
+        # waterfall still tries a free pattern guess) rather than running the key
+        # dry (I1). Unmetered (returns True) outside a budget scope.
+        from app.services.api_budget import charge
+
+        if not charge(1, source="email_finding"):
+            log.warning("apollo_budget_exhausted", company=company_name)
+            return []
         # Modern Apollo authenticates via the ``X-Api-Key`` header, not a body
         # field; sending the key in the JSON body is rejected/ignored.
         headers = {"X-Api-Key": self._api_key, "Content-Type": "application/json"}

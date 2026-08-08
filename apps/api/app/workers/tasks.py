@@ -958,8 +958,7 @@ def refresh_world_trade() -> dict:
             db.scalars(
                 select(func.distinct(Product.hs_code)).where(
                     Product.hs_code.is_not(None),
-                    Product.hs_confirmed_by_user.is_(True)
-                    | Product.hs_auto_classified.is_(True),
+                    Product.hs_confirmed_by_user.is_(True) | Product.hs_auto_classified.is_(True),
                 )
             ).all()
         )

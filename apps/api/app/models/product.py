@@ -80,9 +80,8 @@ class Product(UUIDMixin, TimestampMixin, Base):
         task that used to require ``hs_confirmed_by_user`` gates on this instead
         — provenance stays visible on the two flags, but readiness is one
         choke point."""
-        return bool(
-            self.hs_code and (self.hs_confirmed_by_user or self.hs_auto_classified)
-        )
+        return bool(self.hs_code and (self.hs_confirmed_by_user or self.hs_auto_classified))
+
     classification_status: Mapped[str] = mapped_column(
         String(24), default="pending", nullable=False
     )  # pending | classified | failed

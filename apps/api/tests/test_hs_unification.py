@@ -135,11 +135,9 @@ def test_classify_product_proposes_without_setting_hs_code(db, factory):
 
 
 def test_classify_product_auto_commits_on_strict_auto_tier(db, factory):
-    """"Dates تمور" passes the engine's strict auto gate (verified, overlap ≥ 0.8,
+    """ "Dates تمور" passes the engine's strict auto gate (verified, overlap ≥ 0.8,
     clear margin) → the code IS committed, tagged auto, human flag untouched."""
-    product = Product(
-        factory_id=factory.id, name_ar="تمور", name_en="Dates", currency="USD"
-    )
+    product = Product(factory_id=factory.id, name_ar="تمور", name_en="Dates", currency="USD")
     db.add(product)
     db.flush()
 
@@ -178,9 +176,7 @@ def test_auto_commit_never_overwrites_human_confirmed(db, factory):
 def test_confirm_clears_auto_flag_and_records_override(db, factory):
     """A human override of an auto-committed code clears the auto tag and logs
     an HSCorrection with the machine's code as `suggested` (classifier feedback)."""
-    product = Product(
-        factory_id=factory.id, name_ar="تمور", name_en="Dates", currency="USD"
-    )
+    product = Product(factory_id=factory.id, name_ar="تمور", name_en="Dates", currency="USD")
     db.add(product)
     db.flush()
     hs_classifier.classify_product(db, product)
@@ -191,9 +187,7 @@ def test_confirm_clears_auto_flag_and_records_override(db, factory):
     assert product.hs_code == "040900"
     assert product.hs_confirmed_by_user is True
     assert product.hs_auto_classified is False  # human decision superseded it
-    correction = db.scalars(
-        select(HSCorrection).where(HSCorrection.product_id == product.id)
-    ).one()
+    correction = db.scalars(select(HSCorrection).where(HSCorrection.product_id == product.id)).one()
     assert correction.suggested_code == "080410"
     assert correction.chosen_code == "040900"
 

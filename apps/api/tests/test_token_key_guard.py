@@ -30,6 +30,7 @@ def test_prod_settings_with_token_key_construct():
         token_encryption_key=Fernet.generate_key().decode(),
         trusted_proxy_count=1,
         api_base_url="https://api.silk.example",
+        app_base_url="https://app.silk.example",
     )
     assert settings.token_encryption_key
 

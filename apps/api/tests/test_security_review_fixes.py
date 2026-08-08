@@ -27,6 +27,7 @@ def _prod_kwargs(**overrides) -> dict:
         "token_encryption_key": Fernet.generate_key().decode(),
         "trusted_proxy_count": 1,
         "api_base_url": "https://api.silk.example",
+        "app_base_url": "https://app.silk.example",
         "cors_origins": "https://app.silk.example",
     }
     base.update(overrides)
@@ -108,6 +109,41 @@ def test_trusted_origins_wildcard_passthrough_in_local():
     # A wildcard survives only in local; return it verbatim for Starlette's "*".
     settings = Settings(environment="local", cors_origins="*")
     assert "*" in settings.trusted_origins
+
+
+def test_trusted_origins_canonicalizes_config_spellings():
+    # Trailing slash, uppercase host, and an explicit :443 are the most common
+    # operator mistakes — all must fold to the exact origin a browser sends.
+    settings = Settings(
+        **_prod_kwargs(
+            cors_origins="https://App.Silk.Example/,https://admin.silk.example:443",
+            app_base_url="https://app.silk.example",
+        )
+    )
+    assert "https://app.silk.example" in settings.trusted_origins
+    assert "https://admin.silk.example" in settings.trusted_origins
+    # No un-canonical spelling leaks into the allowlist.
+    assert "https://App.Silk.Example/" not in settings.trusted_origins
+    assert "https://admin.silk.example:443" not in settings.trusted_origins
+
+
+def test_canonical_origin_normalization_units():
+    from app.config import _canonical_origin
+
+    assert _canonical_origin("https://app.example.com/") == "https://app.example.com"
+    assert _canonical_origin("https://App.Example.COM") == "https://app.example.com"
+    assert _canonical_origin("https://app.example.com:443/x?y=1") == "https://app.example.com"
+    assert _canonical_origin("http://app.example.com:80") == "http://app.example.com"
+    assert _canonical_origin("http://app.example.com:8080") == "http://app.example.com:8080"
+    assert _canonical_origin("http://[::1]:3000") == "http://[::1]:3000"
+    # Not an origin → None (so "*" and Origin: null are never trusted).
+    assert _canonical_origin("null") is None
+    assert _canonical_origin("*") is None
+    assert _canonical_origin("") is None
+    # Scheme stays significant: http never folds into an https allowlist.
+    assert _canonical_origin("http://app.example.com") != _canonical_origin(
+        "https://app.example.com"
+    )
 
 
 # -- S3 default-credential guard -------------------------------------------
@@ -284,6 +320,46 @@ def test_foreign_origin_still_blocked_via_guard(monkeypatch):
     )
     with pytest.raises(HTTPException) as exc:
         security._enforce_same_origin(_fake_put_request({"origin": "https://evil.example"}))
+    assert exc.value.status_code == 403
+
+
+def test_guard_matches_despite_config_trailing_slash_and_case(monkeypatch):
+    # The browser always sends a bare, lowercase Origin. A CORS_ORIGINS spelled
+    # with a trailing slash / uppercase host must still match after canonicalizing
+    # both sides — this is the exact class of prod 403 the fix targets.
+    from app import security
+
+    monkeypatch.setattr(
+        security,
+        "get_settings",
+        lambda: Settings(
+            **_prod_kwargs(
+                cors_origins="https://App.Silk.Example/", app_base_url="https://app.silk.example"
+            )
+        ),
+    )
+    # No exception => accepted.
+    security._enforce_same_origin(_fake_put_request({"origin": "https://app.silk.example"}))
+
+
+def test_guard_keeps_scheme_significant(monkeypatch):
+    # Canonicalization must NOT upgrade http→https: an http allowlist entry for an
+    # https-served site fails loudly rather than silently matching.
+    from fastapi import HTTPException
+
+    from app import security
+
+    monkeypatch.setattr(
+        security,
+        "get_settings",
+        lambda: Settings(
+            **_prod_kwargs(
+                cors_origins="http://app.silk.example", app_base_url="http://app.silk.example"
+            )
+        ),
+    )
+    with pytest.raises(HTTPException) as exc:
+        security._enforce_same_origin(_fake_put_request({"origin": "https://app.silk.example"}))
     assert exc.value.status_code == 403
 
 

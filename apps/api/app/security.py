@@ -6,7 +6,6 @@ import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
-from urllib.parse import urlsplit
 
 import bcrypt
 import jwt
@@ -14,7 +13,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
+from app.config import _canonical_origin, get_settings
 from app.db import get_db
 from app.logging import get_logger
 from app.models import User, UserRole
@@ -125,8 +124,12 @@ def _enforce_same_origin(request: Request) -> None:
     The allowlist is ``settings.trusted_origins`` (CORS_ORIGINS ∪ APP_BASE_URL,
     loopback-equivalent in local) — not the raw CORS_ORIGINS — so a request from
     the app's own canonical web origin is never rejected just because the two
-    variables drifted. A block is logged (origin + allowlist, no secrets) so the
-    otherwise-opaque 403 is diagnosable.
+    variables drifted. Both the allowlist and the incoming ``Origin``/``Referer``
+    are put through ``_canonical_origin`` (origin-only, lowercased host, default
+    port dropped) before the equality test, so a config value that differs from
+    the browser's Origin only by a trailing slash, host case, or an explicit
+    ``:443`` still matches; scheme stays significant. A block is logged (origin +
+    allowlist, no secrets) so the otherwise-opaque 403 is diagnosable.
     """
     allowed = set(get_settings().trusted_origins)
     # A wildcard only survives in local (the prod guard rejects it); there every
@@ -135,14 +138,16 @@ def _enforce_same_origin(request: Request) -> None:
         return
     origin = request.headers.get("origin")
     if origin is not None:
-        if origin not in allowed:
-            _log_origin_block(request, origin, allowed)
-            raise _CSRF_ERROR
-        return
+        # Canonicalize the browser Origin the same way the allowlist was built;
+        # ``Origin: null`` and malformed values canonicalize to None → blocked.
+        if _canonical_origin(origin) in allowed:
+            return
+        _log_origin_block(request, origin, allowed)
+        raise _CSRF_ERROR
     referer = request.headers.get("referer")
     if referer:
-        parts = urlsplit(referer)
-        if parts.scheme and parts.netloc and f"{parts.scheme}://{parts.netloc}" in allowed:
+        canon = _canonical_origin(referer)
+        if canon is not None and canon in allowed:
             return
     _log_origin_block(request, origin, allowed)
     raise _CSRF_ERROR

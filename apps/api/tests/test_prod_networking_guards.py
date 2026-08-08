@@ -18,6 +18,7 @@ def _prod(**over) -> dict:
         environment="production",
         trusted_proxy_count=1,
         api_base_url="https://api.silk.example",
+        app_base_url="https://app.silk.example",
     )
     d.update(over)
     return d
@@ -31,6 +32,14 @@ def test_prod_rejects_zero_trusted_proxy_count():
 def test_prod_rejects_localhost_api_base_url():
     with pytest.raises(ValueError, match="API_BASE_URL"):
         Settings(**_prod(api_base_url="http://localhost:8000"))
+
+
+def test_prod_rejects_localhost_app_base_url():
+    # APP_BASE_URL is the canonical web origin AND is folded into the CSRF
+    # trusted-origin set; a localhost value in prod is a dead link origin and
+    # neuters the "just set APP_BASE_URL for a custom domain" escape hatch.
+    with pytest.raises(ValueError, match="APP_BASE_URL"):
+        Settings(**_prod(app_base_url="http://localhost:3000"))
 
 
 def test_prod_accepts_safe_values():

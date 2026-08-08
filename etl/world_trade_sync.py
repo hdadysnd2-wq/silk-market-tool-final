@@ -250,6 +250,8 @@ def _fetch_world_imports(
     fail-closed guard keeps every offline/CI path from ever calling it. Kept
     deliberately small and defensive.
     """
+    import contextlib
+    import io
     import socket
 
     import comtradeapicall  # (lazy, etl-only — I7)
@@ -272,28 +274,54 @@ def _fetch_world_imports(
 
     try:
         for year in years:
+            # comtradeapicall SWALLOWS request failures: it print()s
+            # "Request error: …" and returns an empty DataFrame instead of
+            # raising (PreviewGet.getPreviewData, shared by getFinalData) — so
+            # a network/auth failure is indistinguishable from a genuinely
+            # empty dataset and our except-branch never fires. Capture the
+            # library's stdout and surface anything it printed as a structured
+            # WARNING (live incident 2026-08-08: `world_trade_synced rows=0`
+            # with no error line anywhere).
+            _lib_out = io.StringIO()
             try:
                 # Imports (flowCode="M"), all reporters, partner=World (0), HS6.
-                df = comtradeapicall.getFinalData(
-                subscription_key,
-                typeCode="C",
-                    freqCode="A",
-                    clCode="HS",
-                    period=str(year),
-                    reporterCode=None,  # every reporter
-                    cmdCode=hs6,
-                    flowCode="M",
-                    partnerCode="0",  # World
-                    partner2Code="0",
-                    customsCode="C00",
-                    motCode="0",
-                )
+                # Param set mirrors the repo's PROVEN Comtrade client
+                # (silk_data_layer._comtrade_call): reporter omitted ⇒ every
+                # reporter (the library drops None params), partner=0 ⇒ World,
+                # and NO customs/mot/partner2 filters — the proven path never
+                # sends them, and any of them over-filtering was a prime
+                # suspect for the all-years-empty live result.
+                with contextlib.redirect_stdout(_lib_out):
+                    df = comtradeapicall.getFinalData(
+                        subscription_key,
+                        typeCode="C",
+                        freqCode="A",
+                        clCode="HS",
+                        period=str(year),
+                        reporterCode=None,  # dropped by the library ⇒ every reporter
+                        cmdCode=hs6,
+                        flowCode="M",
+                        partnerCode="0",  # World
+                        partner2Code=None,
+                        customsCode=None,
+                        motCode=None,
+                    )
             except Exception as exc:  # noqa: BLE001 — a failed year is a declared gap (I1)
                 log.warning(
                     "comtrade_bulk_year_failed hs6=%s year=%s error=%s", hs6, year, exc
                 )
                 continue
+            _lib_msg = _lib_out.getvalue().strip()
+            if _lib_msg:
+                log.warning(
+                    "comtrade_call_output hs6=%s year=%s output=%s",
+                    hs6, year, _lib_msg[:500],
+                )
             if df is None or getattr(df, "empty", True):
+                # Empty-but-successful is a DECLARED gap, never silence — before
+                # this line the incident signature was `rows=0` with no per-year
+                # trace at all.
+                log.warning("comtrade_empty_result hs6=%s year=%s", hs6, year)
                 continue
             # Resolve the ISO / value / qty columns against the schema actually
             # returned (tolerant of spelling drift). If the mandatory two are

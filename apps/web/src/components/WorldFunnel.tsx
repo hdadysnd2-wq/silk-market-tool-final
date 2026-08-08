@@ -53,7 +53,12 @@ export function WorldFunnel({
   const [stage, setStage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const confirmed = Boolean(product.hs_code && product.hs_confirmed_by_user);
+  // A committed HS code opens the funnel whether a human confirmed it or the
+  // engine's strict auto gate committed it (ADR-0009) — provenance is shown on
+  // the product page; the human override path stays one click away.
+  const confirmed = Boolean(
+    product.hs_code && (product.hs_confirmed_by_user || product.hs_auto_classified),
+  );
 
   // Per-stage progress label from the analysis status — the funnel is a staged
   // pipeline (pending → ranked → enriched → deepened), not one opaque spinner.

@@ -43,7 +43,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
           <p className="tabular mt-1 text-2xl font-bold text-brand-700">
             {product.hs_code ?? "—"}
           </p>
-          {product.hs_confirmed_by_user && product.hs_code && (
+          {product.hs_auto_classified && product.hs_code && (
+            <p className="mt-1 inline-block rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+              {t("hsAutoBadge")}
+            </p>
+          )}
+          {(product.hs_confirmed_by_user || product.hs_auto_classified) && product.hs_code && (
             <div className="mt-4 flex flex-wrap gap-2">
               <Link
                 href={`/products/${product.id}/markets`}

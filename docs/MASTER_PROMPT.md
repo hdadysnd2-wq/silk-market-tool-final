@@ -71,7 +71,12 @@ tracking.**
 ## Non-negotiable invariants (guardrails)
 
 - **I1** No fabricated data, ever. Failure → `None`, logged, surfaced.
-- **I2** Human HS confirmation gate is mandatory and unbypassable.
+- **I2** Human HS confirmation stays supreme and is the only writer of
+  `hs_confirmed_by_user`. Amended by owner decision 2026-08-08 (ADR-0009): the
+  engine's STRICT `tier="auto"` verdict may commit `hs_code`, provenance-tagged
+  `hs_auto_classified` — never over a human confirmation, never on ambiguity,
+  and never from name-only evidence when unexamined label signals exist
+  (engine lesson 79). A human confirm/override clears the tag and wins.
 - **I3** Human campaign-approval gate stays 3-layer (API + worker row-lock + DB CHECK).
 - **I4** Global suppression checked at send; one-click unsubscribe; append-only
   audit log; suppression stays cross-tenant.

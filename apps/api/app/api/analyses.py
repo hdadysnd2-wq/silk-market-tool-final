@@ -67,9 +67,10 @@ def start_analysis(
     db: DbDep,
     product: ProductModel = Depends(get_owned_product),
 ) -> AnalysisAccepted:
-    # I2 — the world funnel runs only on a human-confirmed HS code. An unconfirmed
-    # or missing code is a 409, never a silent run on a guessed code.
-    if not (product.hs_code and product.hs_confirmed_by_user):
+    # I2 (ADR-0009) — the world funnel runs only on a COMMITTED HS code (human
+    # confirm, or the engine's strict auto commit). An uncommitted or missing
+    # code is a 409, never a silent run on a guessed code.
+    if not product.hs_ready:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="HS code must be confirmed before running a world analysis",
@@ -134,8 +135,8 @@ def enrich_analysis(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> Ana
     """
     analysis = _owned_analysis(db, analysis_id, user)
     product = db.get(Product, analysis.product_id) if analysis.product_id else None
-    # I2 — never enrich/rank on an unconfirmed HS code.
-    if not (product and product.hs_code and product.hs_confirmed_by_user):
+    # I2 (ADR-0009) — never enrich/rank on an uncommitted HS code.
+    if not (product and product.hs_ready):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="HS code must be confirmed before Stage-2 enrichment",
@@ -175,8 +176,8 @@ def deepdive_analysis(analysis_id: uuid.UUID, db: DbDep, user: CurrentUser) -> A
     """
     analysis = _owned_analysis(db, analysis_id, user)
     product = db.get(Product, analysis.product_id) if analysis.product_id else None
-    # I2 — never deep-dive on an unconfirmed HS code.
-    if not (product and product.hs_code and product.hs_confirmed_by_user):
+    # I2 (ADR-0009) — never deep-dive on an uncommitted HS code.
+    if not (product and product.hs_ready):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="HS code must be confirmed before Stage-3 deep-dive",

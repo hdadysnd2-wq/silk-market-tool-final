@@ -9,11 +9,18 @@ against the daily cap and results cached — so the offline CSV path survives as
 the engine's own explicit fallback, and its use is visible in each candidate's
 ``provider``/``used_llm`` provenance. This service only shapes the result into
 ``product.hs_candidates`` and lazily backfills the HS catalogue so a proposed
-code stays foreign-key-valid and confirmable. It PROPOSES only: the committed
-``product.hs_code`` + ``hs_confirmed_by_user`` are set solely in
-:func:`confirm_hs_code` (invariant I2). A ``tier="manual"`` result is a
-declared gap — status ``failed`` with NO invented candidates (invariant I1);
-the UI's search + manual-entry fallback remains the last resort.
+code stays foreign-key-valid and confirmable.
+
+Commit rules (I2 as amended by owner decision 2026-08-08, ADR-0009):
+``hs_confirmed_by_user`` is set solely in :func:`confirm_hs_code` — human
+action only, and a human confirm/override always wins. Additionally, when the
+engine returns its STRICT ``tier="auto"`` verdict (verified top candidate,
+overlap ≥ 0.8, clear margin over the runner-up — genuine ambiguity never
+passes), :func:`classify_product` commits ``product.hs_code`` tagged
+``hs_auto_classified=True``, and never overwrites a human-confirmed code.
+A ``tier="manual"`` result is a declared gap — status ``failed`` with NO
+invented candidates (invariant I1); the UI's search + manual-entry fallback
+remains the last resort.
 """
 
 from __future__ import annotations
@@ -119,9 +126,13 @@ def classify_product(db: Session, product: Product) -> list[dict]:
     over the full WCO nomenclature when it does not, every candidate validated by
     the engine's no-fabrication gate. ``tier="manual"`` — the classifier cannot
     decide (or no key) — is a declared gap: status ``failed``, NO candidates
-    invented (the manual search/entry UI is the last resort). This only PROPOSES:
-    ``product.hs_code`` is never set here (I2 — committed solely by
-    :func:`confirm_hs_code`).
+    invented (the manual search/entry UI is the last resort).
+
+    Commit rule (ADR-0009): on the engine's strict ``tier="auto"`` verdict the
+    winning code IS committed to ``product.hs_code``, provenance-tagged
+    ``hs_auto_classified=True`` — never silently: a human-confirmed code is
+    never overwritten, and ``hs_confirmed_by_user`` stays human-only (set
+    solely by :func:`confirm_hs_code`). Every other tier still only proposes.
     """
     from app.services import engine
 
@@ -169,6 +180,27 @@ def classify_product(db: Session, product: Product) -> list[dict]:
         product.failure_reason = (
             result.get("message") or "HS classification could not propose a code"
         )[:500]
+
+    # ADR-0009 (owner decision 2026-08-08): the engine's strict tier="auto"
+    # verdict commits the winning code, tagged as machine-committed. Guards:
+    # a human-confirmed code is NEVER overwritten (human supremacy, I2), and
+    # the code must be catalogue-valid (ensure_hs_code above) so the FK holds.
+    # tier="candidates" (genuine ambiguity — e.g. flavoured milk, 2202 vs 0402)
+    # still proposes only and waits for the human.
+    auto_code = (result.get("hs6") or "").strip() if tier == "auto" else ""
+    if auto_code and not product.hs_confirmed_by_user:
+        committed = next((c for c in candidates if c["code"] == auto_code), None)
+        if committed is not None and committed["in_catalogue"]:
+            product.hs_code = auto_code
+            product.hs_auto_classified = True
+            log.info(
+                "hs_code_auto_committed",
+                product_id=str(product.id),
+                hs_code=auto_code,
+                confidence=committed["confidence"],
+                provider=provider,
+            )
+
     db.flush()
     log.info(
         "product_classified",
@@ -192,13 +224,25 @@ def confirm_hs_code(
 
     Backfills the catalogue first (:func:`ensure_hs_code`) so a human can confirm
     any real engine code even if it was never seeded — the committed ``hs_code``
-    FK stays valid. This is the ONLY place ``product.hs_code`` +
-    ``hs_confirmed_by_user`` are set (invariant I2).
+    FK stays valid. This is the ONLY place ``hs_confirmed_by_user`` is set
+    (invariant I2, human-only), and a human decision here supersedes any
+    machine-committed code: the ``hs_auto_classified`` tag is cleared, and
+    overriding an auto-committed code is logged as an :class:`HSCorrection`
+    (classifier feedback, ADR-0009).
     """
     ensure_hs_code(db, chosen_code)
 
+    # What did the machine put forward? An auto-COMMITTED code (ADR-0009) is the
+    # strongest machine claim and takes precedence as "suggested" in the
+    # correction ledger; otherwise the top proposal, as before.
     suggested = product.hs_candidates[0] if product.hs_candidates else None
     suggested_code = suggested["code"] if suggested else None
+    if product.hs_auto_classified and product.hs_code:
+        auto = next(
+            (c for c in (product.hs_candidates or []) if c["code"] == product.hs_code),
+            None,
+        )
+        suggested, suggested_code = auto or suggested, product.hs_code
 
     if suggested_code and suggested_code != chosen_code:
         db.add(
@@ -219,5 +263,8 @@ def confirm_hs_code(
 
     product.hs_code = chosen_code
     product.hs_confirmed_by_user = True
+    # A human decision supersedes any machine commit — the auto tag never
+    # outlives a confirm/override (provenance stays truthful, ADR-0009).
+    product.hs_auto_classified = False
     db.flush()
     return product

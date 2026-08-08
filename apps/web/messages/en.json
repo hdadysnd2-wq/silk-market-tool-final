@@ -60,6 +60,8 @@
     "image": "Product image",
     "hsCode": "HS code",
     "hsSuggestions": "Suggested HS codes",
+    "hsAutoBadge": "Auto-classified",
+    "hsAutoCommitted": "The tool read your product and committed HS code {code} automatically (unambiguous match). You can change it below at any time.",
     "confidence": "Confidence",
     "confirm": "Confirm code",
     "override": "Change code",

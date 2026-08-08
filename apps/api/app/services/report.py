@@ -155,6 +155,7 @@ def _product_section(product: Product, hs: HSCode | None) -> ReportProduct:
         hs_description_en=hs.description_en if hs else None,
         hs_description_ar=hs.description_ar if hs else None,
         hs_confirmed_by_user=product.hs_confirmed_by_user,
+        hs_auto_classified=product.hs_auto_classified,
         classification_status=product.classification_status,
         hs_confidence=_hs_confidence(product),
     )

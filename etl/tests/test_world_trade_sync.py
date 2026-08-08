@@ -157,3 +157,53 @@ def test_resolve_columns_qty_optional_when_iso_and_value_present():
     iso, val, qty = wt.resolve_columns(["reporterISO", "primaryValue"])
     assert iso == "reporterISO" and val == "primaryValue"
     assert qty is None  # qty is genuinely optional, not a hard failure
+
+
+# ── the library swallows request errors (print + empty df) — we must not ──────
+# Live incident 2026-08-08: `world_trade_synced rows=0` with NO error line —
+# comtradeapicall print()s "Request error: …" and returns an empty DataFrame
+# instead of raising, so the except-branch never fires. These lock the two
+# defenses: library stdout becomes a structured WARNING, and empty-but-
+# successful years are declared, never silent.
+
+
+def _fake_comtrade_modules(monkeypatch, print_msg: str):
+    import sys
+    import types
+
+    class _EmptyDF:
+        empty = True
+        columns: list[str] = []
+
+    fake_api = types.ModuleType("comtradeapicall")
+
+    def _get_final_data(subscription_key, **kw):
+        if print_msg:
+            print(print_msg)
+        return _EmptyDF()
+
+    fake_api.getFinalData = _get_final_data
+    fake_pd = types.ModuleType("pandas")
+    fake_pd.isna = lambda v: v != v
+    monkeypatch.setitem(sys.modules, "comtradeapicall", fake_api)
+    monkeypatch.setitem(sys.modules, "pandas", fake_pd)
+
+
+def test_swallowed_library_error_is_surfaced_as_structured_warning(
+    monkeypatch, caplog
+):
+    _fake_comtrade_modules(monkeypatch, "Request error: tunnel 403")
+    with caplog.at_level("WARNING", logger="etl.world_trade_sync"):
+        usd, qty, mirrors = wt._fetch_world_imports("040299", [2023])
+    assert usd == {} and qty == {} and mirrors == set()
+    blob = "\n".join(r.getMessage() for r in caplog.records)
+    assert "comtrade_call_output" in blob and "tunnel 403" in blob, blob
+
+
+def test_empty_but_successful_year_is_declared_not_silent(monkeypatch, caplog):
+    _fake_comtrade_modules(monkeypatch, "")
+    with caplog.at_level("WARNING", logger="etl.world_trade_sync"):
+        wt._fetch_world_imports("040299", [2023, 2024])
+    blob = "\n".join(r.getMessage() for r in caplog.records)
+    assert blob.count("comtrade_empty_result") == 2, blob
+    assert "hs6=040299" in blob and "year=2023" in blob and "year=2024" in blob

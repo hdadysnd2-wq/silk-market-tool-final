@@ -37,6 +37,9 @@ class ProductOut(BaseModel):
     hs_code: str | None
     hs_candidates: list[HSCandidate] | None
     hs_confirmed_by_user: bool
+    #: True when ``hs_code`` was committed by the engine's strict auto gate, not
+    #: a human (ADR-0009). Lets the UI badge the code «تلقائي» and offer override.
+    hs_auto_classified: bool = False
     classification_status: str
     #: Why classification failed (only set when ``classification_status`` is
     #: ``failed``) — lets the UI explain and offer retry / manual HS entry.

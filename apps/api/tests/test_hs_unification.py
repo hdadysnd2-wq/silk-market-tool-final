@@ -5,7 +5,13 @@ through ``engine.resolve_hs_candidates`` (the name-based ``silk_hs_resolver``),
 with the vision pass producing the description that feeds it. These tests pin the
 observable contract of that path:
 
-* classification only PROPOSES — ``product.hs_code`` stays uncommitted (I2);
+* an ambiguous result (``tier="candidates"``) only PROPOSES — ``product.hs_code``
+  stays uncommitted until a human confirms (I2);
+* the engine's STRICT ``tier="auto"`` verdict auto-commits the code, tagged
+  ``hs_auto_classified`` — never over a human confirmation, and never when
+  label signals exist that the engine could not consult (ADR-0009 + lesson 79);
+* a human confirm/override stays supreme: it is the only writer of
+  ``hs_confirmed_by_user``, clears the auto tag, and logs an override;
 * a resolver-proposed code is confirmable because the catalogue is lazily
   backfilled from the engine seed (no bulk-seeding of 5,600+ placeholder rows);
 * a nonsense product declares a gap (``failed`` + empty candidates), never a
@@ -17,7 +23,9 @@ resolver reads its bundled CSV seed — no network, no model key.
 
 from __future__ import annotations
 
-from app.models import HSCode, Product
+from sqlalchemy import select
+
+from app.models import HSCode, HSCorrection, Product
 from app.services import hs_classifier
 
 # A real product whose name resolves to a genuine HS6 (Natural honey, 040900),
@@ -103,6 +111,8 @@ def test_nonsense_product_declares_gap_not_a_fabricated_code(client, auth_header
 
 
 def test_classify_product_proposes_without_setting_hs_code(db, factory):
+    """Ambiguous tier ("Sidr Honey" scores below the engine's strict auto gate)
+    → proposal only, exactly as before ADR-0009."""
     product = Product(
         factory_id=factory.id, name_ar="عسل السدر", name_en="Sidr Honey", currency="USD"
     )
@@ -113,11 +123,136 @@ def test_classify_product_proposes_without_setting_hs_code(db, factory):
 
     assert candidates and all(c["code"] for c in candidates)
     assert product.classification_status == "classified"
-    # I2: proposal only — classify never auto-commits or auto-confirms.
+    # I2: on an unclear verdict classify never commits or confirms.
     assert product.hs_code is None
     assert product.hs_confirmed_by_user is False
+    assert product.hs_auto_classified is False
     # Every proposed code was backfilled into the catalogue (FK/confirm-valid).
     assert db.get(HSCode, candidates[0]["code"]) is not None
+
+
+# -- (e) ADR-0009: the STRICT auto tier commits, provenance-tagged --------------
+
+
+def test_classify_product_auto_commits_on_strict_auto_tier(db, factory):
+    """"Dates تمور" passes the engine's strict auto gate (verified, overlap ≥ 0.8,
+    clear margin) → the code IS committed, tagged auto, human flag untouched."""
+    product = Product(
+        factory_id=factory.id, name_ar="تمور", name_en="Dates", currency="USD"
+    )
+    db.add(product)
+    db.flush()
+
+    hs_classifier.classify_product(db, product)
+
+    assert product.hs_code == "080410"
+    assert product.hs_auto_classified is True
+    # hs_confirmed_by_user stays HUMAN-ONLY (I2): auto commit never fakes it.
+    assert product.hs_confirmed_by_user is False
+    # The committed code is FK-valid (catalogue backfilled before commit).
+    assert db.get(HSCode, "080410") is not None
+
+
+def test_auto_commit_never_overwrites_human_confirmed(db, factory):
+    """Human supremacy: re-classifying a human-confirmed product proposes fresh
+    candidates but NEVER touches the confirmed code."""
+    hs_classifier.ensure_hs_code(db, "040900")
+    product = Product(
+        factory_id=factory.id,
+        name_ar="تمور",
+        name_en="Dates",
+        currency="USD",
+        hs_code="040900",  # deliberately "wrong" — but human-confirmed
+        hs_confirmed_by_user=True,
+    )
+    db.add(product)
+    db.flush()
+
+    hs_classifier.classify_product(db, product)
+
+    assert product.hs_code == "040900"  # untouched
+    assert product.hs_confirmed_by_user is True
+    assert product.hs_auto_classified is False
+
+
+def test_confirm_clears_auto_flag_and_records_override(db, factory):
+    """A human override of an auto-committed code clears the auto tag and logs
+    an HSCorrection with the machine's code as `suggested` (classifier feedback)."""
+    product = Product(
+        factory_id=factory.id, name_ar="تمور", name_en="Dates", currency="USD"
+    )
+    db.add(product)
+    db.flush()
+    hs_classifier.classify_product(db, product)
+    assert product.hs_auto_classified is True and product.hs_code == "080410"
+
+    hs_classifier.confirm_hs_code(db, product, "040900", None)
+
+    assert product.hs_code == "040900"
+    assert product.hs_confirmed_by_user is True
+    assert product.hs_auto_classified is False  # human decision superseded it
+    correction = db.scalars(
+        select(HSCorrection).where(HSCorrection.product_id == product.id)
+    ).one()
+    assert correction.suggested_code == "080410"
+    assert correction.chosen_code == "040900"
+
+
+def test_auto_committed_code_opens_downstream_gates(client, auth_headers, db, factory):
+    """ADR-0009 end-to-end: a strict-auto committed code passes the analysis
+    gate exactly like a human-confirmed one (the gate predicate is hs_ready) —
+    while an uncommitted candidates-tier product still 409s.
+
+    The auto-committed state is constructed directly: through the full hermetic
+    intake the mock vision fills attributes, and the engine (lesson 79)
+    rightly refuses `tier="auto"` when those label signals cannot be consulted
+    offline — the commit path itself is covered by the service-level test on an
+    attribute-free product."""
+    hs_classifier.ensure_hs_code(db, "080410")
+    dates = Product(
+        factory_id=factory.id,
+        name_ar="تمور",
+        name_en="Dates",
+        currency="USD",
+        hs_code="080410",
+        hs_auto_classified=True,  # machine-committed; NOT human-confirmed
+        classification_status="classified",
+    )
+    db.add(dates)
+    db.commit()
+    res = client.post(f"/api/v1/products/{dates.id}/analysis", headers=auth_headers)
+    assert res.status_code == 202, res.text
+
+    honey = _create(client, auth_headers, _HONEY)
+    assert honey["hs_code"] is None  # candidates tier — uncommitted
+    res = client.post(f"/api/v1/products/{honey['id']}/analysis", headers=auth_headers)
+    assert res.status_code == 409, res.text
+
+
+def test_label_signals_without_llm_never_auto_commit(db, factory):
+    """Lesson 79 at the platform seam: vision attributes (label signals) present
+    but the engine could not consult the LLM offline → the engine downgrades
+    auto → candidates, so nothing is committed. The strawberry-milk incident can
+    never be auto-committed from name-only evidence."""
+    product = Product(
+        factory_id=factory.id,
+        name_ar="حليب",
+        name_en="milk",
+        currency="USD",
+        attributes=[
+            {"name": "flavor", "value": "Strawberry (حليب بالفراولة)"},
+            {"name": "nutrition", "value": "Sugars 11g"},
+        ],
+    )
+    db.add(product)
+    db.flush()
+
+    candidates = hs_classifier.classify_product(db, product)
+
+    assert candidates, "downgrade must keep candidates for the human picker"
+    assert product.hs_code is None
+    assert product.hs_auto_classified is False
+    assert product.hs_confirmed_by_user is False
 
 
 def test_ensure_hs_code_backfills_real_codes_and_never_fabricates(db):

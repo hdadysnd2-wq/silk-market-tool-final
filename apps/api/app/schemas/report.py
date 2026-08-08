@@ -39,6 +39,9 @@ class ReportProduct(BaseModel):
     hs_description_en: str | None
     hs_description_ar: str | None
     hs_confirmed_by_user: bool
+    #: The code was committed by the engine's strict auto gate (ADR-0009) — the
+    #: report pill reads «صُنّف تلقائيًا» instead of implying a human confirmed.
+    hs_auto_classified: bool = False
     classification_status: str
     #: Classifier confidence for the confirmed/chosen HS code, if known.
     hs_confidence: float | None

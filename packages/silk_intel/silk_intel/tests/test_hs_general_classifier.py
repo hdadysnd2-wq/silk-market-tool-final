@@ -688,3 +688,42 @@ def test_incident_stale_cache_entry_is_not_replayed_after_policy_bump(monkeypatc
         hsc.classify_general(product, ingredients=_STRAWBERRY_HINTS,
                              allow_claude=True)
         assert fake.call_count == 1, "المفتاح الموسوم لا يُقرأ — إنفاقٌ مكرّر"
+
+
+def test_incident_label_signals_unconsulted_never_auto():
+    """(٥ — امتداد العائلة، الدرس ٧٩) بوابةُ «تلقائي» لا تدّعي يقيناً فوق
+    أدلةٍ لم تُفحَص: إشاراتُ ملصقٍ حاضرةٌ والاستشارةُ لم تقع فعلياً (صمّامٌ
+    مطفأ / لا مفتاح / حجزُ الميزانية مرفوض / فشل النداء) ⇒ الحكمُ يُخفَّض إلى
+    «مرشّحين» ولا يمرّ تلقائياً أبداً.
+
+    السياق: منصّةُ المالك صارت **تثبِّت** رمزَ tier="auto" آلياً (ADR-0009)،
+    فتطابقُ الاسم الحتميُّ التامُّ («milk حليب» → 040120) كان سيُثبَّت للحليب
+    المنكّه كلّما تعذّرت الاستشارة — إعادةُ إنتاجِ حادثة حليب الفراولة آلياً
+    وبصمت. الاسمُ وحده لا يحسم منتجاً وُصف ملصقُه."""
+    import silk_hs_classifier as hsc
+
+    # (أ) بلا سماحٍ بكلود أصلاً — أخطر مساراً لأنه مسار preflight الرخيص.
+    r = hsc.classify_general("milk حليب", ingredients=_STRAWBERRY_HINTS,
+                             allow_claude=False)
+    assert r["tier"] != "auto", (
+        f"حُسم تلقائياً باسمٍ مجرّدٍ رغم إشارات ملصقٍ لم تُفحَص: {r['hs6']}")
+    assert r["candidates"], "التخفيض يجب أن يُبقي المرشّحين للاختيار اليدوي"
+
+    # (ب) السماحُ قائمٌ لكن الصمّام/المفتاح غائب (enabled() = False).
+    with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "0"}):
+        r2 = hsc.classify_general("milk حليب", ingredients=_STRAWBERRY_HINTS,
+                                  allow_claude=True)
+    assert r2["tier"] != "auto", r2["hs6"]
+
+    # (ج) الصمّام يعمل لكن حجز الميزانية مرفوض — النداء لم يقع.
+    with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "1"}), \
+         patch("silk_ai_judge.available", return_value=True), \
+         patch("silk_usage.try_reserve_paid_calls", return_value=False):
+        r3 = hsc.classify_general("milk حليب", ingredients=_STRAWBERRY_HINTS,
+                                  allow_claude=True)
+    assert r3["tier"] != "auto", r3["hs6"]
+
+    # (د) وبلا إشاراتٍ إطلاقاً يبقى الاختصارُ الحتميُّ التلقائيُّ كما هو —
+    # التخفيضُ مشروطٌ بأدلةٍ غير مفحوصة، لا عقوبةٌ عامة على المسار الرخيص.
+    r4 = hsc.classify_general("milk حليب", allow_claude=False)
+    assert r4["tier"] == "auto" and r4["hs6"] == "040120", r4

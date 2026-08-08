@@ -40,11 +40,11 @@ def discover(
         limit=DISCOVER_RATE_LIMIT,
         window_seconds=DISCOVER_WINDOW_SECONDS,
     )
-    # I2 — buyer discovery fetches buyer PII, so it runs only on a *human-confirmed*
-    # HS code. The classifier pre-fills product.hs_code with its top candidate
-    # before the user confirms, so checking hs_code alone would let discovery run
-    # on a guess; the confirmation flag is the real gate (as on the analysis run).
-    if not (product.hs_code and product.hs_confirmed_by_user):
+    # I2 (ADR-0009) — buyer discovery fetches buyer PII, so it runs only on a
+    # COMMITTED HS code: human-confirmed, or the engine's strict auto commit.
+    # hs_ready is the one gate predicate; checking hs_code alone would let
+    # discovery run on an uncommitted proposal.
+    if not product.hs_ready:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="HS code must be confirmed before discovering buyers",

@@ -448,6 +448,7 @@ def classify_general(product: str, hs_code: str | None = None,
         return top
 
     used_llm = False
+    llm_consulted = False       # هل فُحصت إشاراتُ الملصق فعلاً (حيّاً أو من الذاكرة)؟
     top = _clearly_auto(candidates)
     # إشارات الصورة/الملصق (ingredients) قد تنقل المنتج إلى بندٍ مختلفٍ عن اسمه
     # المجرّد — الحليب المنكّه/المحلّى ينتمي إلى بندٍ غير بند الحليب العادي مثلاً.
@@ -479,6 +480,7 @@ def classify_general(product: str, hs_code: str | None = None,
         else:
             llm_raw = None
         if llm_raw:
+            llm_consulted = True
             # سجلُّ تشخيصٍ لا حكم: بلا هذا السطر يستحيل التمييز من سجلّ الإنتاج
             # بين «النموذج لم يقترح» و«اقترح فرُفض بنيوياً/دُفن» — وهو عينُ ما
             # أطال تشخيص حادثة حليب الفراولة. والمصدر (حيّ/ذاكرة) مُصرَّحٌ به كي
@@ -498,6 +500,18 @@ def classify_general(product: str, hs_code: str | None = None,
                              c.get("hs6"))
             candidates = _dedupe_candidates(candidates)
             top = _clearly_auto(candidates)
+
+    # الدرس ٧٩ — بوابةُ «تلقائي» لا تدّعي يقيناً فوق أدلةٍ لم تُفحَص: إشاراتُ
+    # ملصقٍ حاضرةٌ والاستشارةُ لم تقع فعلياً (صمّامٌ مطفأ / لا مفتاح / حجزُ
+    # الميزانية مرفوض / فشل النداء) ⇒ تخفيضٌ إلى «مرشّحين». تطابقُ الاسم التامُّ
+    # («milk» → بند الحليب الخام) كان يمرّ تلقائياً بينما أدلةُ الملصق (نكهة،
+    # سكريات) غير مفحوصةٍ أصلاً — والمنصّةُ صارت تثبِّت tier="auto" آلياً
+    # (قرار المالك، ADR رقم ٩ في المنصّة)، فالسكوتُ هنا يعيد إنتاج حادثة
+    # حليب الفراولة بلا أيّ نداء.
+    if top is not None and ingredients and not llm_consulted:
+        log.info("hs auto downgraded to candidates: label signals present but "
+                 "unconsulted (product=%s)", product)
+        top = None
 
     if top is not None:
         return {"tier": "auto", "hs6": top["hs6"],

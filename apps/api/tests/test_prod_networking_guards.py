@@ -34,12 +34,13 @@ def test_prod_rejects_localhost_api_base_url():
         Settings(**_prod(api_base_url="http://localhost:8000"))
 
 
-def test_prod_rejects_localhost_app_base_url():
-    # APP_BASE_URL is the canonical web origin AND is folded into the CSRF
-    # trusted-origin set; a localhost value in prod is a dead link origin and
-    # neuters the "just set APP_BASE_URL for a custom domain" escape hatch.
-    with pytest.raises(ValueError, match="APP_BASE_URL"):
-        Settings(**_prod(app_base_url="http://localhost:3000"))
+def test_prod_allows_localhost_app_base_url_without_crashing():
+    # APP_BASE_URL is imported at boot by EVERY backend role (api/worker/beat),
+    # so it must never be a fail-closed guard: a missing value on one service
+    # would otherwise crash-loop the whole platform. A localhost value only
+    # degrades the CSRF escape hatch, so prod Settings must still construct.
+    settings = Settings(**_prod(app_base_url="http://localhost:3000"))
+    assert settings.app_base_url == "http://localhost:3000"
 
 
 def test_prod_accepts_safe_values():

@@ -340,13 +340,16 @@ class Settings(BaseSettings):
         - ``api_base_url`` still at the localhost default means every outbound
           email embeds a localhost unsubscribe link — an RFC 8058 / compliance
           break on the money path.
-        - ``app_base_url`` still at the localhost default is both a dead
-          email/OAuth link origin AND — since it is folded into the CSRF
-          trusted-origin set — makes every state-changing request depend
-          entirely on CORS_ORIGINS matching the browser exactly (the "just set
-          APP_BASE_URL" escape hatch for a custom domain is worthless if it is
-          left at localhost).
         Local/CI keep the convenient defaults.
+
+        NB: ``app_base_url`` is deliberately NOT a fail-closed guard here. It is
+        imported at boot by every backend role (api/worker/beat all build
+        ``Settings`` — the worker via ``celery_app``), so a fatal check on it
+        would crash-loop the whole platform when the variable is merely missing
+        on one service. A wrong/localhost ``app_base_url`` only weakens the CSRF
+        escape hatch (writes still work off ``CORS_ORIGINS``) and mis-points
+        OAuth return links — degraded, not down. The ``csrf_origin_blocked`` log
+        surfaces the mismatch without taking the service offline.
         """
         if self.environment.strip().lower() == "local":
             return self
@@ -366,16 +369,6 @@ class Settings(BaseSettings):
                 "email embeds its unsubscribe link under this origin; a localhost "
                 "link is a dead unsubscribe (RFC 8058 / compliance break). Set it "
                 "to the API's public URL."
-            )
-        if "localhost" in self.app_base_url or "127.0.0.1" in self.app_base_url:
-            raise ValueError(
-                f"APP_BASE_URL={self.app_base_url!r} still points at localhost but "
-                f"ENVIRONMENT={self.environment!r} is not 'local'. It is the "
-                "canonical web-app origin: outbound email/OAuth links are built "
-                "from it AND it is trusted for the cookie-CSRF Origin check, so a "
-                "localhost value breaks those links and leaves every state-changing "
-                "request depending entirely on CORS_ORIGINS. Set it to the exact "
-                "origin users load in the browser (e.g. https://app.example.com)."
             )
         return self
 

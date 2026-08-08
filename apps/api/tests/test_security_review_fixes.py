@@ -62,6 +62,54 @@ def test_wildcard_cors_allowed_in_local():
     assert settings.cors_origin_list == ["*"]
 
 
+# -- trusted_origins: APP_BASE_URL backfill + local loopback equivalence -----
+
+
+def test_trusted_origins_includes_app_base_url_origin():
+    # A web app moved to a custom domain (set in APP_BASE_URL) stays trusted even
+    # if CORS_ORIGINS still holds the old origin — no "Cross-origin request
+    # blocked" 403 on every write from config drift.
+    settings = Settings(
+        **_prod_kwargs(
+            cors_origins="https://legacy.silk.example",
+            app_base_url="https://app.silk.example/onboarding",  # a full URL folds to its origin
+        )
+    )
+    assert "https://app.silk.example" in settings.trusted_origins
+    assert "https://legacy.silk.example" in settings.trusted_origins
+
+
+def test_trusted_origins_loopback_equivalent_in_local():
+    # localhost / 127.0.0.1 / [::1] name the same dev machine but are distinct
+    # browser origins — treat them as one so 127.0.0.1 isn't blocked.
+    settings = Settings(
+        environment="local",
+        cors_origins="http://localhost:3000",
+        app_base_url="http://localhost:3000",
+    )
+    trusted = settings.trusted_origins
+    assert "http://localhost:3000" in trusted
+    assert "http://127.0.0.1:3000" in trusted
+    assert "http://[::1]:3000" in trusted
+
+
+def test_trusted_origins_no_loopback_expansion_outside_local():
+    # Real deploys aren't on loopback; don't synthesize extra origins there.
+    settings = Settings(
+        **_prod_kwargs(
+            cors_origins="https://app.silk.example",
+            app_base_url="https://app.silk.example",
+        )
+    )
+    assert settings.trusted_origins == ["https://app.silk.example"]
+
+
+def test_trusted_origins_wildcard_passthrough_in_local():
+    # A wildcard survives only in local; return it verbatim for Starlette's "*".
+    settings = Settings(environment="local", cors_origins="*")
+    assert "*" in settings.trusted_origins
+
+
 # -- S3 default-credential guard -------------------------------------------
 
 
@@ -177,6 +225,66 @@ def test_cookie_put_with_allowed_origin_succeeds(client, factory_user):
         headers={"Origin": "http://localhost:3000"},  # the local CORS allowlist
     )
     assert res.status_code == 200, res.text
+
+
+def test_cookie_put_with_loopback_origin_succeeds(client, factory_user):
+    # The dev server allowlists http://localhost:3000; a browser that reached it
+    # via http://127.0.0.1:3000 sends that loopback Origin. In local the two are
+    # treated as the same origin, so the write is NOT blocked.
+    _cookie(client, factory_user)
+    res = client.put(
+        "/api/v1/auth/me",
+        json={"display_name": "X"},
+        headers={"Origin": "http://127.0.0.1:3000"},
+    )
+    assert res.status_code == 200, res.text
+
+
+def _fake_put_request(headers: dict[str, str]):
+    from starlette.requests import Request
+
+    raw = [(k.lower().encode(), v.encode()) for k, v in headers.items()]
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": "PUT",
+        "scheme": "http",
+        "path": "/api/v1/auth/me",
+        "raw_path": b"/api/v1/auth/me",
+        "query_string": b"",
+        "root_path": "",
+        "headers": raw,
+        "server": ("testserver", 80),
+        "client": ("test", 123),
+    }
+    return Request(scope)
+
+
+def test_local_wildcard_origin_accepts_any_origin(monkeypatch):
+    # In local a wildcard CORS_ORIGINS trusts every origin for the CSRF guard too
+    # (matches the CORS middleware's "*" behaviour); prod rejects the wildcard.
+    from app import security
+
+    monkeypatch.setattr(
+        security, "get_settings", lambda: Settings(environment="local", cors_origins="*")
+    )
+    # No exception raised => accepted.
+    security._enforce_same_origin(_fake_put_request({"origin": "https://anything.example"}))
+
+
+def test_foreign_origin_still_blocked_via_guard(monkeypatch):
+    from fastapi import HTTPException
+
+    from app import security
+
+    monkeypatch.setattr(
+        security,
+        "get_settings",
+        lambda: Settings(environment="local", cors_origins="http://localhost:3000"),
+    )
+    with pytest.raises(HTTPException) as exc:
+        security._enforce_same_origin(_fake_put_request({"origin": "https://evil.example"}))
+    assert exc.value.status_code == 403
 
 
 def test_cookie_get_is_not_csrf_checked(client, factory_user):

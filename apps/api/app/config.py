@@ -8,11 +8,50 @@ with no third-party accounts.
 from __future__ import annotations
 
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEV_SECRET_DEFAULT = "dev-secret-key-not-for-production"
+
+# The three spellings of the loopback host. In local dev they name the same
+# machine, but ``http://localhost:3000`` and ``http://127.0.0.1:3000`` are
+# *different* browser origins — a mismatch that otherwise 403s every
+# state-changing request with "Cross-origin request blocked". Treated as
+# interchangeable for the trusted-origin set in local only.
+_LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
+
+
+def _origin_of(url: str) -> str | None:
+    """``scheme://host[:port]`` for an absolute URL, else ``None``.
+
+    Used to fold ``APP_BASE_URL`` (a full URL, possibly with a path) down to the
+    bare origin the browser sends in its ``Origin`` header.
+    """
+    parts = urlsplit(url.strip())
+    if not parts.scheme or not parts.netloc:
+        return None
+    return f"{parts.scheme}://{parts.netloc}"
+
+
+def _loopback_equivalents(origins: list[str]) -> list[str]:
+    """Expand any loopback origin to all three loopback spellings (same port).
+
+    ``http://localhost:3000`` → also ``http://127.0.0.1:3000`` and
+    ``http://[::1]:3000``. Non-loopback origins pass through untouched.
+    """
+    out = list(origins)
+    for origin in origins:
+        parts = urlsplit(origin)
+        if parts.hostname not in _LOOPBACK_HOSTS:
+            continue
+        port = f":{parts.port}" if parts.port else ""
+        for host in ("localhost", "127.0.0.1", "[::1]"):
+            candidate = f"{parts.scheme}://{host}{port}"
+            if candidate not in out:
+                out.append(candidate)
+    return out
 
 
 class Settings(BaseSettings):
@@ -345,6 +384,45 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def trusted_origins(self) -> list[str]:
+        """First-party origins trusted for CORS *and* the cookie-CSRF check.
+
+        The web app talks to one origin (the browser hits the Next.js server,
+        which proxies ``/api/v1/*`` to this API), so a state-changing request
+        arrives carrying the *web* app's ``Origin``. The cookie-CSRF guard pins
+        that Origin to this set; if it isn't in it, the request 403s with
+        "Cross-origin request blocked".
+
+        The set is the union of the explicit ``CORS_ORIGINS`` allowlist and
+        ``APP_BASE_URL``'s own origin. Folding ``APP_BASE_URL`` in means an
+        operator who moves the web app to a custom domain only has to update the
+        one variable they must set anyway (email/OAuth links are built from it,
+        and a prod guard already forbids it pointing at localhost) — a stale
+        ``CORS_ORIGINS`` no longer silently blocks every write. In local, the
+        loopback spellings (localhost / 127.0.0.1 / [::1]) are treated as
+        interchangeable so hitting the dev server on 127.0.0.1 isn't blocked.
+
+        A wildcard is only reachable in local (the prod guard rejects it); it is
+        returned verbatim so Starlette's own ``*`` handling still applies.
+        """
+        origins = list(self.cors_origin_list)
+        app_origin = _origin_of(self.app_base_url)
+        if app_origin and app_origin not in origins:
+            origins.append(app_origin)
+        if "*" in origins:
+            return origins
+        if self.environment.strip().lower() == "local":
+            origins = _loopback_equivalents(origins)
+        # De-duplicate while preserving order.
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for origin in origins:
+            if origin not in seen:
+                seen.add(origin)
+                deduped.append(origin)
+        return deduped
 
 
 @lru_cache

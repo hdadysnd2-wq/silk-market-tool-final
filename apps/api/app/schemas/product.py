@@ -8,7 +8,11 @@ from pydantic import BaseModel, Field
 
 class HSCandidate(BaseModel):
     code: str
-    confidence: float
+    # Nullable on purpose: the deterministic classifier stores `None` when a match
+    # is honestly unscored (I1 — never a fabricated number). A required float here
+    # made `GET /products` 500 on any product the worker classified without a
+    # confidence score. See hs_classifier.classify_product.
+    confidence: float | None = None
     rationale: str | None = None
     description_en: str | None = None
     description_ar: str | None = None

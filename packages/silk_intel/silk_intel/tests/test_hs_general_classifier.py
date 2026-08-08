@@ -70,6 +70,31 @@ def test_classify_general_deterministic_only_never_needs_llm_for_clean_match():
     assert r["message"] == "✓ صُنّف تلقائياً"
 
 
+def test_classify_general_consults_llm_on_clean_match_when_image_supplied_signals():
+    """إشارات الصورة/الملصق (`ingredients`) تُجبر استشارة كلود حتى على تطابقٍ
+    حتميٍّ واضح («تمور») — لأن الملصق قد ينقل المنتج إلى بندٍ آخر (حليبٌ منكّه
+    محلّى مثلاً، لا حليبٌ عادي). بلا إشاراتٍ يبقى الاختصار الحتميّ الرخيص بلا
+    نداء (الاختبار المجاور فوق)."""
+    import silk_hs_classifier as hsc
+    fake = _fake_llm([
+        {"hs6": "080410", "description_ar": "تمر مجفّف", "reason_ar": "تمر",
+         "confidence": 0.9},
+    ])
+    with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "1"}), \
+         patch("silk_ai_judge.available", return_value=True), \
+         patch("silk_ai_judge._call", return_value=fake) as mock_call, \
+         patch("silk_usage.try_reserve_paid_calls", return_value=True), \
+         patch("silk_usage.try_reserve_usd", return_value=True):
+        hsc.classify_general("تمور", ingredients=["نكهة الفراولة", "سكر مضاف"],
+                             allow_claude=True)
+    assert mock_call.called is True, "الملصق/الصورة يجب أن تستدعي كلود حتى على تطابقٍ حتميٍّ"
+
+    # وبلا إشاراتٍ: يبقى الاختصار الحتمي بلا نداء (لا إنفاق زائد) — تأكيدٌ مزدوج.
+    with patch("silk_ai_judge._call") as mock_call2:
+        hsc.classify_general("تمور", allow_claude=True)
+    assert mock_call2.called is False
+
+
 def test_classify_general_never_auto_passes_flagged_product_without_llm():
     """«زبدة الفول السوداني» — العيّنة الأصلية للحادثة (مرساةُ الدرس ٣٩،
     الاسم ثابتٌ في السجلّ). القاعدة الأمنية الدائمة: الرمز اللفظي الخاطئ

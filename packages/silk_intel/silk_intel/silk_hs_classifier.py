@@ -444,7 +444,15 @@ def classify_general(product: str, hs_code: str | None = None,
 
     used_llm = False
     top = _clearly_auto(candidates)
-    if top is None and allow_claude and enabled():
+    # إشارات الصورة/الملصق (ingredients) قد تنقل المنتج إلى بندٍ مختلفٍ عن اسمه
+    # المجرّد — الحليب المنكّه/المحلّى ينتمي إلى بندٍ غير بند الحليب العادي مثلاً.
+    # فتطابقُ الاسم الحتميّ الواثق **لا يكفي** حينها: نستشير كلود حتى لو بدا
+    # «تلقائياً واضحاً»، فتنضمّ مرشّحاته إلى نفس المجمع ويحسم اختبارُ الهامش نفسه
+    # — وإن لم يجد كلود أفضل، يبقى الحتميّ كما هو (لا تراجع). بلا هذه الإشارات
+    # يُحفظ اختصار المُحلِّل الحتمي الرخيص (لا إنفاق زائد).
+    # A confident name-only match is NOT sufficient once the vision pass supplied
+    # label signals; consult Claude so those signals are actually used.
+    if (top is None or ingredients) and allow_claude and enabled():
         cache_key = product if not (ingredients or category) else (
             product + "|" + "|".join(sorted(str(i) for i in (ingredients or [])))
             + "|" + str(category or ""))

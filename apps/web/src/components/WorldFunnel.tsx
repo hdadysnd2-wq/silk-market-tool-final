@@ -9,10 +9,13 @@ import type { Analysis, AnalysisAccepted, FunnelBrief, Product } from "@/lib/typ
 /**
  * How long the UI waits for a world-funnel run before giving up. The offline mock
  * finishes in well under a second, but a live Comtrade screen makes real, throttled
- * calls under the per-analysis budget and can take minutes — so this is generous.
- * The worker always finishes regardless; this only bounds how long the UI polls.
+ * calls under the per-analysis budget and can take minutes — and an HS6 with no
+ * coverage yet now stays `pending` while the worker chains a live coverage sync
+ * (bounded by per-year socket timeouts, worst case ≈ 6–7 min) and re-ranks
+ * automatically, so the poll window must outlast that whole chain. The worker
+ * always finishes regardless; this only bounds how long the UI polls.
  */
-const LIVE_SCREEN_TIMEOUT_MS = 180_000;
+const LIVE_SCREEN_TIMEOUT_MS = 480_000;
 
 /**
  * Stage-1 world funnel for a product: screens every market locally and shows the

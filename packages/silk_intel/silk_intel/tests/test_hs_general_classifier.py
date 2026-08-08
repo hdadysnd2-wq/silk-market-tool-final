@@ -763,3 +763,171 @@ def test_incident_model_authored_text_cannot_self_certify_auto():
     # تلقائياً — التشديد يخصّ مصدرَ النصّ لا العتبة.
     r2 = hsc.classify_general("تمور", allow_claude=False)
     assert r2["tier"] == "auto" and r2["hs6"] == "080410", r2
+
+
+# ══════════ ADR-0010 — درجة «تلقائي» بحكم النموذج الحاسم (قرار المالك) ══════
+#
+# الشكوى المتكرّرة (2026-08-08، الثالثة من عائلتها): بعد ADR-0009 ظلّ كلُّ
+# منتجٍ استُشير النموذجُ فيه يتوقّف عند المنتقي اليدوي — البوابةُ المُرساة على
+# البذرة بنيوياً لا تصل «تلقائي» لرمزٍ صحيحٍ خارج بذرتنا الجزئية (حليبٌ منكّه
+# => بند المشروبات). قرارُ المالك: حكمُ النموذج **المُعلَنُ الحسم** يُثبَّت،
+# بشروطٍ صارمة، وبوسم مصدرٍ مميَّز، والتجاوزُ البشري يبقى سيّداً في المنصّة.
+
+_DECISIVE_SLATE = [
+    {"hs6": "220299",
+     "description_ar": "مشروبات غير كحولية أخرى — مشروب حليب milk "
+                       "منكّه محلّى مهيّأ للشرب المباشر",
+     "reason_ar": "الملصق يُظهر نكهة فراولة وسكريات مضافة — شكلٌ محضَّرٌ "
+                  "للشرب لا سلعة خام",
+     "confidence": 0.9},
+    {"hs6": "040299", "description_ar": "حليب وقشدة محلاة غير جافّة",
+     "reason_ar": "بديلٌ لو غلب مكوّنُ الحليب", "confidence": 0.55},
+]
+
+
+def _decisive_llm(slate=None, decisive=True):
+    obj = {"candidates": slate or _DECISIVE_SLATE}
+    if decisive:
+        obj["decisive"] = True
+    return json.dumps(obj)
+
+
+def test_decisive_verdict_reaches_auto_with_tagged_source():
+    """حكمٌ حاسمٌ مستوفي الشروط (ثقة ≥ ٠٫٨، هامشٌ واضح، اجتاز البوابة
+    البنيوية وتصدّر المجمع) => `tier="auto"` بمصدرٍ موسوم `llm_decisive` —
+    فتُثبِّته المنصّة (ADR-0009/0010) بلا نقرة، والمرشّحون يبقون معروضين
+    للتجاوز البشري بنقرة."""
+    import silk_hs_classifier as hsc
+    fake = MagicMock(return_value=_decisive_llm())
+    p1, p2, p3, p4, p5 = _strawberry_patches(fake)
+    with p1, p2, p3, p4, p5:
+        r = hsc.classify_general("milk حليب", ingredients=_STRAWBERRY_HINTS,
+                                 allow_claude=True)
+    assert r["tier"] == "auto", r
+    assert r["hs6"] == "220299", r
+    assert r["source"] == "llm_decisive", r["source"]
+    assert r["message"] == "✓ صُنّف تلقائياً"
+    assert any(c["hs6"] == "220299" for c in r["candidates"]), (
+        "المرشّحون يجب أن يبقوا معروضين للتجاوز بنقرة")
+
+
+def test_no_decisive_flag_stays_candidates():
+    """ردٌّ بلا حقل `decisive` (كل إجابات السياسة السابقة v2) لا يُثبَّت أبداً
+    — لا تغييرَ خلسةً لسلوك الردود القديمة، ومفتاحُ الذاكرة الموسوم بالنسخة
+    يعيد حوسبةَ المخزونِ القديم لا إعادتَه."""
+    import silk_hs_classifier as hsc
+    fake = MagicMock(return_value=_decisive_llm(decisive=False))
+    p1, p2, p3, p4, p5 = _strawberry_patches(fake)
+    with p1, p2, p3, p4, p5:
+        r = hsc.classify_general("milk حليب", ingredients=_STRAWBERRY_HINTS,
+                                 allow_claude=True)
+    assert r["tier"] == "candidates", r["tier"]
+    assert r["hs6"] is None
+
+
+def test_decisive_with_contradicting_confidences_stays_candidates():
+    """ادّعاءُ حسمٍ بثقتين متقاربتين (هامش < ٠٫١٥) أو بثقةٍ دون العتبة
+    (< ٠٫٨) تناقضٌ ذاتيٌّ يُرفَض — «عند الشك اسأل» تبقى قائمة."""
+    import silk_hs_classifier as hsc
+    narrow = [dict(_DECISIVE_SLATE[0], confidence=0.85),
+              dict(_DECISIVE_SLATE[1], confidence=0.8)]
+    weak = [dict(_DECISIVE_SLATE[0], confidence=0.6)]
+    for slate in (narrow, weak):
+        fake = MagicMock(return_value=_decisive_llm(slate))
+        p1, p2, p3, p4, p5 = _strawberry_patches(fake)
+        with p1, p2, p3, p4, p5:
+            r = hsc.classify_general("milk حليب",
+                                     ingredients=_STRAWBERRY_HINTS,
+                                     allow_claude=True)
+        assert r["tier"] == "candidates", (slate, r["tier"])
+
+
+def test_decisive_structurally_rejected_verdict_never_commits():
+    """حكمٌ حاسمٌ برمزٍ مرفوضٍ بنيوياً (فصلٌ لا وجود له) لا يعبر أبداً —
+    بوابةُ عدم الاختلاق تسبق قرارَ المالك ولا يعطّلها (I1)."""
+    import silk_hs_classifier as hsc
+    slate = [dict(_DECISIVE_SLATE[0], hs6="999999"), _DECISIVE_SLATE[1]]
+    fake = MagicMock(return_value=_decisive_llm(slate))
+    p1, p2, p3, p4, p5 = _strawberry_patches(fake)
+    with p1, p2, p3, p4, p5:
+        r = hsc.classify_general("milk حليب", ingredients=_STRAWBERRY_HINTS,
+                                 allow_claude=True)
+    assert r["tier"] != "auto", r
+    assert all(c["hs6"] != "999999" for c in r["candidates"])
+
+
+def test_decisive_kill_switch_restores_strict_gate():
+    """الصمّامُ الصريح (SILK_HS_LLM_AUTO=0) يعيد البوابةَ المُرساة على البذرة
+    وحدها — قرارُ مشغّلٍ صريح لا افتراضٌ صامت."""
+    import silk_hs_classifier as hsc
+    fake = MagicMock(return_value=_decisive_llm())
+    p1, p2, p3, p4, p5 = _strawberry_patches(fake)
+    with p1, p2, p3, p4, p5, \
+         patch.dict(os.environ, {"SILK_HS_LLM_AUTO": "0"}):
+        r = hsc.classify_general("milk حليب", ingredients=_STRAWBERRY_HINTS,
+                                 allow_claude=True)
+    assert r["tier"] == "candidates", r["tier"]
+
+
+def test_llm_decisive_top_honors_verdict_not_lexical_leader():
+    """المراجعة الذاتية (§58): `_llm_decisive_top` يُطابق حكمَ النموذج بالرمز
+    داخل المجمع لا بموضعه — مرشّحٌ لفظيٌّ أعلى تداخلاً قد يتصدّر `cands`، لكن
+    الحكمَ المُتحقَّق بنيوياً (الحاضرَ في المجمع فوق عتبة العرض) هو ما يُثبَّت.
+    عينُ حادثة حليب الفراولة: بندُ الاسم المجرّد أقربُ لفظياً من بند الشكل
+    المحضَّر المحسوم — اشتراطُ الصدارة اللفظية كان سيُسقِط الحكمَ الصحيح.
+    اختبارُ وحدةٍ حتميّ (تداخلاتٌ مُصطنَعة) كي لا يعتمد على مطابقةٍ لفظية
+    فعلية متقلّبة."""
+    import silk_hs_classifier as hsc
+    # 040299 يتصدّر `cands` بتداخلٍ لفظيٍّ أعلى، لكن حكمَ النموذج 220299.
+    cands = [
+        {"hs6": "040299", "source": "llm", "overlap": 0.8},
+        {"hs6": "220299", "source": "llm", "overlap": 0.5},
+    ]
+    slate = [{"hs6": "220299", "confidence": 0.92, "decisive": True},
+             {"hs6": "040299", "confidence": 0.5}]
+    top = hsc._llm_decisive_top(cands, slate)
+    assert top is not None and top["hs6"] == "220299", top
+
+    # لكن حكماً دون عتبة العرض (تداخل < العتبة) لا يمرّ — ليس أيَّ رمزٍ يدّعيه
+    # النموذج، بل الحاضرَ فعلاً فوق عتبة العرض.
+    weak = [{"hs6": "040299", "source": "llm", "overlap": 0.8},
+            {"hs6": "220299", "source": "llm", "overlap": 0.1}]
+    assert hsc._llm_decisive_top(weak, slate) is None
+
+    # وحكمٌ غائبٌ عن المجمع (رُفض بنيوياً فلم يصل `cands`) لا يمرّ.
+    missing = [{"hs6": "040299", "source": "llm", "overlap": 0.8}]
+    assert hsc._llm_decisive_top(missing, slate) is None
+
+
+def test_decisive_verdict_leads_the_displayed_slate():
+    """الرمزُ المُثبَّت آلياً يتصدّر قائمةَ العرض حتى لو لم يكن أعلى تداخلٍ
+    لفظيّ — كي يقرأ مستهلكو القائمة (الواجهة/المنصّة) العنصرَ [0] هو الرمزَ
+    المُثبَّت نفسَه. (المرشّح الطبيعي 220299 يتصدّر هنا أصلاً؛ الاختبار يقفل
+    التطابقَ بين رأس القائمة و`hs6` المُثبَّت.)"""
+    import silk_hs_classifier as hsc
+    fake = MagicMock(return_value=_decisive_llm())
+    p1, p2, p3, p4, p5 = _strawberry_patches(fake)
+    with p1, p2, p3, p4, p5:
+        r = hsc.classify_general("milk حليب", ingredients=_STRAWBERRY_HINTS,
+                                 allow_claude=True)
+    assert r["tier"] == "auto"
+    assert r["candidates"][0]["hs6"] == r["hs6"], (
+        f"رأسُ العرض يجب أن يطابق الرمزَ المُثبَّت: "
+        f"{[c['hs6'] for c in r['candidates']]} vs {r['hs6']}")
+
+
+def test_decisive_verdict_survives_cache_round_trip():
+    """الحسمُ يعيش في الذاكرة: النداء الأول حيٌّ والثاني يُخدَم من المخزن —
+    وكلاهما يبلغ «تلقائي» (علامةُ الحسم تُخزَّن مع السِجِلّ ولا تضيع، وإلا
+    عاد المنتجُ المكرَّر إلى المنتقي اليدوي رغم حكمٍ محفوظ)."""
+    import silk_hs_classifier as hsc
+    fake = MagicMock(return_value=_decisive_llm())
+    p1, p2, p3, p4, p5 = _strawberry_patches(fake)
+    with p1, p2, p3, p4, p5:
+        r1 = hsc.classify_general("milk حليب", ingredients=_STRAWBERRY_HINTS,
+                                  allow_claude=True)
+        r2 = hsc.classify_general("milk حليب", ingredients=_STRAWBERRY_HINTS,
+                                  allow_claude=True)
+    assert fake.call_count == 1, "الردُّ الثاني يجب أن يُخدَم من الذاكرة"
+    assert r1["tier"] == "auto" and r2["tier"] == "auto", (r1["tier"], r2["tier"])
+    assert r2["hs6"] == "220299" and r2["source"] == "llm_decisive"

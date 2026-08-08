@@ -32,7 +32,9 @@ log = logging.getLogger("silk.hs_classifier")
 #: نسخةُ سياسة التصنيف (prompt + اختيار النموذج) المضمّنة في مفتاح الذاكرة.
 #: ارفعها كلّما تغيّر الـprompt أو منطقُ النموذج كي تُبطَل الإجاباتُ المخزّنة
 #: بالسياسة القديمة تلقائياً (bump on any prompt/model-policy change).
-_CLASSIFY_POLICY_VERSION = "v2-img-evidence"
+#: v3: الـprompt صار يطلب حكمَ حسمٍ صريحاً (`decisive`) — إجاباتُ v2 بلا
+#: الحقل كانت ستُعاد من الذاكرة للأبد فلا يُثبَّت شيءٌ آلياً رغم الإصلاح.
+_CLASSIFY_POLICY_VERSION = "v3-decisive-verdict"
 
 # عتبة ثقة المُحلِّل الحتمي التي دونها نستدعي كلود — نفس عتبة `resolve_all`
 # (٠٫٧). قابلة للضبط بالبيئة فقط (لا رقم مكتوب صلبًا في المنطق العام).
@@ -297,6 +299,29 @@ _CANDIDATE_MIN_OVERLAP = float(
 # التباس حقيقي بين احتمالين => نسأل لا نُخمِّن (الأمر: «صارمٌ — عند الشك اسأل»).
 _AUTO_MARGIN = float(os.environ.get("SILK_HS_AUTO_MARGIN", "0.15") or "0.15")
 
+# ── درجة «تلقائي» بحكم النموذج الحاسم (ADR رقم ١٠ في المنصّة، قرار المالك) ────────────────────────────────────────────────────────────────
+# البوابة الحتمية المُرساة على البذرة (`_clearly_auto`) بنيوياً لا تصل درجةَ
+# «تلقائي» لمنتجٍ حكمُه الصحيح خارج بذرتنا الجزئية (حليبٌ منكّه => بند
+# المشروبات مثلاً): تداخلُ البذرة يبقى دون العتبة مهما كان حكمُ النموذج
+# صائباً، فيتوقّف كلُّ منتجٍ استُشير النموذجُ فيه عند المنتقي اليدوي — عينُ
+# الشكوى المتكرّرة («ما زال لا يحدّد الرمز تلقائياً»). قرارُ المالك: حكمُ
+# النموذج **المُعلَنُ الحسم** يُثبَّت آلياً — بشروطٍ صارمة (انظر
+# `_llm_decisive_top`) وبوسم مصدرٍ مميَّز (`llm_decisive`) والتجاوزُ البشري
+# بنقرةٍ يبقى سيّداً في المنصّة (ADR رقم ٩). عتبتا الثقة والهامش قابلتان
+# للضبط، والصمّامُ يُطفأ صراحةً (SILK_HS_LLM_AUTO=0) لا افتراضاً.
+_LLM_AUTO_MIN_CONF = float(
+    os.environ.get("SILK_HS_LLM_AUTO_MIN_CONF", "0.8") or "0.8")
+_LLM_AUTO_MARGIN = float(
+    os.environ.get("SILK_HS_LLM_AUTO_MARGIN", "0.15") or "0.15")
+
+
+def _llm_auto_enabled() -> bool:
+    """صمّامُ التثبيت بحكم النموذج — فشل-آمن مفعّلٌ افتراضياً (نفس عائلة
+    `enabled()` أعلاه): يُطفأ صراحةً فقط (SILK_HS_LLM_AUTO=0/false/no/off)،
+    فيعود النظام إلى البوابة المُرساة على البذرة وحدها."""
+    raw = os.environ.get("SILK_HS_LLM_AUTO", "").strip().lower()
+    return raw not in ("0", "false", "no", "off")
+
 
 def _clean_hs6(v) -> str:
     digits = "".join(ch for ch in str(v or "") if ch.isdigit())
@@ -405,6 +430,66 @@ def _dedupe_candidates(cands: list[dict]) -> list[dict]:
     return sorted(seen.values(), key=_rank_key, reverse=True)
 
 
+def _llm_decisive_top(cands: list[dict], llm_slate: list | None) -> dict | None:
+    """بوابةُ الحسم النموذجي (ADR رقم ١٠ في المنصّة — قرار المالك):
+    يعيد المرشّحَ الأعلى للمجمع المدموج **فقط** حين أعلن النموذجُ الحسمَ
+    صراحةً واستوفى كلَّ الشروط، وإلا `None` (تبقى درجةُ «مرشّحين»).
+
+    الشروط، كلُّها معاً:
+    ١. النموذجُ أعلن `decisive: true` على رأس سِجِلِّه — غيابُ الحقل (كل ردود
+       السياسة السابقة v2) ليس حسماً أبداً؛
+    ٢. ثقةُ النموذج في مرشّحه الأول ≥ `SILK_HS_LLM_AUTO_MIN_CONF` (٠٫٨
+       افتراضياً) **ويتفوّق بهامش** ≥ `SILK_HS_LLM_AUTO_MARGIN` (٠٫١٥) على
+       مرشّحه الثاني — ادّعاءُ حسمٍ بثقتين متقاربتين تناقضٌ ذاتيٌّ يُرفَض
+       («عند الشك اسأل» تبقى قائمة)؛
+    ٣. مرشّحُ الحكم نفسُه (`hs6` رأسِ سِجِلِّ النموذج) اجتاز بوابةَ التحقّق
+       البنيوية فحضر في المجمع المدموج (`_validated_candidate` — سلامة
+       الفصل، الاستبعاد النطاقي، لا اختلاق رمز) وتداخلُه فوق عتبة العرض
+       (`_CANDIDATE_MIN_OVERLAP`) — حكمٌ رُفض بنيوياً لا يُثبَّت.
+
+    مراجعةٌ ذاتية (§58): البوابةُ لا تشترط أن يكون حكمُ النموذج **متصدّرَ
+    التداخل اللفظي** (`cands[0]`) — عينُ الحادثة المُصلَحة: بندُ الاسم
+    المجرّد (الحليب الخام) كثيراً ما يسجّل تداخلاً لفظياً أعلى من بند الشكل
+    المحضَّر الصحيح (المشروبات المهيّأة) الذي حسمته أدلةُ الملصق، فاشتراطُ
+    الصدارة اللفظية كان سيُسقِط الحكمَ الصحيحَ ويعيد المنتجَ للمنتقي اليدوي
+    (نفسُ الشكوى المتكرّرة). حكمُ النموذج المُعلَنُ الحسم — بعد اجتيازه
+    التحقّقَ البنيوي — يُقدَّم لصدارة العرض (انظر المستدعي).
+
+    التشديدُ الأمني (الدرس ٨٠) يبقى كما هو للبوابة المُرساة على البذرة؛ هذه
+    درجةٌ **موسومة المصدر** (`llm_decisive`) قرَّر المالكُ قبولَها مع بقاء
+    التجاوز البشري بنقرةٍ سيّداً وسِجِلِّ التصحيح يتعلّم منه (ADR رقم ٩)."""
+    if not cands or not llm_slate:
+        return None
+    first = llm_slate[0] if isinstance(llm_slate[0], dict) else {}
+    if not first.get("decisive"):
+        return None
+    verdict_hs6 = _clean_hs6(first.get("hs6"))
+    try:
+        conf = float(first.get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        conf = 0.0
+    if not verdict_hs6 or conf < _LLM_AUTO_MIN_CONF:
+        return None
+    if len(llm_slate) > 1 and isinstance(llm_slate[1], dict):
+        try:
+            second = float(llm_slate[1].get("confidence") or 0.0)
+        except (TypeError, ValueError):
+            second = 0.0
+        if conf - second < _LLM_AUTO_MARGIN:
+            return None
+    # الحكمُ يُطابَق بالرمز داخل المجمع المدموج (لا بموضعه): مرشّحٌ لفظيٌّ
+    # أقربُ للاسم المجرّد قد يتصدّر `cands`، لكن حكمَ النموذج المُتحقَّق بنيوياً
+    # هو ما يُثبَّت — بشرط أن يكون فعلاً اجتاز الگيت (حاضرٌ في `cands`).
+    verdict = next(
+        (c for c in cands
+         if c.get("hs6") == verdict_hs6 and c.get("source") == "llm"), None)
+    if verdict is None:
+        return None
+    if (verdict.get("overlap") or 0.0) < _CANDIDATE_MIN_OVERLAP:
+        return None
+    return verdict
+
+
 def classify_general(product: str, hs_code: str | None = None,
                      ingredients: list | None = None,
                      category: str | None = None,
@@ -459,6 +544,7 @@ def classify_general(product: str, hs_code: str | None = None,
 
     used_llm = False
     llm_consulted = False       # هل فُحصت إشاراتُ الملصق فعلاً (حيّاً أو من الذاكرة)؟
+    llm_raw: list | None = None  # سِجِلُّ النموذج الخام (حيّ/ذاكرة) — لبوابة الحسم
     top = _clearly_auto(candidates)
     # إشارات الصورة/الملصق (ingredients) قد تنقل المنتج إلى بندٍ مختلفٍ عن اسمه
     # المجرّد — الحليب المنكّه/المحلّى ينتمي إلى بندٍ غير بند الحليب العادي مثلاً.
@@ -523,11 +609,30 @@ def classify_general(product: str, hs_code: str | None = None,
                  "unconsulted (product=%s)", product)
         top = None
 
+    # ADR رقم ١٠ (المنصّة، قرار المالك): حكمُ النموذج المُعلَنُ الحسم
+    # يبلغ درجةَ «تلقائي» — فقط بعد استشارةٍ وقعت فعلاً (الدرس ٧٩ سليم:
+    # `llm_consulted`)، وفقط حين يجتاز مرشّحُ الحكم بوابةَ التحقّق البنيوية
+    # ويتصدّر المجمعَ المدموج ويستوفي عتبةَ الثقة وهامشَ التفرّد (انظر
+    # `_llm_decisive_top`). غيابُ الحقل `decisive` من ردٍّ (كل إجابات السياسة
+    # السابقة) يعني لا حسمَ — لا تغييرَ خلسةً لسلوك أيّ ردٍّ قديم.
+    auto_source = top["source"] if top is not None else None
+    if top is None and llm_consulted and _llm_auto_enabled():
+        top = _llm_decisive_top(candidates, llm_raw)
+        if top is not None:
+            auto_source = "llm_decisive"
+            # صدارةُ العرض للرمز المُثبَّت: قد لا يكون حكمُ النموذج متصدّرَ
+            # التداخل اللفظي، فنُقدّمه كي يقرأ مستهلكو القائمة (الواجهة/المنصّة)
+            # العنصرَ [0] هو الرمزَ المُثبَّت نفسَه لا مرشّحاً آخر — والتجاوزُ
+            # البشري يبقى بنقرة على بقيّة المرشّحين.
+            candidates = [top] + [c for c in candidates if c["hs6"] != top["hs6"]]
+            log.info("hs llm decisive verdict accepted: %s (conf=%s)",
+                     top["hs6"], top.get("model_confidence"))
+
     if top is not None:
         return {"tier": "auto", "hs6": top["hs6"],
                "confidence": top.get("overlap") or 0.0,
                "candidates": _public_candidates(candidates[:3], product),
-               "message": "✓ صُنّف تلقائياً", "source": top["source"],
+               "message": "✓ صُنّف تلقائياً", "source": auto_source,
                "used_llm": used_llm}
 
     plausible = [c for c in candidates
@@ -648,8 +753,16 @@ def _claude_classify_general(product: str, ingredients, category,
         "لكل مرشّح: الرمز (٦ أرقام)، وصفه الرسمي الدقيق (عربي موجز)، وسببٌ من "
         "سطرٍ واحد لماذا يناسب هذا المنتج تحديداً (لا صفةً ثانوية عارضة). "
         "رتّبها من الأنسب. إن كان المنتج غامضاً جداً أو لا يقع تحت أيّ فصلٍ "
-        "واضح قُل ذلك في السبب ولا تخترع رمزاً. أعِد JSON فقط بالشكل: "
-        '{"candidates":[{"hs6":"NNNNNN","description_ar":"وصف رسمي موجز",'
+        "واضح قُل ذلك في السبب ولا تخترع رمزاً. "
+        # ADR رقم ١٠: حكمُ الحسم الصريح — يثبَّت آلياً في المنصّة، فالمعيار
+        # يُعلَن للنموذج بلا لبس: الحسمُ استثناءُ الوضوح لا الافتراض.
+        "وأضِف حقلاً أعلى الكائن باسم decisive: اجعله true **فقط** إذا كانت "
+        "الأدلةُ (الاسم + عناصر الملصق إن وُجدت) تحسم بنداً واحداً بوضوحٍ لا "
+        "التباسَ جادّاً معه مع أيّ بديل، واعكس ذلك في ثقة المرشّح الأول "
+        "وفارقِها عن الثاني؛ وإن وُجد التباسٌ حقيقيٌّ بين بندين فاجعله false "
+        "— لا تدّعِ الحسم عند شكٍّ فعليّ. أعِد JSON فقط بالشكل: "
+        '{"decisive":true,"candidates":[{"hs6":"NNNNNN",'
+        '"description_ar":"وصف رسمي موجز",'
         '"reason_ar":"لماذا هذا الرمز","confidence":0.NN}, ...]}'
     ) + _user_steer("hs_classifier_general", instruction)
     # نموذجُ الحكم الافتراضي لا السريع: قرارُ بندٍ يُتّخذ مرةً واحدة لكل منتج
@@ -687,4 +800,8 @@ def _claude_classify_general(product: str, ingredients, category,
                     "description_ar": str(c.get("description_ar") or "").strip(),
                     "reason_ar": str(c.get("reason_ar") or "").strip(),
                     "confidence": max(0.0, min(1.0, conf))})
+    # حكمُ الحسم (ADR رقم ١٠) يخصّ رأسَ السِجِلّ وحده — يُحمَل على المرشّح الأول
+    # كي تعيده الذاكرةُ كما هو (الشكلُ المخزَّن يبقى قائمةَ مرشّحين).
+    if out and bool(obj.get("decisive")):
+        out[0]["decisive"] = True
     return out or None

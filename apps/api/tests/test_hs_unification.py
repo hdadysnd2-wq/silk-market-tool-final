@@ -223,6 +223,131 @@ def test_auto_committed_code_opens_downstream_gates(client, auth_headers, db, fa
     assert res.status_code == 409, res.text
 
 
+def test_llm_decisive_verdict_auto_commits_from_label_evidence(db, factory, monkeypatch, tmp_path):
+    """ADR-0010 end-to-end at the platform seam — the exact recurring complaint:
+    the strawberry-milk product (label attributes present) whose LLM
+    consultation actually happens (mocked) and returns an explicitly DECISIVE
+    verdict gets its code committed with zero clicks, tagged
+    ``hs_auto_classified``; the human flag stays human-only and the code is
+    FK-valid via the beyond-seed reference backfill."""
+    import json
+    from unittest.mock import patch as _patch
+
+    from app.config import get_settings
+
+    product = Product(
+        factory_id=factory.id,
+        name_ar="حليب",
+        name_en="milk",
+        currency="USD",
+        attributes=[
+            {"name": "flavor", "value": "Strawberry (حليب بالفراولة)"},
+            {"name": "nutrition", "value": "Sugars 11g"},
+        ],
+    )
+    db.add(product)
+    db.flush()
+
+    fake = json.dumps(
+        {
+            "decisive": True,
+            "candidates": [
+                {
+                    "hs6": "220299",
+                    "description_ar": "مشروبات غير كحولية أخرى — مشروب حليب milk "
+                    "منكّه محلّى مهيّأ للشرب المباشر",
+                    "reason_ar": "الملصق يُظهر نكهة فراولة وسكريات مضافة — شكلٌ "
+                    "محضَّرٌ للشرب لا سلعة خام",
+                    "confidence": 0.9,
+                },
+                {
+                    "hs6": "040299",
+                    "description_ar": "حليب وقشدة محلاة غير جافّة",
+                    "reason_ar": "بديلٌ لو غلب مكوّنُ الحليب",
+                    "confidence": 0.55,
+                },
+            ],
+        }
+    )
+
+    # allow_claude comes from settings.anthropic_api_key; the engine's result
+    # cache is routed to a throwaway store so no repo-local db file is created.
+    monkeypatch.setenv("SILK_STORE_DB", str(tmp_path / "store.db"))
+    get_settings.cache_clear()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    try:
+        with (
+            _patch("silk_ai_judge.available", return_value=True),
+            _patch("silk_ai_judge._call", return_value=fake),
+            _patch("silk_usage.try_reserve_paid_calls", return_value=True),
+            _patch("silk_usage.try_reserve_usd", return_value=True),
+        ):
+            hs_classifier.classify_product(db, product)
+    finally:
+        get_settings.cache_clear()
+
+    assert product.hs_code == "220299"
+    assert product.hs_auto_classified is True
+    assert product.hs_confirmed_by_user is False  # human flag stays human-only (I2)
+    assert db.get(HSCode, "220299") is not None  # FK-valid (reference backfill)
+    assert product.hs_candidates[0]["code"] == "220299"
+    assert product.hs_candidates[0]["provider"].endswith("(llm_decisive)")
+
+
+def test_reclassification_downgrade_clears_a_stale_auto_commit(db, factory):
+    """Self-review finding: a machine commit must be self-correcting. A product
+    auto-commits, then a later re-classification returns an ambiguous tier
+    (here: label signals present but the LLM cannot be consulted offline → the
+    engine downgrades, lesson 79). The stale machine code must NOT linger —
+    otherwise the world screen would run on a code the engine no longer
+    endorses. A human-confirmed code would be untouched; a machine one is
+    cleared."""
+    product = Product(factory_id=factory.id, name_ar="تمور", name_en="Dates", currency="USD")
+    db.add(product)
+    db.flush()
+    # First pass: clean deterministic auto-commit (no attributes → no downgrade).
+    hs_classifier.classify_product(db, product)
+    assert product.hs_code == "080410" and product.hs_auto_classified is True
+
+    # Now label signals arrive, but offline the LLM cannot be consulted, so the
+    # engine downgrades auto→candidates for this ambiguous product.
+    product.attributes = [
+        {"name": "flavor", "value": "Strawberry (حليب بالفراولة)"},
+        {"name": "nutrition", "value": "Sugars 11g"},
+    ]
+    product.name_ar, product.name_en = "حليب", "milk"
+    db.flush()
+    hs_classifier.classify_product(db, product)
+
+    # The stale auto commit is cleared — the product reverts to "needs a code".
+    assert product.hs_code is None
+    assert product.hs_auto_classified is False
+    assert product.hs_confirmed_by_user is False
+
+
+def test_reclassification_never_clears_a_human_confirmed_code(db, factory):
+    """The self-correcting downgrade is machine-only: a human-confirmed code
+    survives a re-classification that proposes something else (I2 supremacy)."""
+    hs_classifier.ensure_hs_code(db, "080410")
+    product = Product(
+        factory_id=factory.id,
+        name_ar="حليب",
+        name_en="milk",
+        currency="USD",
+        hs_code="080410",
+        hs_confirmed_by_user=True,
+        attributes=[{"name": "flavor", "value": "Strawberry"}],
+    )
+    db.add(product)
+    db.flush()
+
+    hs_classifier.classify_product(db, product)
+
+    assert product.hs_code == "080410"  # untouched
+    assert product.hs_confirmed_by_user is True
+    assert product.hs_auto_classified is False
+
+
 def test_label_signals_without_llm_never_auto_commit(db, factory):
     """Lesson 79 at the platform seam: vision attributes (label signals) present
     but the engine could not consult the LLM offline → the engine downgrades

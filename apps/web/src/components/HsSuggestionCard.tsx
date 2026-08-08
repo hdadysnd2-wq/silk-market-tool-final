@@ -122,7 +122,11 @@ export function HsSuggestionCard({
           disabled={busy || !selected}
           className="mt-4 w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
         >
-          {product.hs_confirmed_by_user ? t("override") : t("confirm")}
+          {/* An auto-committed code (ADR-0009/0010) is already committed — the
+              action is an override, exactly as after a human confirm. */}
+          {product.hs_confirmed_by_user || (product.hs_auto_classified && product.hs_code)
+            ? t("override")
+            : t("confirm")}
         </button>
       )}
 

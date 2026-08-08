@@ -119,3 +119,41 @@ def test_default_years_are_three_recent_ascending():
     assert len(years) == 3
     assert years == sorted(years)
     assert years[-1] - years[0] == 2
+
+
+# ── schema tolerance for the (never-live-verified) Comtrade response ─────────
+# The live _fetch_world_imports has never run against the paid API; an unexpected
+# column spelling used to silently drop every row (empty coverage read as "the
+# world doesn't import this"). resolve_columns tolerates known spellings and a
+# truly unknown schema is a declared gap the log names — these lock that.
+
+
+def test_resolve_columns_matches_documented_comtrade_spelling():
+    iso, val, qty = wt.resolve_columns(
+        ["period", "reporterISO", "primaryValue", "qty", "cmdCode"])
+    assert (iso, val, qty) == ("reporterISO", "primaryValue", "qty")
+
+
+def test_resolve_columns_is_case_insensitive_and_tolerates_aliases():
+    # A capitalised / aliased schema still resolves (spelling drift must not
+    # zero out real coverage).
+    iso, val, qty = wt.resolve_columns(
+        ["ReporterISO", "TradeValue", "primaryQty"])
+    assert iso == "ReporterISO"
+    assert val == "TradeValue"
+    assert qty == "primaryQty"
+
+
+def test_resolve_columns_reports_missing_mandatory_fields_as_none():
+    # No recognizable ISO or value column → both None (caller declares a gap and
+    # logs the columns received; it never fabricates or silently drops).
+    iso, val, qty = wt.resolve_columns(["reporterCode", "someOtherValue"])
+    assert iso is None
+    assert val is None
+    assert qty is None
+
+
+def test_resolve_columns_qty_optional_when_iso_and_value_present():
+    iso, val, qty = wt.resolve_columns(["reporterISO", "primaryValue"])
+    assert iso == "reporterISO" and val == "primaryValue"
+    assert qty is None  # qty is genuinely optional, not a hard failure

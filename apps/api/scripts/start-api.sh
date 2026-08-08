@@ -6,6 +6,12 @@
 # or beat start scripts — so schema changes are applied exactly once per deploy.
 set -e
 
+# Self-contained cwd (see start-worker.sh): cd ourselves rather than relying on
+# `cd X && sh Y` in the start command, which fails when a platform execs the
+# command without a shell. Alembic (alembic.ini), the seed and uvicorn all need
+# this working directory to import the `app` package.
+cd /app/apps/api
+
 # Settings are validated before anything touches the database. Alembic's env.py
 # instantiates Settings() too, so a missing required variable (e.g.
 # TOKEN_ENCRYPTION_KEY with ENVIRONMENT=production) used to surface as a

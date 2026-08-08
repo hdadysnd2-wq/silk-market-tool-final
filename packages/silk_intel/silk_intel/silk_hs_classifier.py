@@ -468,6 +468,10 @@ def classify_general(product: str, hs_code: str | None = None,
         else:
             llm_raw = None
         if llm_raw:
+            # سجلُّ تشخيصٍ لا حكم: بلا هذين السطرين يستحيل التمييز من سجلّ
+            # الإنتاج بين «النموذج لم يقترح» و«اقترح فرُفض بنيوياً/دُفن» —
+            # وهو عينُ ما أطال تشخيص حادثة حليب الفراولة.
+            log.info("hs llm proposed: %s", [c.get("hs6") for c in llm_raw[:3]])
             for c in llm_raw[:3]:
                 v = _validated_candidate(
                     product, c.get("hs6"), model_desc=c.get("description_ar", ""),
@@ -475,6 +479,9 @@ def classify_general(product: str, hs_code: str | None = None,
                     model_confidence=c.get("confidence", 0.0), source="llm")
                 if v is not None:
                     candidates.append(v)
+                else:
+                    log.info("hs llm candidate rejected by structural gate: %s",
+                             c.get("hs6"))
             candidates = _dedupe_candidates(candidates)
             top = _clearly_auto(candidates)
 
@@ -523,6 +530,13 @@ def _public_candidates(cands: list[dict], product: str = "") -> list[dict]:
     reasons = {c["hs6"]: (c.get("reason_ar") or "") for c in cands}
     rows = silk_hs_dialog.build_candidates(
         product, [c["hs6"] for c in cands], reasons=reasons)
+    # ترتيبُ العرض يحفظ ترتيبَ المحرّك: مرشّحو التصنيف أولاً (الأفضلُ يتصدّر —
+    # الواجهات ومستهلكو الـAPI يقرأون العنصرَ الأول اقتراحاً)، ثم أشقّاءُ
+    # المحور المكمَّلون للسياق بترتيب رموزهم. كانت إعادةُ فرزِ المحور تدفن
+    # فائزاً عبر-البند (بندَ الشكل المحضَّر الذي دلّت عليه أدلةُ الملصق) خلف
+    # أشقّاء بندِ الاسم المجرّد فيتصدّر اقتراحٌ خاطئ.
+    order = {c["hs6"]: i for i, c in enumerate(cands)}
+    rows.sort(key=lambda r: (order.get(r["hs6"], len(order)), r["hs6"]))
     for r in rows:
         r["confidence"] = scores.get(r["hs6"])
     return rows
@@ -538,8 +552,9 @@ def _reserve_llm_call() -> bool:
     import silk_usage
     if not silk_usage.try_reserve_paid_calls(1):
         return False
+    # الافتراضي يعكس نموذجَ الحكم القياسي (لا السريع) — حجزٌ صادقٌ لا متفائل.
     expected = float(
-        os.environ.get("SILK_HS_CLASSIFY_EXPECTED_USD", "0.02") or "0.02")
+        os.environ.get("SILK_HS_CLASSIFY_EXPECTED_USD", "0.06") or "0.06")
     return silk_usage.try_reserve_usd(expected)
 
 
@@ -568,40 +583,63 @@ def _claude_classify_general(product: str, ingredients, category,
     يحمل وصفه الرسمي (كما يراه النموذج) وسبباً — البوابة الحتمية
     (`_validated_candidate`) تفحصهم لاحقاً بمعزلٍ عن هذا النداء."""
     from silk_ai_judge import (available, _call, _isolate, _extract_json,
-                               _user_steer, _FAST_MODEL, _PRINCIPLE)
+                               _user_steer, _PRINCIPLE)
     if not available():
         return None
     extra = ""
     if ingredients:
         joined = "، ".join(str(i) for i in list(ingredients)[:20] if str(i).strip())
         if joined:
-            extra += "المكوّنات/العناصر المستخلَصة: " + _isolate(joined) + "\n"
+            extra += ("عناصر مستخلَصة آلياً من صورة المنتج/ملصقه الفعلي "
+                      "(مكوّنات، نكهات، قيم غذائية، عبارات الملصق): "
+                      + _isolate(joined) + "\n")
     if category:
         extra += "الفئة المقترحة: " + _isolate(str(category)) + "\n"
     user = (
         f"المنتج: {_isolate(product)}.\n" + extra +
         "أنت خبيرٌ بنظام التصنيف الجمركي المنسّق (HS) الدولي الكامل بكل "
         "فصوله (٠١–٩٧). اقترح أفضل ثلاثة رموز HS6 مرشّحة لهذا المنتج من "
-        "معرفتك الكاملة بالنظام — لا تقتصر على أيّ قائمةٍ مرفقة. لكل مرشّح: "
-        "الرمز (٦ أرقام)، وصفه الرسمي الدقيق (عربي موجز)، وسببٌ من سطرٍ واحد "
-        "لماذا يناسب هذا المنتج تحديداً (لا صفةً ثانوية عارضة). رتّبها من "
-        "الأنسب. إن كان المنتج غامضاً جداً أو لا يقع تحت أيّ فصلٍ واضح قُل "
-        "ذلك في السبب ولا تخترع رمزاً. أعِد JSON فقط بالشكل: "
+        "معرفتك الكاملة بالنظام — لا تقتصر على أيّ قائمةٍ مرفقة. "
+        # حادثة حليب الفراولة: الاسمُ المجرّد («حليب») طغى على أدلة الملصق
+        # فبقي المنتجُ في بند السلعة الخام — الأولوية تُعلَن صراحةً.
+        "الاسمُ المُدخل قد يكون عامّاً أو ناقصاً؛ عناصرُ الصورة/الملصق أعلاه "
+        "— إن وُجدت — بيّنةٌ أقوى من الاسم على حقيقة المنتج: إن دلّت على "
+        "نكهةٍ أو تحليةٍ أو تحضيرٍ أو خلطٍ أو تهيئةٍ للاستهلاك المباشر تُخرج "
+        "المنتجَ من بند السلعة الخام، فصنِّف الشكلَ الفعليَّ المحضَّر في "
+        "بنده الصحيح لا بندَ السلعة الخام باسمها المجرّد. "
+        "لكل مرشّح: الرمز (٦ أرقام)، وصفه الرسمي الدقيق (عربي موجز)، وسببٌ من "
+        "سطرٍ واحد لماذا يناسب هذا المنتج تحديداً (لا صفةً ثانوية عارضة). "
+        "رتّبها من الأنسب. إن كان المنتج غامضاً جداً أو لا يقع تحت أيّ فصلٍ "
+        "واضح قُل ذلك في السبب ولا تخترع رمزاً. أعِد JSON فقط بالشكل: "
         '{"candidates":[{"hs6":"NNNNNN","description_ar":"وصف رسمي موجز",'
         '"reason_ar":"لماذا هذا الرمز","confidence":0.NN}, ...]}'
     ) + _user_steer("hs_classifier_general", instruction)
-    raw = _call(_PRINCIPLE, user, max_tokens=700, model=_FAST_MODEL, timeout=25)
+    # نموذجُ الحكم الافتراضي لا السريع: قرارُ بندٍ يُتّخذ مرةً واحدة لكل منتج
+    # ويُخزَّن — رصدُه بالنموذج الخفيف ردّد رموزَ الاسم المجرّد متجاهلاً أدلة
+    # الملصق (البلاغ الحي). تثبيتُ نموذجٍ بعينه قرارُ مشغّلٍ صريح
+    # (SILK_HS_CLASSIFY_MODEL)، والمهلة تتّسع للنموذج الأقوى
+    # (SILK_HS_CLASSIFY_TIMEOUT).
+    model = os.environ.get("SILK_HS_CLASSIFY_MODEL", "").strip() or None
+    try:
+        timeout = float(os.environ.get("SILK_HS_CLASSIFY_TIMEOUT", "60") or "60")
+    except (TypeError, ValueError):
+        timeout = 60.0
+    raw = _call(_PRINCIPLE, user, max_tokens=700, model=model, timeout=timeout)
     if not raw:
         return None
     obj = _extract_json(raw)
     if not isinstance(obj, dict):
+        log.info("hs llm reply unparseable — no proposals surfaced")
         return None
     cands = obj.get("candidates")
     if not isinstance(cands, list):
+        log.info("hs llm reply carried no candidates list")
         return None
     out = []
     for c in cands[:3]:
         if not isinstance(c, dict) or not _clean_hs6(c.get("hs6")):
+            log.info("hs llm entry skipped (malformed): %r",
+                     c.get("hs6") if isinstance(c, dict) else type(c).__name__)
             continue
         try:
             conf = float(c.get("confidence") or 0.0)

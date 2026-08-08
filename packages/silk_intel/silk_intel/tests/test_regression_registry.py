@@ -1958,6 +1958,86 @@ def _guard_readiness_names_the_offending_variable():
         "silk_platform/api.py: البادئة لا تُحوِّل إلى الصفحة فعلاً")
 
 
+def _guard_image_evidence_decides_prepared_form():
+    """LESSONS ٧٨ — حادثة حليب الفراولة: أدلةُ الملصق بلغت نداء التصنيف ثم
+    ضاعت في أربع نقاطٍ متراكبة. الحارس السلوكي: (١) فائزُ كلود عبر-البند
+    يتصدّر القائمة المعروضة (العنصر [0]) ولا يُدفَن بفرز محور بند الاسم؛
+    (٢) الاقتراحاتُ الخام والمرفوضُ بنيوياً يُسجَّلان عند INFO؛ (٣) الـprompt
+    يُعلن أولويةَ أدلة الملصق على الاسم ولا يُجبِر نموذجاً بعينه بلا قرار
+    مشغّل؛ (٤) المخزنُ الموجَّه صراحةً إلى SQLite لا يختطف DATABASE_URL."""
+    import json as _json
+    import logging as _logging
+    import tempfile as _tempfile
+    import unittest.mock as _mock
+
+    import silk_hs_classifier as hsc
+    import silk_store
+
+    hints = ["Sugars 11g", "Strawberry (حليب بالفراولة)", "Tetra pack carton"]
+    seen, records = {}, []
+
+    def _capture(system, user, **kw):
+        seen["user"] = user
+        seen.update(kw)
+        return _json.dumps({"candidates": [
+            {"hs6": "220299",
+             "description_ar": "مشروبات غير كحولية — مشروب حليب milk منكّه",
+             "reason_ar": "شكلٌ محضَّر للشرب بحسب أدلة الملصق",
+             "confidence": 0.9},
+            {"hs6": "999999", "description_ar": "فصل لا وجود له",
+             "reason_ar": "لاختبار الرفض البنيوي", "confidence": 0.5}]})
+
+    handler = _logging.Handler()
+    handler.emit = lambda rec: records.append(rec.getMessage())
+    lg = _logging.getLogger("silk.hs_classifier")
+    old_level = lg.level
+    lg.addHandler(handler)
+    lg.setLevel(_logging.INFO)
+    try:
+        with _tempfile.TemporaryDirectory() as d, \
+             _mock.patch.object(silk_store, "_db_path",
+                                return_value=os.path.join(d, "store.db")), \
+             _mock.patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "1"}), \
+             _mock.patch("silk_ai_judge.available", return_value=True), \
+             _mock.patch("silk_ai_judge._call", side_effect=_capture), \
+             _mock.patch("silk_usage.try_reserve_paid_calls",
+                         return_value=True), \
+             _mock.patch("silk_usage.try_reserve_usd", return_value=True):
+            r = hsc.classify_general("milk حليب", ingredients=hints,
+                                     allow_claude=True)
+    finally:
+        lg.removeHandler(handler)
+        lg.setLevel(old_level)
+
+    codes = [c["hs6"] for c in r["candidates"]]
+    assert r["candidates"][0]["hs6"] == "220299", (
+        f"فائز عبر-البند لم يتصدّر العرض: {codes}")
+    blob = "\n".join(records)
+    assert "hs llm proposed" in blob and "220299" in blob, blob
+    assert "rejected by structural gate" in blob and "999999" in blob, blob
+    assert "بيّنةٌ أقوى من الاسم" in seen["user"], "إعلان الأولوية غائب"
+    assert seen.get("model") is None, (
+        f"نموذجٌ مُجبَرٌ بلا قرار مشغّل: {seen.get('model')!r}")
+
+    # (٤) المخزن: التوجيه الصريح يسبق DATABASE_URL؛ وبلا توجيهٍ يبقى العقد.
+    saved = {k: os.environ.get(k)
+             for k in ("DATABASE_URL", "SILK_DATA_DIR", "SILK_STORE_DB")}
+    try:
+        for k in saved:
+            os.environ.pop(k, None)
+        os.environ["DATABASE_URL"] = "postgresql://u:x@h.invalid:5432/db"
+        assert silk_store._is_postgres() is True
+        os.environ["SILK_DATA_DIR"] = "/tmp/anywhere"
+        assert silk_store._is_postgres() is False, (
+            "SILK_DATA_DIR الصريح لم يفز على DATABASE_URL")
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -2042,6 +2122,7 @@ _LESSONS = {
     75: _guard_gate_passes_synthetic_but_silent_on_real,  # تحليل ٧ — بوّابة مرّت التركيبيّ ثم صمتت على الحقيقيّ (قفلان لكلّ بوّابة)
     76: _guard_seat_lock_is_load_bearing,  # PR-2 — قفل المقعد وحارسه المُميِّز
     77: _guard_readiness_names_the_offending_variable,  # #197 — تشخيصٌ بلا سبب
+    78: _guard_image_evidence_decides_prepared_form,  # حليب الفراولة — أدلة الصورة تحسم
 }
 
 _TRAPS = [

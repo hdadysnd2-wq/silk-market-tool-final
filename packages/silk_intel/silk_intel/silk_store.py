@@ -45,6 +45,16 @@ def _db_path() -> str:
 
 
 def _is_postgres() -> bool:
+    """`DATABASE_URL` متغيّرُ التطبيق المضيف (قاعدة المنصّة المشتركة) لا
+    ملكيّةَ للمخزن عليه: توجيهٌ صريحٌ للمخزن إلى SQLite — `SILK_STORE_DB` أو
+    `SILK_DATA_DIR` — يسبقه دائماً، وفاءً بوعد `_db_path` («Explicit var
+    wins»). اختطافُ الرابط في نشرٍ مشتركٍ أسقط ذاكرةَ تصنيف HS بصمت (سائقُ
+    المنصّة psycopg v3 لا psycopg2)، ولو حضر السائقُ لبُنيت ترحيلاتُ المحرّك
+    المستقلة (users/analyses/markets/sessions) داخل قاعدة الإنتاج المشتركة
+    بأسماءٍ متصادمة. Postgres للمخزن يبقى متاحاً حيث لا توجيهَ صريحاً لغيره."""
+    if os.environ.get("SILK_STORE_DB", "").strip() or \
+            os.environ.get("SILK_DATA_DIR", "").strip():
+        return False
     url = os.environ.get("DATABASE_URL", "").strip()
     return url.startswith("postgres://") or url.startswith("postgresql://")
 

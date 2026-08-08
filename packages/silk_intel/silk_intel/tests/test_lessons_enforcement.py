@@ -663,7 +663,7 @@ _SYMBOL_ANCHORS_EXTRA = [
     # ترتيبُ العرض يحفظ فائزَ المحرّك؛ والمخزن لا يختطف DSN المنصّة المضيفة.
     (78, "silk_hs_classifier.py",
      ["بيّنةٌ أقوى من الاسم", "SILK_HS_CLASSIFY_MODEL", "hs llm proposed",
-      "rejected by structural gate"]),
+      "rejected by structural gate", "_CLASSIFY_POLICY_VERSION"]),
     (78, "silk_store.py",
      ["توجيهٌ صريحٌ للمخزن إلى SQLite"]),
     (78, "tests/test_hs_general_classifier.py",

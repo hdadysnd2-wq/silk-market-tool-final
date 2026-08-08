@@ -1997,7 +1997,9 @@ def _guard_image_evidence_decides_prepared_form():
         with _tempfile.TemporaryDirectory() as d, \
              _mock.patch.object(silk_store, "_db_path",
                                 return_value=os.path.join(d, "store.db")), \
-             _mock.patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "1"}), \
+             _mock.patch.dict(os.environ,
+                              {"SILK_HS_CLASSIFIER": "1",
+                               "SILK_HS_CLASSIFY_MODEL": ""}), \
              _mock.patch("silk_ai_judge.available", return_value=True), \
              _mock.patch("silk_ai_judge._call", side_effect=_capture), \
              _mock.patch("silk_usage.try_reserve_paid_calls",

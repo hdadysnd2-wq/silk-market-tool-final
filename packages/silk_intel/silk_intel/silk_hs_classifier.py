@@ -29,6 +29,11 @@ import os
 
 log = logging.getLogger("silk.hs_classifier")
 
+#: نسخةُ سياسة التصنيف (prompt + اختيار النموذج) المضمّنة في مفتاح الذاكرة.
+#: ارفعها كلّما تغيّر الـprompt أو منطقُ النموذج كي تُبطَل الإجاباتُ المخزّنة
+#: بالسياسة القديمة تلقائياً (bump on any prompt/model-policy change).
+_CLASSIFY_POLICY_VERSION = "v2-img-evidence"
+
 # عتبة ثقة المُحلِّل الحتمي التي دونها نستدعي كلود — نفس عتبة `resolve_all`
 # (٠٫٧). قابلة للضبط بالبيئة فقط (لا رقم مكتوب صلبًا في المنطق العام).
 _DETERMINISTIC_THRESHOLD = float(
@@ -453,9 +458,15 @@ def classify_general(product: str, hs_code: str | None = None,
     # A confident name-only match is NOT sufficient once the vision pass supplied
     # label signals; consult Claude so those signals are actually used.
     if (top is None or ingredients) and allow_claude and enabled():
-        cache_key = product if not (ingredients or category) else (
+        # مفتاح الذاكرة موسومٌ بنسخة سياسة التصنيف (_CLASSIFY_POLICY_VERSION):
+        # الذاكرة بلا TTL ولا إبطال، فأيّ إجابةٍ خُزّنت تحت prompt/نموذجٍ قديم
+        # كانت ستُعاد حرفياً للأبد وتُبطِل هذا الإصلاح على أيّ نشرٍ عملت فيه
+        # الذاكرة. رفعُ النسخة يجعل كلّ إدخالٍ سابقٍ إصابةً فائتة تُعاد حوسبتها
+        # بالسياسة الجديدة — تنظيفٌ ذاتيٌّ بلا مسحٍ يدوي.
+        base_key = product if not (ingredients or category) else (
             product + "|" + "|".join(sorted(str(i) for i in (ingredients or [])))
             + "|" + str(category or ""))
+        cache_key = _CLASSIFY_POLICY_VERSION + "|" + base_key
         cached = _cached_general(cache_key)
         if cached is not None:
             llm_raw = cached
@@ -468,10 +479,13 @@ def classify_general(product: str, hs_code: str | None = None,
         else:
             llm_raw = None
         if llm_raw:
-            # سجلُّ تشخيصٍ لا حكم: بلا هذين السطرين يستحيل التمييز من سجلّ
-            # الإنتاج بين «النموذج لم يقترح» و«اقترح فرُفض بنيوياً/دُفن» —
-            # وهو عينُ ما أطال تشخيص حادثة حليب الفراولة.
-            log.info("hs llm proposed: %s", [c.get("hs6") for c in llm_raw[:3]])
+            # سجلُّ تشخيصٍ لا حكم: بلا هذا السطر يستحيل التمييز من سجلّ الإنتاج
+            # بين «النموذج لم يقترح» و«اقترح فرُفض بنيوياً/دُفن» — وهو عينُ ما
+            # أطال تشخيص حادثة حليب الفراولة. والمصدر (حيّ/ذاكرة) مُصرَّحٌ به كي
+            # لا يُخلَط ردٌّ طازجٌ بإعادةٍ من الذاكرة.
+            log.info("hs llm proposed (%s): %s",
+                     "cache" if cached is not None else "live",
+                     [c.get("hs6") for c in llm_raw[:3]])
             for c in llm_raw[:3]:
                 v = _validated_candidate(
                     product, c.get("hs6"), model_desc=c.get("description_ar", ""),

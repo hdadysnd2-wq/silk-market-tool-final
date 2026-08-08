@@ -679,6 +679,12 @@ _SYMBOL_ANCHORS_EXTRA = [
      ["llm_consulted", "hs auto downgraded to candidates"]),
     (79, "tests/test_hs_general_classifier.py",
      ["def test_incident_label_signals_unconsulted_never_auto"]),
+    # البند ٨٠ — لا مصادقةَ ذاتية: عتبةُ «تلقائي» تُرسى على تداخل مرجعنا
+    # (`seed_overlap`) حصراً، لا على نصٍّ ألّفه النموذجُ ذاته.
+    (80, "silk_hs_classifier.py",
+     ["seed_overlap"]),
+    (80, "tests/test_hs_general_classifier.py",
+     ["def test_incident_model_authored_text_cannot_self_certify_auto"]),
 ]
 
 

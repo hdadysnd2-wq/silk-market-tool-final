@@ -934,6 +934,13 @@ def sync_world_trade(hs6: str) -> dict:
     return {"hs6": code, "synced": True, "rows": written}
 
 
+#: Max Comtrade sync dispatches per daily sweep (security review 2026-08-08,
+#: finding 2.1) — bounds the burst a pile of newly committed codes can cause;
+#: later sweeps drain the remainder. Comtrade syncs sit outside
+#: SILK_PAID_DAILY_CAP, so this is their only fan-out bound.
+WORLD_TRADE_SWEEP_LIMIT = 50
+
+
 @celery_app.task(name="app.workers.tasks.refresh_world_trade")
 def refresh_world_trade() -> dict:
     """Scheduled sweep: re-sync world_trade for HS6 codes in active use.
@@ -962,7 +969,20 @@ def refresh_world_trade() -> dict:
                 )
             ).all()
         )
-        for hs6 in confirmed_hs6:
+        # Security review 2026-08-08 (finding 2.1): the fan-out is capped per
+        # sweep — auto-classified codes now enter this set with zero human
+        # action (ADR-0009), so an account adding many distinct codes must not
+        # translate into an unbounded burst of Comtrade syncs. The daily beat
+        # catches the remainder on subsequent sweeps (staleness cutoff keeps
+        # already-fresh codes out), and the skip is DECLARED, never silent.
+        for hs6 in sorted(confirmed_hs6):
+            if requested >= WORLD_TRADE_SWEEP_LIMIT:
+                log.warning(
+                    "world_trade_refresh_capped",
+                    limit=WORLD_TRADE_SWEEP_LIMIT,
+                    remaining=len(confirmed_hs6) - requested,
+                )
+                break
             newest = db.scalar(select(func.max(WorldTrade.fetched_at)).where(WorldTrade.hs6 == hs6))
             if newest is None or newest < cutoff:
                 sync_world_trade.delay(hs6)

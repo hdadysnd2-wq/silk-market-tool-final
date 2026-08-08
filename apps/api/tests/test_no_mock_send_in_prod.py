@@ -31,6 +31,7 @@ def _prod_settings(**overrides) -> Settings:
         # config fails closed on trusted_proxy_count=0 / localhost api_base_url.
         trusted_proxy_count=1,
         api_base_url="https://api.silk.example",
+        app_base_url="https://app.silk.example",
         **overrides,
     )
 

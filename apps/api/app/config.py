@@ -22,17 +22,44 @@ _DEV_SECRET_DEFAULT = "dev-secret-key-not-for-production"
 # interchangeable for the trusted-origin set in local only.
 _LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
 
+_DEFAULT_PORTS = {"http": "80", "https": "443"}
 
-def _origin_of(url: str) -> str | None:
-    """``scheme://host[:port]`` for an absolute URL, else ``None``.
 
-    Used to fold ``APP_BASE_URL`` (a full URL, possibly with a path) down to the
-    bare origin the browser sends in its ``Origin`` header.
+def _canonical_origin(url: str) -> str | None:
+    """Canonical ``scheme://host[:port]`` for an origin/URL, or ``None``.
+
+    Normalizes an operator-supplied origin (or a full URL like ``APP_BASE_URL``)
+    to exactly the shape a browser puts in its ``Origin`` header, so the CSRF
+    check can compare by equality without tripping over spelling differences:
+
+    - drops any path / query / fragment (``https://app.example.com/`` → origin);
+    - lowercases scheme and host (``https://App.Example.com`` → lowercase);
+    - drops a *default* port (``:80`` for http, ``:443`` for https) — a browser
+      never puts the default port in ``Origin``, but an operator might;
+    - re-brackets IPv6 literals.
+
+    Scheme is preserved verbatim (``http`` ≠ ``https``): an ``http://`` entry for
+    an https-served site must fail loudly, not be silently upgraded. Returns
+    ``None`` for anything without a scheme+host (e.g. ``"*"`` or ``Origin: null``).
     """
-    parts = urlsplit(url.strip())
-    if not parts.scheme or not parts.netloc:
+    try:
+        parts = urlsplit(url.strip())
+        host = parts.hostname  # already lowercased; strips IPv6 brackets
+        if not parts.scheme or not host:
+            return None
+        scheme = parts.scheme.lower()
+        try:
+            port = parts.port  # raises ValueError on a non-numeric port
+        except ValueError:
+            return None
+    except ValueError:
         return None
-    return f"{parts.scheme}://{parts.netloc}"
+    if port is not None and str(port) == _DEFAULT_PORTS.get(scheme):
+        port = None
+    if ":" in host:  # IPv6 literal — urlsplit strips the brackets, re-add them
+        host = f"[{host}]"
+    netloc = host if port is None else f"{host}:{port}"
+    return f"{scheme}://{netloc}"
 
 
 def _loopback_equivalents(origins: list[str]) -> list[str]:
@@ -313,6 +340,12 @@ class Settings(BaseSettings):
         - ``api_base_url`` still at the localhost default means every outbound
           email embeds a localhost unsubscribe link — an RFC 8058 / compliance
           break on the money path.
+        - ``app_base_url`` still at the localhost default is both a dead
+          email/OAuth link origin AND — since it is folded into the CSRF
+          trusted-origin set — makes every state-changing request depend
+          entirely on CORS_ORIGINS matching the browser exactly (the "just set
+          APP_BASE_URL" escape hatch for a custom domain is worthless if it is
+          left at localhost).
         Local/CI keep the convenient defaults.
         """
         if self.environment.strip().lower() == "local":
@@ -333,6 +366,16 @@ class Settings(BaseSettings):
                 "email embeds its unsubscribe link under this origin; a localhost "
                 "link is a dead unsubscribe (RFC 8058 / compliance break). Set it "
                 "to the API's public URL."
+            )
+        if "localhost" in self.app_base_url or "127.0.0.1" in self.app_base_url:
+            raise ValueError(
+                f"APP_BASE_URL={self.app_base_url!r} still points at localhost but "
+                f"ENVIRONMENT={self.environment!r} is not 'local'. It is the "
+                "canonical web-app origin: outbound email/OAuth links are built "
+                "from it AND it is trusted for the cookie-CSRF Origin check, so a "
+                "localhost value breaks those links and leaves every state-changing "
+                "request depending entirely on CORS_ORIGINS. Set it to the exact "
+                "origin users load in the browser (e.g. https://app.example.com)."
             )
         return self
 
@@ -399,18 +442,29 @@ class Settings(BaseSettings):
         ``APP_BASE_URL``'s own origin. Folding ``APP_BASE_URL`` in means an
         operator who moves the web app to a custom domain only has to update the
         one variable they must set anyway (email/OAuth links are built from it,
-        and a prod guard already forbids it pointing at localhost) — a stale
+        and a prod guard forbids it pointing at localhost) — a stale
         ``CORS_ORIGINS`` no longer silently blocks every write. In local, the
         loopback spellings (localhost / 127.0.0.1 / [::1]) are treated as
         interchangeable so hitting the dev server on 127.0.0.1 isn't blocked.
 
+        Every entry is **canonicalized** (``_canonical_origin``: origin-only,
+        lowercased host, default port dropped) so a config value that differs
+        from the browser's ``Origin`` only by a trailing slash, host case, or an
+        explicit ``:443`` still matches — the most common operator mistakes. The
+        CSRF guard canonicalizes the incoming ``Origin`` the same way, so both
+        sides of the comparison are normal-form. Scheme stays significant.
+
         A wildcard is only reachable in local (the prod guard rejects it); it is
         returned verbatim so Starlette's own ``*`` handling still applies.
         """
-        origins = list(self.cors_origin_list)
-        app_origin = _origin_of(self.app_base_url)
-        if app_origin and app_origin not in origins:
-            origins.append(app_origin)
+        origins: list[str] = []
+        for raw in [*self.cors_origin_list, self.app_base_url]:
+            if raw == "*":
+                origins.append("*")
+                continue
+            canon = _canonical_origin(raw)
+            if canon:
+                origins.append(canon)
         if "*" in origins:
             return origins
         if self.environment.strip().lower() == "local":

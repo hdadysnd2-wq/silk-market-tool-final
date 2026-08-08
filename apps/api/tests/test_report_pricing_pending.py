@@ -56,6 +56,7 @@ def gated_prices(monkeypatch):
         token_encryption_key="t" * 44,
         trusted_proxy_count=1,
         api_base_url="https://api.silk.example",
+        app_base_url="https://app.silk.example",
         localprice_api_key="",
         allow_mock_data=False,
     )

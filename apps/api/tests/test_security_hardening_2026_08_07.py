@@ -109,6 +109,7 @@ def test_docs_and_metrics_gated_outside_local(monkeypatch):
     monkeypatch.setenv("REQUIRE_OBJECT_STORAGE", "0")
     monkeypatch.setenv("TRUSTED_PROXY_COUNT", "1")
     monkeypatch.setenv("API_BASE_URL", "https://api.silk.example")
+    monkeypatch.setenv("APP_BASE_URL", "https://app.silk.example")
     get_settings.cache_clear()
     try:
         client = TestClient(create_app())

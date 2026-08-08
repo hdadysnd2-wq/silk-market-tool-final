@@ -30,6 +30,7 @@ def _settings(**overrides) -> Settings:
         # unrelated to the shipments slot but required for any prod Settings.
         "trusted_proxy_count": 1,
         "api_base_url": "https://api.silk.example",
+        "app_base_url": "https://app.silk.example",
     }
     base.update(overrides)
     return Settings(**base)

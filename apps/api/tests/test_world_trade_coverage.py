@@ -41,9 +41,13 @@ def test_coverage_state_none_demo_live(db):
     assert world_funnel.coverage_state(db, "222222") == "live"
 
 
-def test_world_ranking_fails_loudly_on_no_coverage(db, factory, product, monkeypatch):
+def test_world_ranking_holds_pending_and_chains_a_bound_sync(db, factory, product, monkeypatch):
     """With a LIVE trade-data source configured, missing coverage is a genuinely
-    transient state: fail loudly, request a sync, and promise a retry."""
+    transient state: the analysis is NOT terminalized — it stays in its
+    non-terminal status (the UI keeps polling it) while a sync BOUND to this
+    analysis is enqueued, so the funnel completes with zero manual retries.
+    The old behavior (fail + «please retry in a few minutes») was the recurring
+    dead-end the owner kept hitting."""
     from app.config import get_settings
 
     analysis = Analysis(product_id=product.id, product_name="Dates", status="classified")
@@ -56,7 +60,7 @@ def test_world_ranking_fails_loudly_on_no_coverage(db, factory, product, monkeyp
 
     requested = {}
     monkeypatch.setattr(
-        tasks.sync_world_trade, "delay", lambda hs6: requested.setdefault("hs6", hs6)
+        tasks.sync_world_trade, "delay", lambda hs6, **kw: requested.update({"hs6": hs6, **kw})
     )
 
     try:
@@ -66,13 +70,56 @@ def test_world_ranking_fails_loudly_on_no_coverage(db, factory, product, monkeyp
     assert out["coverage"] == "none"
     assert out["ranked"] == 0
     assert out["live_available"] is True
+    assert out["sync_requested"] is True
+
+    db.expire_all()
+    refreshed = db.get(Analysis, analysis.id)
+    # NOT failed: the run is still in flight; the chained sync completes it.
+    assert refreshed.status == "classified"
+    assert refreshed.failure_reason is None
+    # The sync carries the analysis binding so it can re-dispatch the ranking.
+    assert requested.get("hs6") == "999999"
+    assert requested.get("analysis_id") == str(analysis.id)
+
+
+def test_world_ranking_after_sync_without_coverage_is_terminal(db, factory, product, monkeypatch):
+    """The chain is bounded to ONE cycle: a re-run flagged ``after_sync=True``
+    that still finds no coverage terminalizes with a truthful reason — and no
+    second sync is enqueued (no sync loops, no false retry promise)."""
+    from app.config import get_settings
+
+    analysis = Analysis(product_id=product.id, product_name="Dates", status="classified")
+    db.add(analysis)
+    db.commit()
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("COMTRADE_OFFLINE", "0")
+    monkeypatch.setenv("COMTRADE_API_KEY", "test-key")
+
+    requested = []
+    monkeypatch.setattr(
+        tasks.sync_world_trade, "delay", lambda hs6, **kw: requested.append(hs6)
+    )
+
+    try:
+        out = tasks.run_world_ranking.apply(
+            args=[str(analysis.id), "999999"],
+            kwargs={"after_sync": True},
+            throw=False,
+        ).result
+    finally:
+        get_settings.cache_clear()
+    assert out["coverage"] == "none"
+    assert out["live_available"] is True
 
     db.expire_all()
     refreshed = db.get(Analysis, analysis.id)
     assert refreshed.status == "failed"
-    assert "999999" in (refreshed.failure_reason or "")
-    assert "retry" in (refreshed.failure_reason or "").lower()
-    assert requested.get("hs6") == "999999"  # a coverage sync was requested
+    reason = refreshed.failure_reason or ""
+    assert "999999" in reason
+    assert "no world-trade rows" in reason.lower()
+    assert "retry in a few minutes" not in reason.lower()
+    assert requested == []  # bounded: never a second sync
 
 
 def test_world_ranking_no_coverage_tells_the_truth_without_a_live_source(
@@ -93,7 +140,9 @@ def test_world_ranking_no_coverage_tells_the_truth_without_a_live_source(
     monkeypatch.setenv("COMTRADE_API_KEY", "")  # no live source
 
     requested = []
-    monkeypatch.setattr(tasks.sync_world_trade, "delay", lambda hs6: requested.append(hs6))
+    monkeypatch.setattr(
+        tasks.sync_world_trade, "delay", lambda hs6, **kw: requested.append(hs6)
+    )
 
     try:
         out = tasks.run_world_ranking.apply(args=[str(analysis.id), "999999"], throw=False).result
@@ -166,6 +215,139 @@ def test_sync_world_trade_runs_when_live(monkeypatch):
         get_settings.cache_clear()
     assert out == {"hs6": "392010", "synced": True, "rows": 42}
     assert calls["code"] == "392010"
+
+
+def _etl_sync_module():
+    """Import the real ``etl.world_trade_sync`` exactly as production resolves it."""
+    import sys
+    from pathlib import Path
+
+    repo_root = str(Path(__file__).resolve().parents[3])
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    from etl import world_trade_sync as real_sync
+
+    return real_sync
+
+
+def test_sync_world_trade_chains_the_waiting_ranking(db, factory, product, monkeypatch):
+    """The bound sync closes the loop end-to-end (eager): rows land → the SAME
+    waiting analysis is re-ranked automatically (``after_sync=True``) — the
+    user's single click completes with zero manual retries."""
+    from app.config import get_settings
+    from app.db import SessionLocal
+
+    analysis = Analysis(product_id=product.id, product_name="Dates", status="classified")
+    db.add(analysis)
+    db.commit()
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("COMTRADE_OFFLINE", "0")
+    monkeypatch.setenv("COMTRADE_API_KEY", "test-key")
+    real_sync = _etl_sync_module()
+
+    def _run(code):
+        # The real writer upserts world_trade rows; mirror that effect through
+        # the app's own session factory so the chained eager re-rank sees them.
+        s = SessionLocal()
+        try:
+            s.add(
+                WorldTrade(
+                    hs6=code,
+                    importer_iso3="DEU",
+                    year=2024,
+                    import_usd=5_000_000,
+                    is_transit_hub=False,
+                    is_mirror=False,
+                    source="UN Comtrade",
+                )
+            )
+            s.commit()
+        finally:
+            s.close()
+        return 1
+
+    monkeypatch.setattr(real_sync, "run", _run)
+    try:
+        out = tasks.sync_world_trade.apply(
+            args=["654321"], kwargs={"analysis_id": str(analysis.id)}, throw=False
+        ).result
+    finally:
+        get_settings.cache_clear()
+    assert out["synced"] is True and out["rows"] == 1
+    assert out["reranked"] is True
+
+    db.expire_all()
+    refreshed = db.get(Analysis, analysis.id)
+    assert refreshed.status == "ranked"  # the funnel completed without a human retry
+    assert refreshed.failure_reason is None
+
+
+def test_sync_world_trade_zero_rows_terminalizes_the_waiting_analysis(
+    db, factory, product, monkeypatch
+):
+    """A sync that completes but writes nothing must not leave the bound analysis
+    polling forever OR promise a retry: it terminalizes with a truthful reason
+    and never re-dispatches the ranking (no loop on an unreported code)."""
+    from app.config import get_settings
+
+    analysis = Analysis(product_id=product.id, product_name="Dates", status="classified")
+    db.add(analysis)
+    db.commit()
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("COMTRADE_OFFLINE", "0")
+    monkeypatch.setenv("COMTRADE_API_KEY", "test-key")
+    real_sync = _etl_sync_module()
+    monkeypatch.setattr(real_sync, "run", lambda code: 0)
+
+    reranked = []
+    monkeypatch.setattr(
+        tasks.run_world_ranking, "delay", lambda *a, **kw: reranked.append((a, kw))
+    )
+    try:
+        out = tasks.sync_world_trade.apply(
+            args=["654321"], kwargs={"analysis_id": str(analysis.id)}, throw=False
+        ).result
+    finally:
+        get_settings.cache_clear()
+    assert out["synced"] is True and out["rows"] == 0
+    assert reranked == []
+
+    db.expire_all()
+    refreshed = db.get(Analysis, analysis.id)
+    assert refreshed.status == "failed"
+    reason = refreshed.failure_reason or ""
+    assert "654321" in reason
+    assert "no world-trade rows" in reason.lower()
+    assert "retry in a few minutes" not in reason.lower()
+
+
+def test_bound_sync_never_demotes_a_completed_analysis(db, factory, product, monkeypatch):
+    """A racing/duplicate bound sync must never overwrite a finished run: the
+    fail-closed path only terminalizes analyses still waiting (pending /
+    classified) — a 'ranked' row keeps its result."""
+    from app.config import get_settings
+
+    analysis = Analysis(product_id=product.id, product_name="Dates", status="ranked")
+    db.add(analysis)
+    db.commit()
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("COMTRADE_OFFLINE", "1")  # fail-closed branch
+    monkeypatch.setenv("COMTRADE_API_KEY", "")
+    try:
+        out = tasks.sync_world_trade.apply(
+            args=["654321"], kwargs={"analysis_id": str(analysis.id)}, throw=False
+        ).result
+    finally:
+        get_settings.cache_clear()
+    assert out["synced"] is False
+
+    db.expire_all()
+    refreshed = db.get(Analysis, analysis.id)
+    assert refreshed.status == "ranked"  # untouched
+    assert refreshed.failure_reason is None
 
 
 def test_etl_package_ships_in_production_image():

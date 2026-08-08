@@ -76,7 +76,11 @@ tracking.**
   engine's STRICT `tier="auto"` verdict may commit `hs_code`, provenance-tagged
   `hs_auto_classified` — never over a human confirmation, never on ambiguity,
   and never from name-only evidence when unexamined label signals exist
-  (engine lesson 79). A human confirm/override clears the tag and wins.
+  (engine lesson 79). Amended again the same day (ADR-0010): the engine's
+  LLM-decisive verdict (`source="llm_decisive"` — explicit `decisive` claim,
+  confidence + margin bar, structural gate, `SILK_HS_LLM_AUTO` kill switch)
+  reaches `tier="auto"` and commits through the same tagged machinery. A human
+  confirm/override clears the tag and wins.
 - **I3** Human campaign-approval gate stays 3-layer (API + worker row-lock + DB CHECK).
 - **I4** Global suppression checked at send; one-click unsubscribe; append-only
   audit log; suppression stays cross-tenant.

@@ -278,7 +278,12 @@ def process_product_intake(self, product_id: str, deepen: bool = False) -> dict:
 
 @celery_app.task(bind=True, name="app.workers.tasks.run_world_ranking", max_retries=_MAX_RETRIES)
 def run_world_ranking(
-    self, analysis_id: str, hs6: str, top_n: int | None = None, deepen: bool = False
+    self,
+    analysis_id: str,
+    hs6: str,
+    top_n: int | None = None,
+    deepen: bool = False,
+    after_sync: bool = False,
 ) -> dict:
     """Screen the world for a confirmed HS6 and persist the country shortlist.
 
@@ -288,6 +293,15 @@ def run_world_ranking(
     passes it explicitly; this task never re-classifies. The ``/deepen`` scope is
     re-established from the explicit ``deepen`` payload flag (I5) so any budgeted
     paid enrichment folded into the screen is gated in-process.
+
+    Missing coverage with a live Comtrade source is a TRANSIENT state, not a
+    terminal failure: the analysis stays ``pending`` and a coverage sync bound to
+    it is enqueued; :func:`sync_world_trade` re-dispatches this task (with
+    ``after_sync=True``) once rows land, so the funnel completes with zero manual
+    retries — the recurring «please retry in a few minutes» dead-end. The
+    ``after_sync`` flag bounds the chain to ONE cycle: still-missing coverage
+    after a completed sync is a terminal, truthfully-worded failure (I1 — no
+    fabricated screen, no false retry promise).
 
     Retries transient faults with backoff; on permanent failure marks the
     analysis ``failed`` (with a reason) so it never stalls in a non-terminal state.
@@ -304,50 +318,82 @@ def run_world_ranking(
             analysis = db.get(Analysis, _uuid.UUID(analysis_id))
             if analysis is None:
                 return {"error": "analysis not found"}
-            # Fail loudly on missing coverage: an empty world_trade for this HS6
-            # would otherwise produce a silent empty funnel presented as a real
-            # world screen. Mark the analysis failed — but tell the TRUTH about
-            # recoverability. A coverage sync is fail-closed on a real Comtrade
-            # key (sync_world_trade), so on a deployment with no live trade-data
-            # source, "retry in a few minutes" is a false promise: retrying can
-            # never populate coverage. Branch the reason (and only enqueue a sync
-            # that can actually do something) on that capability. Never fabricate
-            # a screen either way (I1).
+            # Loud, honest handling of missing coverage: an empty world_trade for
+            # this HS6 would otherwise produce a silent empty funnel presented as
+            # a real world screen (I1). With a LIVE Comtrade source the state is
+            # transient — keep the analysis pending and chain a sync bound to it
+            # (sync_world_trade re-dispatches this task when rows land), so the
+            # user's single click completes without the recurring manual
+            # «retry in a few minutes» dance. Without a live source — or when a
+            # completed sync still produced nothing (after_sync) — the state is
+            # terminal: say so truthfully, never promise a retry that cannot help,
+            # and never fabricate a screen.
             coverage = world_funnel.coverage_state(db, hs6)
             if coverage == "none":
                 from app.config import get_settings
 
                 settings = get_settings()
                 live_available = bool(settings.comtrade_api_key) and not settings.comtrade_offline
-                analysis.status = "failed"
-                if live_available:
-                    analysis.failure_reason = (
-                        f"No world-trade data for HS {hs6} yet. A live coverage "
-                        "sync has been requested — please retry in a few minutes."
+                if live_available and not after_sync:
+                    # Transient: hold the pending state (the UI keeps polling this
+                    # very analysis) and refresh liveness so the stuck-row reaper
+                    # leaves it alone while the sync runs. Commit BEFORE
+                    # dispatching the bound sync: in eager mode the whole chain
+                    # (sync → re-rank) executes inline, and this session's
+                    # uncommitted hold would otherwise overwrite the chained
+                    # task's 'ranked' write on exit.
+                    analysis.failure_reason = None
+                    heartbeat.beat(analysis.id)
+                    db.flush()
+                    db.commit()
+                    log.warning(
+                        "world_ranking_awaiting_coverage_sync",
+                        analysis_id=analysis_id,
+                        hs6=hs6,
                     )
-                    sync_world_trade.delay(hs6)
+                    sync_world_trade.delay(
+                        hs6, analysis_id=analysis_id, top_n=top_n, deepen=deepen
+                    )
+                    return {
+                        "analysis_id": analysis_id,
+                        "hs6": hs6,
+                        "coverage": "none",
+                        "ranked": 0,
+                        "live_available": True,
+                        "sync_requested": True,
+                    }
                 else:
-                    analysis.failure_reason = (
-                        f"World-market screening is unavailable for HS {hs6} on "
-                        "this deployment: no live trade-data source is connected, "
-                        "so there is nothing to screen and no figures are "
-                        "invented. Operator: set COMTRADE_API_KEY (UN Comtrade) to "
-                        "enable real world-trade coverage."
+                    analysis.status = "failed"
+                    if live_available:
+                        analysis.failure_reason = (
+                            f"The live Comtrade sync completed but produced no "
+                            f"world-trade rows for HS {hs6} — the world may not "
+                            "report this code. Check the HS code (or re-run the "
+                            "screen later); no figures are invented."
+                        )
+                    else:
+                        analysis.failure_reason = (
+                            f"World-market screening is unavailable for HS {hs6} on "
+                            "this deployment: no live trade-data source is connected, "
+                            "so there is nothing to screen and no figures are "
+                            "invented. Operator: set COMTRADE_API_KEY (UN Comtrade) to "
+                            "enable real world-trade coverage."
+                        )
+                    db.flush()
+                    log.warning(
+                        "world_ranking_no_coverage",
+                        analysis_id=analysis_id,
+                        hs6=hs6,
+                        live_available=live_available,
+                        after_sync=after_sync,
                     )
-                db.flush()
-                log.warning(
-                    "world_ranking_no_coverage",
-                    analysis_id=analysis_id,
-                    hs6=hs6,
-                    live_available=live_available,
-                )
-                return {
-                    "analysis_id": analysis_id,
-                    "hs6": hs6,
-                    "coverage": "none",
-                    "ranked": 0,
-                    "live_available": live_available,
-                }
+                    return {
+                        "analysis_id": analysis_id,
+                        "hs6": hs6,
+                        "coverage": "none",
+                        "ranked": 0,
+                        "live_available": live_available,
+                    }
             # Stage 1 is a local SQL screen (no live calls), but the same scope
             # caps the budgeted live enrichment Stages 2-3 add on top (decision
             # #5), and the deepen scope (I5) gates paid engine agents behind
@@ -897,8 +943,29 @@ def poll_replies() -> dict:
     return {"mailboxes_polled": polled, "replies_matched": matched}
 
 
+def _fail_analysis_if_unranked(analysis_id: str, reason: str) -> None:
+    """Terminalize a coverage-waiting analysis — never demote a completed one.
+
+    The bound sync may race a concurrent re-rank (or a duplicate sync); a row
+    that already reached ``ranked``/``enriched``/``deepened`` must keep its
+    result, so only the still-waiting states are failed.
+    """
+    from app.models import Analysis
+
+    with session_scope() as db:
+        analysis = db.get(Analysis, uuid.UUID(analysis_id))
+        if analysis is not None and analysis.status in ("pending", "classified"):
+            analysis.status = "failed"
+            analysis.failure_reason = reason[:500]
+
+
 @celery_app.task(name="app.workers.tasks.sync_world_trade")
-def sync_world_trade(hs6: str) -> dict:
+def sync_world_trade(
+    hs6: str,
+    analysis_id: str | None = None,
+    top_n: int | None = None,
+    deepen: bool = False,
+) -> dict:
     """Refresh ``world_trade`` Stage-1 coverage for one HS6 from UN Comtrade.
 
     Fail-closed (the PR #83 pattern): the live bulk download runs only when a real
@@ -907,8 +974,16 @@ def sync_world_trade(hs6: str) -> dict:
     so an offline/demo deployment never presents synthesized data as a real world
     screen. The heavy pandas + comtradeapicall download lives in ``etl`` (I7);
     this task is the product-side trigger that invokes it.
+
+    When ``analysis_id`` is bound (a world ranking is waiting on this coverage),
+    the task closes the loop instead of leaving the user to retry manually:
+    rows written → re-dispatch :func:`run_world_ranking` (``after_sync=True``,
+    one cycle only); nothing written / sync failed / source unavailable → the
+    waiting analysis is terminalized with a truthful reason (I1 — no false
+    «retry in a few minutes» promise, no fabricated screen).
     """
     from app.config import get_settings
+    from app.services import heartbeat
 
     settings = get_settings()
     code = (hs6 or "").strip()
@@ -916,21 +991,60 @@ def sync_world_trade(hs6: str) -> dict:
         return {"hs6": hs6, "synced": False, "reason": "empty hs6"}
     if settings.comtrade_offline or not settings.comtrade_api_key:
         log.warning("world_trade_sync_unavailable", hs6=code, reason="no live comtrade key")
+        if analysis_id:
+            _fail_analysis_if_unranked(
+                analysis_id,
+                f"World-market screening is unavailable for HS {code}: no live "
+                "trade-data source is connected. Operator: set COMTRADE_API_KEY "
+                "(UN Comtrade) to enable real world-trade coverage.",
+            )
         return {"hs6": code, "synced": False, "reason": "live comtrade unavailable"}
     try:
         from etl import world_trade_sync
 
+        if analysis_id:
+            # Liveness for the analysis waiting on this sync: the bulk download
+            # can take minutes, and the stuck-row reaper must not terminalize
+            # the held ``pending`` row mid-sync.
+            heartbeat.beat(uuid.UUID(analysis_id))
         written = world_trade_sync.run(code)
     except ImportError as exc:
         # The heavy bulk download lives in the ``etl`` environment (pandas +
         # comtradeapicall, I7). If that environment is not present, degrade
         # loudly rather than fabricate coverage.
         log.error("world_trade_sync_env_missing", hs6=code, error=str(exc))
+        if analysis_id:
+            _fail_analysis_if_unranked(
+                analysis_id,
+                f"The live coverage sync for HS {code} could not run on this "
+                "deployment (etl environment unavailable); please contact the "
+                "operator.",
+            )
         return {"hs6": code, "synced": False, "reason": "etl environment unavailable"}
     except Exception as exc:  # noqa: BLE001 — a failed sync is a declared gap, not a crash
         log.error("world_trade_sync_failed", hs6=code, error=str(exc))
+        if analysis_id:
+            _fail_analysis_if_unranked(
+                analysis_id,
+                f"The live coverage sync for HS {code} failed "
+                f"({type(exc).__name__}); please re-run the world screen.",
+            )
         return {"hs6": code, "synced": False, "reason": str(exc)}
     log.info("world_trade_synced", hs6=code, rows=written)
+    if analysis_id:
+        if written > 0:
+            # Coverage landed — complete the waiting funnel run automatically.
+            # after_sync=True bounds the chain to one cycle (no sync loops).
+            run_world_ranking.delay(
+                analysis_id, code, top_n=top_n, deepen=deepen, after_sync=True
+            )
+            return {"hs6": code, "synced": True, "rows": written, "reranked": True}
+        _fail_analysis_if_unranked(
+            analysis_id,
+            f"The live Comtrade sync completed but produced no world-trade rows "
+            f"for HS {code} — the world may not report this code. Check the HS "
+            "code (or re-run the screen later); no figures are invented.",
+        )
     return {"hs6": code, "synced": True, "rows": written}
 
 

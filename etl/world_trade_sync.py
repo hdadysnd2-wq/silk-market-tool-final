@@ -307,15 +307,19 @@ def _fetch_world_imports(
                         motCode=None,
                     )
             except Exception as exc:  # noqa: BLE001 — a failed year is a declared gap (I1)
+                # Redact ALWAYS: the library sends the key as a `subscription-key`
+                # query param, and urllib3 errors embed the full request URL —
+                # str(exc) would otherwise write the live key into worker logs.
                 log.warning(
-                    "comtrade_bulk_year_failed hs6=%s year=%s error=%s", hs6, year, exc
+                    "comtrade_bulk_year_failed hs6=%s year=%s error=%s",
+                    hs6, year, _redact_key(str(exc), subscription_key),
                 )
                 continue
             _lib_msg = _lib_out.getvalue().strip()
             if _lib_msg:
                 log.warning(
                     "comtrade_call_output hs6=%s year=%s output=%s",
-                    hs6, year, _lib_msg[:500],
+                    hs6, year, _redact_key(_lib_msg, subscription_key)[:500],
                 )
             if df is None or getattr(df, "empty", True):
                 # Empty-but-successful is a DECLARED gap, never silence — before
@@ -351,6 +355,22 @@ def _fetch_world_imports(
     # Mirror-data derivation (reconstructing a non-reporter's imports from partner
     # exports) is a future enhancement; none derived here.
     return imports_usd, imports_qty, set()
+
+
+def _redact_key(text: str, subscription_key: str = "") -> str:
+    """Scrub the Comtrade key from any log-bound text — never expose secrets.
+
+    Two independent layers (either alone would leak on the other's miss):
+    the literal key value wherever it appears, and any ``subscription-key=…``
+    query-param value — comtradeapicall sends the key as a query param and its
+    swallowed-error prints / urllib3 exception strings embed the full request
+    URL, so un-redacted capture would write the live key into worker logs.
+    """
+    import re
+
+    if subscription_key:
+        text = text.replace(subscription_key, "***")
+    return re.sub(r"(subscription-key=)[^&\s'\"]+", r"\1***", text)
 
 
 def _as_float(value: object) -> float | None:

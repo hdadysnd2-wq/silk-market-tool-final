@@ -63,9 +63,12 @@ def create_app() -> FastAPI:
         docs_url="/docs" if is_local else None,
     )
 
+    # trusted_origins (CORS_ORIGINS ∪ APP_BASE_URL) keeps CORS and the cookie-CSRF
+    # guard on one allowlist, so the app's own web origin can never pass one and
+    # fail the other. The prod wildcard/empty guard on CORS_ORIGINS still applies.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origin_list,
+        allow_origins=settings.trusted_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

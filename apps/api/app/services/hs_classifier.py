@@ -217,11 +217,7 @@ def classify_product(db: Session, product: Product) -> list[dict]:
     # "needs a code" instead of screening the world on a code the engine just
     # declined to stand behind. A human-confirmed code (I2) is never touched —
     # only machine commits are self-correcting.
-    if (
-        not committed_now
-        and product.hs_auto_classified
-        and not product.hs_confirmed_by_user
-    ):
+    if not committed_now and product.hs_auto_classified and not product.hs_confirmed_by_user:
         log.info(
             "hs_auto_commit_cleared_on_downgrade",
             product_id=str(product.id),

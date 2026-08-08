@@ -351,9 +351,7 @@ def run_world_ranking(
                         analysis_id=analysis_id,
                         hs6=hs6,
                     )
-                    sync_world_trade.delay(
-                        hs6, analysis_id=analysis_id, top_n=top_n, deepen=deepen
-                    )
+                    sync_world_trade.delay(hs6, analysis_id=analysis_id, top_n=top_n, deepen=deepen)
                     return {
                         "analysis_id": analysis_id,
                         "hs6": hs6,
@@ -1035,9 +1033,7 @@ def sync_world_trade(
         if written > 0:
             # Coverage landed — complete the waiting funnel run automatically.
             # after_sync=True bounds the chain to one cycle (no sync loops).
-            run_world_ranking.delay(
-                analysis_id, code, top_n=top_n, deepen=deepen, after_sync=True
-            )
+            run_world_ranking.delay(analysis_id, code, top_n=top_n, deepen=deepen, after_sync=True)
             return {"hs6": code, "synced": True, "rows": written, "reranked": True}
         _fail_analysis_if_unranked(
             analysis_id,

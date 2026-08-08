@@ -97,9 +97,7 @@ def test_world_ranking_after_sync_without_coverage_is_terminal(db, factory, prod
     monkeypatch.setenv("COMTRADE_API_KEY", "test-key")
 
     requested = []
-    monkeypatch.setattr(
-        tasks.sync_world_trade, "delay", lambda hs6, **kw: requested.append(hs6)
-    )
+    monkeypatch.setattr(tasks.sync_world_trade, "delay", lambda hs6, **kw: requested.append(hs6))
 
     try:
         out = tasks.run_world_ranking.apply(
@@ -140,9 +138,7 @@ def test_world_ranking_no_coverage_tells_the_truth_without_a_live_source(
     monkeypatch.setenv("COMTRADE_API_KEY", "")  # no live source
 
     requested = []
-    monkeypatch.setattr(
-        tasks.sync_world_trade, "delay", lambda hs6, **kw: requested.append(hs6)
-    )
+    monkeypatch.setattr(tasks.sync_world_trade, "delay", lambda hs6, **kw: requested.append(hs6))
 
     try:
         out = tasks.run_world_ranking.apply(args=[str(analysis.id), "999999"], throw=False).result
@@ -302,9 +298,7 @@ def test_sync_world_trade_zero_rows_terminalizes_the_waiting_analysis(
     monkeypatch.setattr(real_sync, "run", lambda code: 0)
 
     reranked = []
-    monkeypatch.setattr(
-        tasks.run_world_ranking, "delay", lambda *a, **kw: reranked.append((a, kw))
-    )
+    monkeypatch.setattr(tasks.run_world_ranking, "delay", lambda *a, **kw: reranked.append((a, kw)))
     try:
         out = tasks.sync_world_trade.apply(
             args=["654321"], kwargs={"analysis_id": str(analysis.id)}, throw=False
